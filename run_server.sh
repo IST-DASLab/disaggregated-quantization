@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# export CUDA_VISIBLE_DEVICES=4,5
+
 PIDS=()
 
 SERVED_MODEL_NAME="${SERVED_MODEL_NAME:-Qwen/Qwen3.5-9B Qwen3.5-9B}"
@@ -9,8 +11,10 @@ SERVED_MODEL_NAME="${SERVED_MODEL_NAME:-Qwen/Qwen3.5-9B Qwen3.5-9B}"
 # DECODE_MODEL_NAME="${DECODE_MODEL_NAME:-/nfs/scistore19/alistgrp/mkleineg/MatGPTQ-dev/EvoPress-matgptq/.tmp/Qwen3-8B-4bit}"
 # TOKENIZER_NAME="${TOKENIZER_NAME:-Qwen/Qwen3-8B}"
 
-PREFILL_MODEL_NAME="${PREFILL_MODEL_NAME:-RedHatAI/Qwen3.5-9B-quantized.w8a8}"
-DECODE_MODEL_NAME="${DECODE_MODEL_NAME:-RedHatAI/Qwen3.5-9B-quantized.w4a16}" # mkleinegger/llama3.1-8b-2bit
+#PREFILL_MODEL_NAME="${PREFILL_MODEL_NAME:-RedHatAI/Qwen3.5-9B-FP8-dynamic}"
+#DECODE_MODEL_NAME="${DECODE_MODEL_NAME:-RedHatAI/Qwen3.5-9B-quantized.w4a16}"
+PREFILL_MODEL_NAME="${PREFILL_MODEL_NAME:-Qwen/Qwen3.5-9B}"
+DECODE_MODEL_NAME="${DECODE_MODEL_NAME:-Qwen/Qwen3.5-9B}"
 TOKENIZER_NAME="${TOKENIZER_NAME:-Qwen/Qwen3.5-9B}"
 
 PREFILL_GPU="${PREFILL_GPU:-4}"
@@ -37,7 +41,8 @@ SERVER_READY_TIMEOUT_S="${SERVER_READY_TIMEOUT_S:-1200}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-PROXY_SERVER="${PROXY_SERVER:-/nfs/scistore19/alistgrp/mkleineg/vllm-sandbox/tests/v1/kv_connector/nixl_integration/toy_proxy_server.py}"
+# PROXY_SERVER="${PROXY_SERVER:-/nfs/scistore19/alistgrp/mkleineg/vllm-sandbox/tests/v1/kv_connector/nixl_integration/toy_proxy_server.py}"
+PROXY_SERVER="${PROXY_SERVER:-./toy_proxy_server.py}"
 READY_FILE="${READY_FILE:-}"
 
 # module load cuda/13
@@ -110,7 +115,7 @@ wait_for_server() {
   for _ in $(seq 1 "$SERVER_READY_TIMEOUT_S"); do
     if wget -qO- \
       --header="Content-Type: application/json" \
-      --post-data='{"model":"Qwen3-8B","prompt":"hi","max_tokens":1}' \
+      --post-data='{"model":"Qwen3.5-9B","prompt":"hi","max_tokens":1}' \
       "http://localhost:${port}/v1/completions" \
       >/dev/null 2>&1; then
       echo "${name} success"
