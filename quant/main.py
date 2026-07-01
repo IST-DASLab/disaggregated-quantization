@@ -22,9 +22,7 @@ from model_utils import QuantizedLinear
 from datasets import load_dataset
 
 MODEL = "Qwen/Qwen3-8B"
-QUANT_METHOD = "rtn"  # "gptq" or "rtn"
-GPTQ_JOINT = True      # joint NVFP4+INT3 sweep with shared error feedback (vs independent)
-GPTQ_LAMBDA = 0.2      # joint combine weight: 1.0=pure NVFP4, 0.0=pure INT3, 0.5=equal
+QUANT_METHOD = "gptq"  # "gptq" or "rtn"
 ACT_QUANT = True       # dynamic NVFP4 activation quantization (prefill path only)
 SEQUENCE_LENGTH = 2048
 NUM_CALIBRATION_SEQUENCES = 128
