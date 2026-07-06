@@ -1,3 +1,5 @@
+from collections import defaultdict
+import csv
 import math
 import sys
 import types
@@ -18,18 +20,22 @@ from lm_eval.models.huggingface import HFLM
 from data import get_data
 from rtn import rtn_quantization
 from gptq import gptq_quantization
-from model_utils import QuantizedLinear
+from model_utils import QuantizedLinear, clear_device_cache
 from datasets import load_dataset
 
 MODEL = "Qwen/Qwen3-8B"
 QUANT_METHOD = "gptq"  # "gptq" or "rtn"
+QUANT_SCHEME = "downcast"  # "nvfp", "int", "independent", "downcast" (downcast is gptq-only)
 ACT_QUANT = True       # dynamic NVFP4 activation quantization (prefill path only)
 SEQUENCE_LENGTH = 2048
+DECODE_BITS = 3
 NUM_CALIBRATION_SEQUENCES = 128
 NUM_EVAL_CONVERSATIONS = 256   # Tulu-3 chats used for the prefill/decode ppl split
 SEED = 42
+SEEDS = [0, 42, 1234, 2026, 9999]
 LMEVAL_OUTPUT_PATH = "results.json"
-LMEVAL_TASKS = ["gsm8k"]
+RESULTS_CSV_PATH = "results_ppl_" + QUANT_METHOD + "_" + QUANT_SCHEME + ".csv"
+LMEVAL_TASKS = ["gsm8k", "arc_challenge_llama"]
 LMEVAL_MAX_LENGTH = 4*1024
 LMEVAL_GEN_KWARGS = {
     "do_sample": True,
@@ -41,6 +47,9 @@ LMEVAL_GEN_KWARGS = {
 }
 
 def eval_lmeval(model, tokenizer):
+
+    set_auto_mode(model, auto=True)
+
     lm = HFLM(
         pretrained=model,
         tokenizer=tokenizer,
@@ -55,7 +64,7 @@ def eval_lmeval(model, tokenizer):
         model=lm,
         tasks=LMEVAL_TASKS,
         batch_size=128,
-        limit=300,
+#        limit=100,
         task_manager=task_manager,
         evaluation_tracker=evaluation_tracker,
         apply_chat_template=True,
@@ -76,9 +85,10 @@ def eval_lmeval(model, tokenizer):
         print(make_table(results, "groups"))
 
 
-def get_tulu_chat(tokenizer, num_conversations, seed):
-    """Load single-turn Tulu-3 chats and return ``(input_ids[1, L], prefill_len)`` pairs."""
-    raw = load_dataset("allenai/tulu-3-sft-mixture", split="train").shuffle(seed=seed)
+def _get_tulu_chat(tokenizer, num_conversations, seed, shuffle_buffer=10_000):
+    raw = load_dataset(
+        "allenai/tulu-3-sft-mixture", split="train", streaming=True
+    ).shuffle(seed=seed, buffer_size=shuffle_buffer)
     data = []
     for example in raw:
         messages = example["messages"]
@@ -109,7 +119,16 @@ def get_tulu_chat(tokenizer, num_conversations, seed):
         data.append((torch.tensor(ids, dtype=torch.long).unsqueeze(0), prefill_len))
         if len(data) >= num_conversations:
             break
+    if len(data) < num_conversations:
+        print(f"Warning: collected only {len(data)}/{num_conversations} Tulu chats for seed {seed}.")
     return data
+
+
+def get_tulu_chats(tokenizer, num_conversations, seeds, shuffle_buffer=10_000):
+    return [
+        _get_tulu_chat(tokenizer, num_conversations, seed, shuffle_buffer)
+        for seed in seeds
+    ]
 
 
 
@@ -168,6 +187,23 @@ def compute_perplexity_prefill_decode(model, eval_data, device, prefill=("prefil
 
     return prefill_ppl, decode_ppl
 
+
+def save_results_csv(results, seeds, path):
+    phases = ["prefill", "decode"]
+    header = ["label", "phase"] + [f"seed_{s}" for s in seeds] + ["mean"]
+    print("### Average ppl across seeds (label x phase) ###")
+    with open(path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(header)
+        for label, per_seed in results.items():
+            for p_idx, phase in enumerate(phases):
+                vals = [per_seed[s][p_idx] for s in seeds]
+                mean = sum(vals) / len(vals) if vals else float("nan")
+                writer.writerow([label, phase] + [f"{v:.6f}" for v in vals] + [f"{mean:.6f}"])
+                print(f"[{label}] {phase}: {mean:.3f}")
+    print(f"Wrote results to {path}")
+
+
 def main():
     torch.manual_seed(SEED)
     if torch.cuda.is_available():
@@ -185,25 +221,44 @@ def main():
     model.requires_grad_(False)
     tokenizer = AutoTokenizer.from_pretrained(MODEL)
 
-    chat_eval = get_tulu_chat(tokenizer, NUM_EVAL_CONVERSATIONS, SEED)
-    prefill_ppl, decode_ppl = compute_perplexity_prefill_decode(model, chat_eval, device)
-    print(f"[full-precision] Tulu ppl — prefill/user: {prefill_ppl:.3f}, decode/assistant: {decode_ppl:.3f}")
+    # chat_evals = get_tulu_chats(tokenizer, NUM_EVAL_CONVERSATIONS, SEEDS)
+
+    lm_eval_results = eval_lmeval(model, tokenizer)
+
+    clear_device_cache(True)
+    results = defaultdict(dict)
+    # for seed, evals in zip(SEEDS, chat_evals):        
+    #     prefill_ppl, decode_ppl = compute_perplexity_prefill_decode(model, evals, device)
+    #     print(f"[full-precision] SEED {seed}: Tulu ppl — prefill/user: {prefill_ppl:.3f}, decode/assistant: {decode_ppl:.3f}")
+    #     results["full-precision"][seed] = (prefill_ppl, decode_ppl)
 
     calibration_data = get_data("open-thoughts", tokenizer, SEQUENCE_LENGTH, NUM_CALIBRATION_SEQUENCES, SEED)
     calibration_data = [s.to(device) for s in calibration_data]
     if QUANT_METHOD == "gptq":
-        gptq_quantization(model, calibration_data, device=device, act_quant=ACT_QUANT)
+        gptq_quantization(model, calibration_data, wbits=DECODE_BITS, device=device, act_quant=ACT_QUANT, scheme=QUANT_SCHEME)
     else:
-        rtn_quantization(model, calibration_data, device=device, act_quant=ACT_QUANT)
+        rtn_quantization(model, calibration_data, wbits=DECODE_BITS, device=device, act_quant=ACT_QUANT, scheme=QUANT_SCHEME)
 
     model.config.use_cache = True
 
-    prefill_ppl, decode_ppl = compute_perplexity_prefill_decode(model, chat_eval, device, ("prefill", True), ("decode", False))
-    print(f"[mixed-precision] Tulu ppl — prefill/user: {prefill_ppl:.3f}, decode/assistant: {decode_ppl:.3f}")
+    lm_eval_results = eval_lmeval(model, tokenizer)
+
+    #for seed, evals in zip(SEEDS, chat_evals):
+    #    prefill_ppl, decode_ppl = compute_perplexity_prefill_decode(model, evals, device, ("prefill", True), ("decode", False))
+    #    print(f"[mixed-precision] SEED {seed}: Tulu ppl — prefill/user: {prefill_ppl:.3f}, decode/assistant: {decode_ppl:.3f}")
+    #    results["mixed-precision"][seed] = (prefill_ppl, decode_ppl)
     
-    for label, phase in [("NVFP4", ("prefill", False)), ("NVFP4+A", ("prefill", True)), ("INT", ("decode", False))]:
-        prefill_ppl, decode_ppl = compute_perplexity_prefill_decode(model, chat_eval, device, phase, phase)
-        print(f"[{label}] Tulu ppl — prefill/user: {prefill_ppl:.3f}, decode/assistant: {decode_ppl:.3f}")
+    # for label, phase in [
+    #     ("NVFP4", ("prefill", False)), 
+    #     ("NVFP4+A", ("prefill", True)), 
+    #     ("INT", ("decode", False))
+    # ]:
+    #     for seed, evals in zip(SEEDS, chat_evals):
+    #         prefill_ppl, decode_ppl = compute_perplexity_prefill_decode(model, evals, device, phase, phase)
+    #         print(f"[{label}] SEED {seed}: Tulu ppl — prefill/user: {prefill_ppl:.3f}, decode/assistant: {decode_ppl:.3f}")
+    #         results[label][seed] = (prefill_ppl, decode_ppl)
+
+    save_results_csv(results, SEEDS, RESULTS_CSV_PATH)
 
 
 if __name__ == "__main__":

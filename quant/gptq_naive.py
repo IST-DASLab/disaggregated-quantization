@@ -1,7 +1,6 @@
 import math
-from contextlib import contextmanager
 from enum import Enum
-from typing import Callable, Tuple
+from typing import Tuple
 
 import torch
 import torch.nn as nn
@@ -15,40 +14,20 @@ from model_utils import (
     _set_submodule,
     maybe_first_element,
 )
-from quantizer import NVFP_GROUPSIZE, Quantizer, make_quantizer
+from quantizer import NVFP_GROUPSIZE, Quantizer
 
 
 class QuantizationOrder(str, Enum):
     DEFAULT = "default"
     ACTIVATION = "activation"
 
-
-@contextmanager
-def _column_group_size(*quantizers: Quantizer):
-    """Temporarily disable grouping so the quantizers operate one column at a time
-    (GPTQ quantizes column-by-column, passing a single group's scale each step)."""
-    saved = [(q, q.group_size) for q in quantizers]
-    for q, _ in saved:
-        q.group_size = None
-    try:
-        yield
-    finally:
-        for q, gs in saved:
-            q.group_size = gs
-
-
 class GPTQ:
-    """GPTQ for a single-format quantizer: prefill and decode share the same grid, so
-    both output weights are identical and the feedback error is ``w - w_q``.
-
-    Subclasses override :meth:`step` to plug in a decode grid and its error term; the
-    shared, numerically sensitive machinery lives once in :meth:`_gptq_loop`.
-    """
 
     def __init__(
         self,
         layer: nn.Linear,
-        quantizer: Quantizer,
+        quantizer_prefill: Quantizer,
+        quantizer_decode: Quantizer,
         quantization_order: str = "default",
         block_size: int = 128,
         rel_damp: float = 1e-2,
@@ -57,7 +36,9 @@ class GPTQ:
         self.layer = layer
         self.W = self.layer.weight
         self.d_row, self.d_col = layer.weight.shape
-        self.quantizer = quantizer
+        # Quantization properties (dual grids: one per inference stage).
+        self.quantizer_prefill = quantizer_prefill
+        self.quantizer_decode = quantizer_decode
         self.quantization_order = QuantizationOrder(quantization_order)
         self.block_size = block_size
         self.rel_damp = rel_damp
@@ -114,70 +95,75 @@ class GPTQ:
         self.pre_step_completed = True
 
     @torch.no_grad()
-    def _gptq_loop(
-        self, quantize_column: Callable[[torch.Tensor, torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Shared GPTQ machinery: permute, invert the Hessian, and sweep columns.
-
-        ``quantize_column(w_ci, orig_col, d) -> (w_q, w_d, err)`` returns the prefill and
-        decode columns plus the already Hessian-normalised feedback error to propagate.
-        Returns ``(w_prefill, w_decode)`` in the layer dtype.
-        """
-        d_col, block_size, dtype = self.d_col, self.block_size, self.W_dtype
-        # Get permutation
-        if self.quantization_order == QuantizationOrder.ACTIVATION:
-            perm = torch.argsort(self.H.diag(), descending=True)
-        else:
-            perm = torch.arange(d_col, device=self.W_device)
-        perm_inv = torch.argsort(perm)
-        # Permute Hessian prior to inversion
-        self.H = self.H[perm][:, perm]
-        # Get weight (prefill output doubles as the shared running weight; w_dec
-        # collects the decode-quantized columns)
-        w = self.W[:, perm]
-        w_dec = torch.zeros_like(w)
-        # Get Hessian inverse
-        H_inv_cho = self._get_hessian_inverse(w)
-        # Quantize
-        for c1 in range(0, d_col, block_size):
-            c2 = min(c1 + block_size, d_col)
-            ncols = c2 - c1
-            w_blk = w[:, c1:c2].clone()
-            errs = torch.zeros_like(w_blk)
-            H_inv_cho_blk = H_inv_cho[c1:c2, c1:c2]
-            # Iterate over block
-            for i in range(ncols):
-                # Weight column, its Hessian diagonal and original (pre-perm) index
-                w_ci = w_blk[:, i]
-                d = H_inv_cho_blk[i, i]
-                w_q, w_d, err = quantize_column(w_ci, perm[c1 + i], d)
-                w[:, c1 + i] = w_q
-                w_dec[:, c1 + i] = w_d
-                # Update subsequent weights with the rounding error
-                w_blk[:, i:].addr_(err, H_inv_cho_blk[i, i:], alpha=-1)
-                errs[:, i] = err
-            # Update the weights after block
-            w[:, c2:].addmm_(errs, H_inv_cho[c1:c2, c2:], alpha=-1)
-
-        # Invert permutation
-        w = w[:, perm_inv].contiguous()
-        w_dec = w_dec[:, perm_inv].contiguous()
-        self.H = self.H[perm_inv][:, perm_inv]
-        return w.to(dtype), w_dec.to(dtype)
-
-    @torch.no_grad()
     def step(self) -> Tuple[torch.Tensor, torch.Tensor]:
-        q = self.quantizer
-        group_size = q.group_size or self.d_col
-        scales, zeros = q.get_quantization_params(self.W)
-        with _column_group_size(q):
-            def quantize_column(w_ci, orig_col, d):
-                g = orig_col // group_size
-                w_q = q.quantize_dequantize(w_ci, scales[:, g], zeros[:, g])
-                # Single format: decode == prefill, feedback error is w - w_q.
-                return w_q, w_q, (w_ci - w_q) / d
+        # 1) Define constants and chunk
+        d_col, block_size, device, dtype = self.d_col, self.block_size, self.W_device, self.W_dtype
+        # 2) Get per-quantizer group sizes
+        group_size_p = self.quantizer_prefill.group_size or d_col
+        group_size_d = self.quantizer_decode.group_size or d_col
 
-            return self._gptq_loop(quantize_column)
+        # Get scales and zeros (static, from the original weight)
+        scales_p, zeros_p = self.quantizer_prefill.get_quantization_params(self.W)
+        scales_d, zeros_d = self.quantizer_decode.get_quantization_params(self.W)
+        # Dirty hack for GPTQ quantization: quantize one column at a time
+        orig_group_size_p = self.quantizer_prefill.group_size
+        orig_group_size_d = self.quantizer_decode.group_size
+        self.quantizer_prefill.group_size = None
+        self.quantizer_decode.group_size = None
+
+        try:
+            # Get permutation
+            if self.quantization_order == QuantizationOrder.ACTIVATION:
+                perm = torch.argsort(self.H.diag(), descending=True)
+            else:
+                perm = torch.arange(d_col, device=device)
+            perm_inv = torch.argsort(perm)
+            # Permute Hessian prior to inversion
+            self.H = self.H[perm][:, perm]
+            # Get weight (prefill output doubles as the shared running weight; w_dec
+            # collects the decode-quantized columns)
+            w = self.W[:, perm]
+            w_dec = torch.zeros_like(w)
+            # Get Hessian inverse
+            H_inv_cho = self._get_hessian_inverse(w)
+            # Quantize
+            for c1 in range(0, d_col, block_size):
+                c2 = min(c1 + block_size, d_col)
+                ncols = c2 - c1
+                w_blk = w[:, c1:c2].clone()
+                errs = torch.zeros_like(w_blk)
+                H_inv_cho_blk = H_inv_cho[c1:c2, c1:c2]
+                # 2) Iterate over block
+                for i in range(ncols):
+                    # Get weight column, corresponding Hessian diagonal and group_id
+                    w_ci = w_blk[:, i]
+                    d = H_inv_cho_blk[i, i]
+                    # Original column index -> its group for each quantizer
+                    orig_col = perm[c1 + i]
+                    g_p = orig_col // group_size_p
+                    g_d = orig_col // group_size_d
+                    # Quantize weight column with both grids
+                    w_q = self.quantizer_prefill.quantize_dequantize(w_ci, scales_p[:, g_p], zeros_p[:, g_p])
+                    w_d = self.quantizer_decode.quantize_dequantize(w_ci, scales_d[:, g_d], zeros_d[:, g_d])
+                    w[:, c1 + i] = w_q
+                    w_dec[:, c1 + i] = w_d
+                    # Update subsequent weights with the combined rounding error
+                    err = ((w_ci - w_q) * 1 + (w_ci - w_d) * 1) / d
+                    w_blk[:, i:].addr_(err, H_inv_cho_blk[i, i:], alpha=-1)
+                    errs[:, i] = err
+                # 3) Update the weights after block
+                w[:, c2:].addmm_(errs, H_inv_cho[c1:c2, c2:], alpha=-1)
+
+            # Invert permutation
+            w = w[:, perm_inv].contiguous()
+            w_dec = w_dec[:, perm_inv].contiguous()
+            self.H = self.H[perm_inv][:, perm_inv]
+        finally:
+            # Restore quantizer group sizes
+            self.quantizer_prefill.group_size = orig_group_size_p
+            self.quantizer_decode.group_size = orig_group_size_d
+
+        return w.to(dtype), w_dec.to(dtype)
 
     @torch.no_grad()
     def _get_hessian_inverse(self, w: torch.Tensor):
@@ -205,62 +191,6 @@ class GPTQ:
         return self.step()
 
 
-class PrefillDecodeGPTQ(GPTQ):
-    """Independent decode grid: the decode weight comes from ``quantizer.decode_quantizer``
-    with its own scales, and both stages' errors feed back (``(w-w_q) + (w-w_d)``)."""
-
-    @torch.no_grad()
-    def step(self) -> Tuple[torch.Tensor, torch.Tensor]:
-        q, q_dec = self.quantizer, self.quantizer.decode_quantizer
-        group_size_p = q.group_size or self.d_col
-        group_size_d = q_dec.group_size or self.d_col
-        scales_p, zeros_p = q.get_quantization_params(self.W)
-        scales_d, zeros_d = q_dec.get_quantization_params(self.W)
-        with _column_group_size(q, q_dec):
-            def quantize_column(w_ci, orig_col, d):
-                g_p, g_d = orig_col // group_size_p, orig_col // group_size_d
-                w_q = q.quantize_dequantize(w_ci, scales_p[:, g_p], zeros_p[:, g_p])
-                w_d = q_dec.quantize_dequantize(w_ci, scales_d[:, g_d], zeros_d[:, g_d])
-                return w_q, w_d, ((w_ci - w_q) + (w_ci - w_d)) / d
-
-            return self._gptq_loop(quantize_column)
-
-
-class DowncastGPTQ(GPTQ):
-    """Downcast decode: the decode weight is a 3-bit LUT view of the stored NVFP4 code,
-    so it reuses the prefill NVFP4 scales. Only the prefill error feeds back (``w-w_q``)."""
-
-    @torch.no_grad()
-    def step(self) -> Tuple[torch.Tensor, torch.Tensor]:
-        q = self.quantizer
-        group_size = q.group_size or self.d_col
-        scales, zeros = q.get_quantization_params(self.W)
-        with _column_group_size(q):
-            def quantize_column(w_ci, orig_col, d):
-                g = orig_col // group_size
-                w_q = q.quantize_dequantize(w_ci, scales[:, g], zeros[:, g])
-                w_d = q.quantize_dequantize_decode(w_ci, scales[:, g], zeros[:, g])
-                return w_q, w_d, ((w_ci - w_q) * 0.1 + (w_ci - w_d)) / d
-
-            return self._gptq_loop(quantize_column)
-
-
-# scheme -> (GPTQ variant). The quantizer itself is built by make_quantizer.
-GPTQ_SCHEMES = {
-    "nvfp": GPTQ,
-    "int": GPTQ,
-    "independent": PrefillDecodeGPTQ,
-    "downcast": DowncastGPTQ,
-}
-
-
-def make_gptq(scheme: str, layer: nn.Linear, wbits: int = 3, **kwargs) -> GPTQ:
-    """Pick the GPTQ variant + quantizer for a scheme (mirrors make_quantizer)."""
-    if scheme not in GPTQ_SCHEMES:
-        raise ValueError(f"Unknown GPTQ scheme: {scheme!r}")
-    return GPTQ_SCHEMES[scheme](layer, make_quantizer(scheme, wbits), **kwargs)
-
-
 def gptq_quantization(
     model,
     calibration_data,
@@ -270,7 +200,6 @@ def gptq_quantization(
     block_size=128,
     rel_damp=1e-2,
     quantization_order="default",
-    scheme="downcast",
 ):
     print("Start GPTQ quantization...")
 
@@ -300,15 +229,15 @@ def gptq_quantization(
             if ("mlp" in name or "attn" in name) and isinstance(layer, nn.Linear)
         }
 
-        # One GPTQ handle (one Hessian, one quantizer) per layer. The scheme selects the
-        # GPTQ variant: "nvfp"/"int" (single format), "independent" (own decode scales),
-        # or "downcast" (decode = 3-bit LUT view of the stored NVFP4 code).
+        # One GPTQ handle (one Hessian, both quantizers) per layer.
         gptq = {}
         for name, layer in target_layers.items():
-            gptq[name] = make_gptq(
-                scheme,
+            quantizer_prefill = Quantizer(format="nvfp", bits=4, symmetric=True, group_size=NVFP_GROUPSIZE)
+            quantizer_decode = Quantizer(format="int", bits=wbits, symmetric=True, group_size=NVFP_GROUPSIZE)
+            gptq[name] = GPTQ(
                 layer,
-                wbits,
+                quantizer_prefill,
+                quantizer_decode,
                 quantization_order=quantization_order,
                 block_size=block_size,
                 rel_damp=rel_damp,
@@ -329,7 +258,7 @@ def gptq_quantization(
         for h in hooks:
             h.remove()
 
-        # Quantize each layer into prefill (NVFP4) and decode (nested LUT3) weights that share
+        # Quantize each layer into prefill (NVFP4) and decode (INT) weights that share
         # the layer's Hessian, then swap in the dual-weight module.
         for layer_name, layer in target_layers.items():
             with torch.no_grad():

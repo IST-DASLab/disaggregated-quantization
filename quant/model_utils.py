@@ -84,6 +84,7 @@ class QuantizedLinear(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.auto_mode:
             mode = "prefill" if x.shape[-2] > 1 else "decode"
+            self.act_quant = mode == "prefill"
         else:
             mode = self.mode
 

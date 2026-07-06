@@ -11,26 +11,22 @@ FP32_EXPONENT_BIAS = 127
 FP32_MIN_NORMAL = 2 ** (-FP32_EXPONENT_BIAS + 1)
 
 FP4_GRID =  [-6.0, -4.0, -3.0, -2.0, -1.5, -1.0, -0.5, 0.0, 0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0]
+FP4_GRID_TENSOR = torch.tensor(FP4_GRID, dtype=torch.float32)
 FP4_BITPACKING_PERM = [15, 14, 13, 12, 11, 10,  9,  8,  0,  1,  2,  3,  4,  5,  6,  7]
 FP4_SCALE = 3 / 4
 
 ########################## QUANT FUNCTIONS ##########################
 
-def cast_to_fp4(x):
-    sign = torch.sign(x)
-    x = torch.abs(x)
-    x[(x >= 0.0) & (x <= 0.25)] = 0.0
-    x[(x > 0.25) & (x < 0.75)] = 0.5
-    x[(x >= 0.75) & (x <= 1.25)] = 1.0
-    x[(x > 1.25) & (x < 1.75)] = 1.5
-    x[(x >= 1.75) & (x <= 2.5)] = 2.0
-    x[(x > 2.5) & (x < 3.5)] = 3.0
-    x[(x >= 3.5) & (x <= 5.0)] = 4.0
-    x[x > 5.0] = 6.0
-    return x * sign
+def index_rtn_grid(x: torch.Tensor, grid: torch.Tensor) -> torch.Tensor:
+    """Round-to-nearest index into a sorted 1-D ``grid`` (ties -> higher index)."""
+    inds = torch.bucketize(x, grid)
+    lo = torch.clamp(inds - 1, min=0, max=grid.shape[-1] - 1)
+    hi = torch.clamp(inds, min=0, max=grid.shape[-1] - 1)
+    return torch.where((grid[hi] - x) <= (x - grid[lo]), hi, lo)
 
 def quantize_fp4(x: torch.Tensor, scales: torch.Tensor, zeros: torch.Tensor, q_min: int, q_max: int):
-    return cast_to_fp4(x / scales)
+    grid = FP4_GRID_TENSOR.to(device=x.device, dtype=x.dtype)
+    return grid[index_rtn_grid(x / scales, grid)]
 
 def dequantize_fp4(q: torch.Tensor, scales: torch.Tensor, zeros: torch.Tensor):
     return q.mul(scales)
@@ -90,7 +86,7 @@ class Quantizer:
         symmetric: bool = True,
         dim: int = -1,
         group_size: Optional[int] = None,
-        scale_min_clip: Optional[float] = None,
+        scale_min_clip: Optional[float] = None
     ):
         assert format in ["nvfp", "int"]
         if format == "nvfp": assert bits == 4
@@ -193,3 +189,94 @@ class Quantizer:
         xg, s, z = self._reshape_before_quantization(x, scales, zeros)
         xq = self.quant_dequant_fn(xg, s, z, self.q_min, self.q_max)
         return xq.reshape(original_shape)
+
+    def gptq_error(self, w: torch.Tensor, w_q: torch.Tensor, w_d: torch.Tensor) -> torch.Tensor:
+        return (w - w_q)
+
+
+class PrefillDecodeQuantizer(Quantizer):
+    """Two individual quantizers: the container is the prefill quantizer and holds an
+    independent decode quantizer with its own format and scales."""
+
+    def __init__(
+        self,
+        format_prefill: str,
+        bits_prefill: int = 4,
+        format_decode: str = "int",
+        bits_decode: int = 3,
+        symmetric: bool = True,
+        dim: int = -1,
+        group_size: Optional[int] = None,
+        scale_min_clip: Optional[float] = None,
+        err_weight_prefill: float = 0.1,
+        err_weight_decode: float = 1.0,
+    ):
+        super().__init__(
+            format_prefill, bits_prefill, symmetric, dim, group_size, scale_min_clip,
+            err_weight_prefill, err_weight_decode,
+        )
+        self.decode_quantizer = Quantizer(format_decode, bits_decode, symmetric, dim, group_size, scale_min_clip)
+
+    def quantize_dequantize_decode(self, x: torch.Tensor, scales: torch.Tensor, zeros: Optional[torch.Tensor] = None) -> torch.Tensor:
+        original_shape = x.shape
+        xg, s, z = self._reshape_before_quantization(x, scales, zeros)
+        xq = self.decode_quantizer.quantize_dequantize(xg, s, z)
+        return xq.reshape(original_shape)
+
+    def gptq_error(self, w: torch.Tensor, w_q: torch.Tensor, w_d: torch.Tensor) -> torch.Tensor:
+        return (w - w_q) + (w - w_d)
+
+########################## DOWNCAST LUT QUANTIZER ##########################
+
+# MSE-optimal downcast levels: FP4 codes paired by dropping the low index bit (idx >> 1);
+# each level is the center of mass of its pair bucket on Gaussian data. See grids.ipynb.
+LUT3_DOWNCAST_GRID = [-4.890, -2.550, -1.236, -0.372, 0.372, 1.236, 2.550, 4.890]
+
+class DowncastLUTQuantizer(Quantizer):
+    """NVFP4 quantizer whose decode weight is downcast to a 3-bit LUT (fp4 idx >> 1)."""
+
+    def __init__(
+        self,
+        downcast_grid=LUT3_DOWNCAST_GRID,
+        symmetric: bool = True,
+        dim: int = -1,
+        group_size: Optional[int] = None,
+        scale_min_clip: Optional[float] = None,
+    ):
+        super().__init__(
+            "nvfp", 4, symmetric, dim, group_size, scale_min_clip
+        )
+        self.fp4_grid = torch.tensor(FP4_GRID, dtype=torch.float32)
+        self.lut_grid = torch.as_tensor(downcast_grid, dtype=torch.float32)
+        # Downcast table: adjacent FP4 codes share a level (16 -> 8), so the zero codes
+        # split sign-aware by construction ((-0.5, -0.0) -> level 3, (+0.0, +0.5) -> level 4).
+        self.nest = torch.arange(len(FP4_GRID)) >> 1
+
+    def quantize_dequantize_decode(
+        self,
+        x: torch.Tensor,
+        scales: torch.Tensor,
+        zeros: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        """Downcast LUT dequant using the NVFP4 ``scales`` (companion to ``quantize_dequantize``)."""
+        original_shape = x.shape
+        xg, s, _ = self._reshape_before_quantization(x, scales, zeros)
+        fp4_grid = self.fp4_grid.to(x.device)
+        lut_grid = self.lut_grid.to(x.device)
+        nest = self.nest.to(x.device)
+        fp4_idx = index_rtn_grid(xg / s, fp4_grid)
+        xq = lut_grid[nest[fp4_idx]] * s
+        return xq.reshape(original_shape)
+
+
+def make_quantizer(scheme: str, wbits: int = 3) -> Quantizer:
+    """Build the quantizer for a quantization scheme (shared by the RTN and GPTQ drivers)."""
+    if scheme == "nvfp":
+        return Quantizer(format="nvfp", bits=4, symmetric=True, group_size=NVFP_GROUPSIZE)
+    if scheme == "int":
+        return Quantizer(format="int", bits=wbits, symmetric=True, group_size=NVFP_GROUPSIZE)
+    if scheme == "independent":
+        return PrefillDecodeQuantizer("nvfp", 4, "int", wbits, group_size=NVFP_GROUPSIZE)
+    if scheme == "downcast":
+        return DowncastLUTQuantizer(group_size=NVFP_GROUPSIZE)
+    raise ValueError(f"Unknown quantization scheme: {scheme!r}")

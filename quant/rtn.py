@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 from model_utils import InputCollector, ForwardInterrupt, QuantizedLinear, clear_device_cache, to, _set_submodule, maybe_first_element
-from quantizer import NVFP_GROUPSIZE, Quantizer
+from quantizer import NVFP_GROUPSIZE, Quantizer, make_quantizer
 
 
 def rtn_quantization(
@@ -11,7 +11,9 @@ def rtn_quantization(
     wbits=3,
     device="cuda",
     act_quant=False,
+    scheme="independent",
 ):
+    assert scheme in ("nvfp", "int", "independent"), "RTN supports only single-format and independent schemes."
     print("Start RTN quantization...")
 
     blocks = model.model.layers
@@ -42,17 +44,23 @@ def rtn_quantization(
             with torch.no_grad():
                 w = layer.weight  # [out_features, in_features]
 
-                quantizer_prefill = Quantizer(format="nvfp", bits=4, symmetric=True, group_size=NVFP_GROUPSIZE)
-                quantizer_decode = Quantizer(format=f"int", bits=wbits, symmetric=True, group_size=NVFP_GROUPSIZE)
+                quantizer = make_quantizer(scheme, wbits)
+                scales, zeros = quantizer.get_quantization_params(w)
+                dqweight_prefill = quantizer.quantize_dequantize(w, scales, zeros)
 
-                # Prefill (NVFP4) and decode (INT) scales are derived independently from the same weight;
-                scales_prefill, zeros_prefill = quantizer_prefill.get_quantization_params(w)
-                scales_decode, zeros_decode = quantizer_decode.get_quantization_params(w)
+                # Independent decode derives its own scales from the same weight;
+                # single-format schemes reuse the prefill weight for both stages.
+                quantizer_decode = getattr(quantizer, "decode_quantizer", None)
+                if quantizer_decode is not None:
+                    scales_decode, zeros_decode = quantizer_decode.get_quantization_params(w)
+                    dqweight_decode = quantizer_decode.quantize_dequantize(w, scales_decode, zeros_decode)
+                else:
+                    dqweight_decode = dqweight_prefill
 
                 bias = layer.bias.detach() if layer.bias is not None else None
                 qlinear = QuantizedLinear(
-                    quantizer_prefill.quantize_dequantize(w, scales_prefill, zeros_prefill),
-                    quantizer_decode.quantize_dequantize(w, scales_decode, zeros_decode),
+                    dqweight_prefill,
+                    dqweight_decode,
                     bias,
                     act_quantizer=Quantizer("nvfp", bits=4, symmetric=True, group_size=NVFP_GROUPSIZE) if act_quant else None
                 )
