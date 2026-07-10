@@ -207,13 +207,10 @@ class PrefillDecodeQuantizer(Quantizer):
         symmetric: bool = True,
         dim: int = -1,
         group_size: Optional[int] = None,
-        scale_min_clip: Optional[float] = None,
-        err_weight_prefill: float = 0.1,
-        err_weight_decode: float = 1.0,
+        scale_min_clip: Optional[float] = None
     ):
         super().__init__(
-            format_prefill, bits_prefill, symmetric, dim, group_size, scale_min_clip,
-            err_weight_prefill, err_weight_decode,
+            format_prefill, bits_prefill, symmetric, dim, group_size, scale_min_clip
         )
         self.decode_quantizer = Quantizer(format_decode, bits_decode, symmetric, dim, group_size, scale_min_clip)
 

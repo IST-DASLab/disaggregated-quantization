@@ -5,7 +5,7 @@ set -euo pipefail
 
 PIDS=()
 
-SERVED_MODEL_NAME="${SERVED_MODEL_NAME:-Qwen/Qwen3.5-9B Qwen3.5-9B}"
+SERVED_MODEL_NAME="${SERVED_MODEL_NAME:-Qwen/Qwen3-8B Qwen3-8B}"
 
 # PREFILL_MODEL_NAME="${PREFILL_MODEL_NAME:-/nfs/scistore19/alistgrp/mkleineg/MatGPTQ-dev/EvoPress-matgptq/.tmp/Qwen3-8B-8bit}"
 # DECODE_MODEL_NAME="${DECODE_MODEL_NAME:-/nfs/scistore19/alistgrp/mkleineg/MatGPTQ-dev/EvoPress-matgptq/.tmp/Qwen3-8B-4bit}"
@@ -13,15 +13,15 @@ SERVED_MODEL_NAME="${SERVED_MODEL_NAME:-Qwen/Qwen3.5-9B Qwen3.5-9B}"
 
 #PREFILL_MODEL_NAME="${PREFILL_MODEL_NAME:-RedHatAI/Qwen3.5-9B-FP8-dynamic}"
 #DECODE_MODEL_NAME="${DECODE_MODEL_NAME:-RedHatAI/Qwen3.5-9B-quantized.w4a16}"
-PREFILL_MODEL_NAME="${PREFILL_MODEL_NAME:-Qwen/Qwen3.5-9B}"
-DECODE_MODEL_NAME="${DECODE_MODEL_NAME:-Qwen/Qwen3.5-9B}"
-TOKENIZER_NAME="${TOKENIZER_NAME:-Qwen/Qwen3.5-9B}"
+PREFILL_MODEL_NAME="${PREFILL_MODEL_NAME:-/home/max/prefill-decode/prefill-decode-shenanigans/models/Qwen3-8B-nvfp4-identity-gptq-prefill}"
+DECODE_MODEL_NAME="${DECODE_MODEL_NAME:-/home/max/prefill-decode/prefill-decode-shenanigans/models/Qwen3-8B-nvfp4-identity-gptq-decode}"
+TOKENIZER_NAME="${TOKENIZER_NAME:-Qwen/Qwen3-8B}"
 
-PREFILL_GPU="${PREFILL_GPU:-4}"
-DECODE_GPU="${DECODE_GPU:-5}"
+PREFILL_GPU="${PREFILL_GPU:-5}"
+DECODE_GPU="${DECODE_GPU:-6}"
 TENSOR_PARALLEL_SIZE="${TENSOR_PARALLEL_SIZE:-1}"
 MAX_NUM_SEQS="${MAX_NUM_SEQS:-16}"
-MAX_MODEL_LENGTH="${MAX_MODEL_LENGTH:-112640}"
+MAX_MODEL_LENGTH="${MAX_MODEL_LENGTH:-40960}"
 MAX_NUM_BATCHED_TOKENS="${MAX_NUM_BATCHED_TOKENS:-}"
 HF_OVERRIDES="${HF_OVERRIDES:-{\"rope_parameters\":{\"rope_type\":\"yarn\",\"rope_theta\":1000000,\"factor\":4.0,\"original_max_position_embeddings\":32768}}}"
 VLLM_DTYPE="${VLLM_DTYPE:-}"
@@ -115,7 +115,7 @@ wait_for_server() {
   for _ in $(seq 1 "$SERVER_READY_TIMEOUT_S"); do
     if wget -qO- \
       --header="Content-Type: application/json" \
-      --post-data='{"model":"Qwen3.5-9B","prompt":"hi","max_tokens":1}' \
+      --post-data='{"model":"Qwen3-8B","prompt":"hi","max_tokens":1}' \
       "http://localhost:${port}/v1/completions" \
       >/dev/null 2>&1; then
       echo "${name} success"
@@ -167,6 +167,7 @@ vllm serve "$PREFILL_MODEL_NAME" \
   --max-num-seqs "$MAX_NUM_SEQS" \
   --max-num-batched-tokens "$MAX_NUM_BATCHED_TOKENS" \
   --no-disable-hybrid-kv-cache-manager \
+  --allow-deprecated-quantization \
   --kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_load_failure_policy":"fail","kv_connector_extra_config":{"enforce_handshake_compat":false}}' &
 PIDS+=("$!")
 wait_for_server "prefill" "$PREFILL_PORT"
