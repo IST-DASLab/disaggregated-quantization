@@ -62,7 +62,7 @@ def split_dim(x: torch.Tensor, num_splits: int, dim: int = -1) -> torch.Tensor:
 
 def get_reciprocal(x):
     if isinstance(x, torch.Tensor):
-        return torch.where(x == 0, torch.tensor(0.0, dtype=x.dtype), 1.0 / x)
+        return torch.where(x == 0, torch.zeros_like(x), 1.0 / x)
     elif isinstance(x, (float, int)):
         return 0.0 if x == 0 else 1.0 / x
     else:

@@ -221,14 +221,16 @@ class PrefillDecodeGPTQ(GPTQ):
                 g_p, g_d = orig_col // group_size_p, orig_col // group_size_d
                 w_q = q.quantize_dequantize(w_ci, scales_p[:, g_p], zeros_p[:, g_p])
                 w_d = q_dec.quantize_dequantize(w_ci, scales_d[:, g_d], zeros_d[:, g_d])
-                return w_q, w_d, ((w_ci - w_q) + (w_ci - w_d)) / d
+                return w_q, w_d, (1/2 * (w_ci - w_q) + (w_ci - w_d)) / d
 
             return self._gptq_loop(quantize_column)
 
 
 class DowncastGPTQ(GPTQ):
     """Downcast decode: the decode weight is a 3-bit LUT view of the stored NVFP4 code,
-    so it reuses the prefill NVFP4 scales. Only the prefill error feeds back (``w-w_q``)."""
+    so it reuses the prefill NVFP4 scales. The decode LUT index is always the
+    stored FP4 index with its low bit dropped (``fp4_idx >> 1``).
+    """
 
     @torch.no_grad()
     def step(self) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -240,7 +242,7 @@ class DowncastGPTQ(GPTQ):
                 g = orig_col // group_size
                 w_q = q.quantize_dequantize(w_ci, scales[:, g], zeros[:, g])
                 w_d = q.quantize_dequantize_decode(w_ci, scales[:, g], zeros[:, g])
-                return w_q, w_d, ((w_ci - w_q) * 0.1 + (w_ci - w_d)) / d
+                return w_q, w_d, (1 / 2 * (w_ci - w_q) + (w_ci - w_d)) / d
 
             return self._gptq_loop(quantize_column)
 

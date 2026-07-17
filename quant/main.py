@@ -18,7 +18,7 @@ from model_utils import QuantizedLinear, clear_device_cache
 from datasets import load_dataset
 
 MODEL = "Qwen/Qwen3-8B"
-QUANT_METHOD = "rtn"  # "gptq" or "rtn"
+QUANT_METHOD = "gptq"  # "gptq" or "rtn"
 QUANT_SCHEME = "downcast"  # "nvfp", "int", "independent", "downcast" (downcast is gptq-only)
 ACT_QUANT = True       # dynamic NVFP4 activation quantization (prefill path only)
 SEQUENCE_LENGTH = 2048
@@ -214,11 +214,11 @@ def main():
     results = defaultdict(dict)
     # Full-precision pass: must run BEFORE quantization (weights are replaced
     # in place); it also collects the top-k logit reference for the KL metric.
-    kl_refs = {}
-    for seed, evals in zip(SEEDS, chat_evals):
-        prefill_ppl, decode_ppl, _, _, kl_refs[seed] = compute_perplexity_prefill_decode(model, evals, device)
-        print(f"[full-precision] SEED {seed}: Tulu ppl — prefill/user: {prefill_ppl:.3f}, decode/assistant: {decode_ppl:.3f}")
-        results["full-precision"][seed] = (prefill_ppl, decode_ppl, float("nan"), float("nan"))
+    # kl_refs = {}
+    # for seed, evals in zip(SEEDS, chat_evals):
+    #     prefill_ppl, decode_ppl, _, _, kl_refs[seed] = compute_perplexity_prefill_decode(model, evals, device)
+    #     print(f"[full-precision] SEED {seed}: Tulu ppl — prefill/user: {prefill_ppl:.3f}, decode/assistant: {decode_ppl:.3f}")
+    #     results["full-precision"][seed] = (prefill_ppl, decode_ppl, float("nan"), float("nan"))
 
     calibration_data = get_data("open-thoughts", tokenizer, SEQUENCE_LENGTH, NUM_CALIBRATION_SEQUENCES, SEED)
     calibration_data = [s.to(device) for s in calibration_data]
@@ -229,11 +229,11 @@ def main():
 
     model.config.use_cache = True
 
-    for seed, evals in zip(SEEDS, chat_evals):
-        prefill_ppl, decode_ppl, prefill_kl, decode_kl, _ = compute_perplexity_prefill_decode(
-            model, evals, device, ("prefill", True), ("decode", False), reference_topk=kl_refs[seed])
-        print(f"[mixed-precision] SEED {seed}: Tulu ppl — prefill/user: {prefill_ppl:.3f}, decode/assistant: {decode_ppl:.3f} | kl — prefill: {prefill_kl:.4f}, decode: {decode_kl:.4f}")
-        results["mixed-precision"][seed] = (prefill_ppl, decode_ppl, prefill_kl, decode_kl)
+    # for seed, evals in zip(SEEDS, chat_evals):
+    #     prefill_ppl, decode_ppl, prefill_kl, decode_kl, _ = compute_perplexity_prefill_decode(
+    #         model, evals, device, ("prefill", True), ("decode", False), reference_topk=kl_refs[seed])
+    #     print(f"[mixed-precision] SEED {seed}: Tulu ppl — prefill/user: {prefill_ppl:.3f}, decode/assistant: {decode_ppl:.3f} | kl — prefill: {prefill_kl:.4f}, decode: {decode_kl:.4f}")
+    #     results["mixed-precision"][seed] = (prefill_ppl, decode_ppl, prefill_kl, decode_kl)
 
     # for label, phase in [
     #     ("NVFP4", ("prefill", False)),
@@ -248,8 +248,8 @@ def main():
 
     # save_results_csv(results, SEEDS, RESULTS_CSV_PATH)
 
-    prefill_dir = os.path.join("../models", f"{MODEL.split('/')[-1]}-{QUANT_SCHEME}-identity-{QUANT_METHOD}-prefill")
-    decode_dir = os.path.join("../models", f"{MODEL.split('/')[-1]}-{QUANT_SCHEME}-identity-{QUANT_METHOD}-decode")
+    prefill_dir = os.path.join("./models", f"{MODEL.split('/')[-1]}-{QUANT_SCHEME}-identity-{QUANT_METHOD}-prefill")
+    decode_dir = os.path.join("./models", f"{MODEL.split('/')[-1]}-{QUANT_SCHEME}-identity-{QUANT_METHOD}-decode")
     print(f"[4/4] Exporting checkpoints ...", flush=True)
     export_prefill_pseudoquant(model, tokenizer, prefill_dir)
     print(f"  prefill (pseudoquant NVFP4, W4A4)  -> {os.path.abspath(prefill_dir)}", flush=True)
