@@ -6,7 +6,7 @@ import torch.distributed as dist
 from torch import Tensor
 
 
-@torch.compile(dynamic=False, fullgraph=True)
+@torch.compile(dynamic=True, fullgraph=True)
 def _adamw_step(
     p: Tensor,
     grad: Tensor,

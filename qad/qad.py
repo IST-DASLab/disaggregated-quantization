@@ -44,6 +44,79 @@ from liger_kernel.chunked_loss import LigerFusedLinearJSDLoss
 from data_utils import get_tulu_train_val
 from dist_adamw import DistAdamW
 from fp8 import apply_fp8_linear
+from gsq2bit import apply_gsq2bit, apply_gsq3bit, gsq_param_groups, post_update_all
+from ste_quant import apply_ste2bit, apply_ste3bit
+from quant import QuantizedLinear
+
+
+# ---------------------------------------------------------------------------
+# Quantizer registry
+# ---------------------------------------------------------------------------
+# Each entry maps a name to:
+#   apply(model, **params)            – replace linears in-place
+#   param_groups(model, lr, **params) – DistAdamW-compatible param groups (or None → all params)
+#   post_update                       – callable(model, step, total_steps) or None
+#   defaults                          – default hyperparameter dict merged with --quantizer-params
+
+_QUANTIZER_REGISTRY: dict = {
+    "fp8": {
+        "apply":        lambda model, **_: apply_fp8_linear(model),
+        "param_groups": None,          # all params equally
+        "post_update":  None,          # FP8 recomputes each forward via STE; no buffer to refresh
+        "defaults":     {},
+    },
+    "gsq2bit": {
+        "apply":        apply_gsq2bit,
+        "param_groups": gsq_param_groups,
+        "post_update":  post_update_all,
+        "defaults": {
+            "groupsize":   128,
+            "std":         0.01,
+            "strength":    6.0,
+            "temp_start":  2.0,
+            "temp_end":    0.05,
+            "scale_start": 100.0,
+            "scale_end":   500.0,
+        },
+    },
+    "gsq3bit": {
+        "apply":        apply_gsq3bit,
+        "param_groups": gsq_param_groups,
+        "post_update":  post_update_all,
+        "defaults": {
+            "groupsize":   128,
+            "std":         0.01,
+            "strength":    6.0,
+            "temp_start":  2.0,
+            "temp_end":    0.05,
+            "scale_start": 100.0,
+            "scale_end":   500.0,
+        },
+    },
+    "ste2bit": {
+        "apply":        apply_ste2bit,
+        "param_groups": None,          # single weight param, no split needed
+        "post_update":  post_update_all,
+        "defaults":     {"groupsize": 128},
+    },
+    "ste3bit": {
+        "apply":        apply_ste3bit,
+        "param_groups": None,
+        "post_update":  post_update_all,
+        "defaults":     {"groupsize": 128},
+    },
+}
+
+
+def _build_quantizer_params(name: str, overrides_json: str) -> dict:
+    import json, hashlib
+    entry = _QUANTIZER_REGISTRY[name]
+    params = dict(entry["defaults"])
+    if overrides_json:
+        params.update(json.loads(overrides_json))
+    # stable hash of the effective overrides for checkpoint naming
+    h = hashlib.md5(json.dumps(params, sort_keys=True).encode()).hexdigest()[:8]
+    return params, h
 
 
 # ---------------------------------------------------------------------------
@@ -183,7 +256,7 @@ def save_checkpoint(
 ) -> None:
     if dist.get_rank() != 0:
         return
-    path = Path(args.ckpt_dir) / args.run_name / f"step_{step:07d}" / "ckpt.pt"
+    path = Path(args.ckpt_dir) / args.ckpt_tag / f"step_{step:07d}" / "ckpt.pt"
     path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(
         {
@@ -201,6 +274,28 @@ def save_checkpoint(
 # Validation — per-token NTP cross-entropy on the student
 # ---------------------------------------------------------------------------
 @torch.no_grad()
+def _ntp_loss(model: nn.Module, val_chunks, device, batch_size) -> float:
+    """Per-token NTP CE loss for model over val_chunks."""
+    total_loss = torch.tensor(0.0, device=device)
+    total_n    = torch.tensor(0,   device=device)
+    for i in range(0, len(val_chunks), batch_size):
+        batch = val_chunks[i : i + batch_size]
+        if not batch:
+            break
+        ids_b, lbl_b, _ = zip(*batch)
+        input_ids   = torch.stack(ids_b).to(device)
+        labels_data = torch.stack(lbl_b).to(device)
+        with torch.amp.autocast("cuda", dtype=torch.bfloat16):
+            out = model(input_ids=input_ids, labels=labels_data)
+        n = (labels_data[:, 1:] != -100).sum().item()
+        total_loss += out.loss * n
+        total_n    += n
+    dist.all_reduce(total_loss)
+    dist.all_reduce(total_n)
+    return (total_loss / total_n.clamp(min=1)).item()
+
+
+@torch.no_grad()
 def eval_ntp(
     student: nn.Module,
     val_chunks: list[tuple[Tensor, Tensor, Tensor]],
@@ -208,25 +303,21 @@ def eval_ntp(
     batch_size: int,
 ) -> float:
     student.eval()
-    total_loss = torch.tensor(0.0, device=device)
-    total_n = torch.tensor(0, device=device)
-
     val_steps = range(0, len(val_chunks), batch_size)
+    total_loss = torch.tensor(0.0, device=device)
+    total_n    = torch.tensor(0,   device=device)
     for i in tqdm(val_steps, desc="val", unit="batch", disable=dist.get_rank() != 0):
         batch = val_chunks[i : i + batch_size]
         if not batch:
             break
-        ids_b, lbl_b, msk_b = zip(*batch)
+        ids_b, lbl_b, _ = zip(*batch)
         input_ids   = torch.stack(ids_b).to(device)
         labels_data = torch.stack(lbl_b).to(device)
-        attn_mask   = torch.stack(msk_b).to(device)
-        # No attention_mask: causal attention ensures real tokens only attend to earlier
-        # real tokens; padding predictions are masked by labels=-100.
-        out = student(input_ids=input_ids, labels=labels_data)
+        with torch.amp.autocast("cuda", dtype=torch.bfloat16):
+            out = student(input_ids=input_ids, labels=labels_data)
         n = (labels_data[:, 1:] != -100).sum().item()
         total_loss += out.loss * n
-        total_n += n
-
+        total_n    += n
     dist.all_reduce(total_loss)
     dist.all_reduce(total_n)
     student.train()
@@ -245,10 +336,18 @@ def main() -> None:
     parser.add_argument("--micro-batch-size", type=int, default=8, help="sequences per GPU per forward pass")
     parser.add_argument("--global-batch-size", type=int, default=64, help="total sequences per optimizer step across all GPUs")
     parser.add_argument("--eval-batch-size",  type=int, default=1, help="sequences per GPU during validation")
-    parser.add_argument("--lr", type=float, default=1e-5)
+    parser.add_argument("--lr", type=float, default=3e-6)
     parser.add_argument("--warmup-steps", type=int, default=100)
     parser.add_argument("--weight-decay", type=float, default=0.1)
     parser.add_argument("--grad-clip", type=float, default=1.0)
+    parser.add_argument("--lr-scale-ratio", type=float, default=0.5,
+                        help="scale LR multiplier for quantizers that use separate scale LR")
+    parser.add_argument("--quantizer", type=str, default="gsq2bit",
+                        choices=list(_QUANTIZER_REGISTRY),
+                        help="quantization scheme to apply to the student")
+    parser.add_argument("--quantizer-params", type=str, default="",
+                        help="JSON string of quantizer hyperparameter overrides, "
+                             "e.g. '{\"groupsize\": 64}'")
     parser.add_argument("--include-prefill-loss", action="store_true",
                         help="compute KL loss on all token positions (paper behaviour); "
                              "default is assistant-reply tokens only")
@@ -256,8 +355,16 @@ def main() -> None:
     parser.add_argument("--ckpt-dir", type=str, default="checkpoints")
     parser.add_argument("--chunk-cache-dir", type=str, default=None, help="directory to cache tokenized chunks")
     parser.add_argument("--save-every", type=int, default=500)
-    parser.add_argument("--val-every", type=int, default=100)
+    parser.add_argument("--val-every", type=int, default=25)
     args = parser.parse_args()
+
+    quant_params, quant_hash = _build_quantizer_params(args.quantizer, args.quantizer_params)
+    quant_entry = _QUANTIZER_REGISTRY[args.quantizer]
+    # Embed quantizer name + param hash into identifiers for traceability
+    run_tag = f"{args.run_name}-{args.quantizer}"
+    ckpt_tag = f"{run_tag}-{quant_hash}"
+    args.run_tag  = run_tag   # used for wandb run name
+    args.ckpt_tag = ckpt_tag  # used for checkpoint path
 
     dist.init_process_group("nccl")
     rank = dist.get_rank()
@@ -269,8 +376,8 @@ def main() -> None:
     if rank == 0:
         wandb.init(
             project="prefill-decode-distill",
-            name=args.run_name,
-            config=vars(args),
+            name=run_tag,
+            config={**vars(args), "quantizer_params": quant_params, "quantizer_hash": quant_hash},
         )
 
     # Teacher — frozen bf16 reference; no gradients anywhere
@@ -282,11 +389,11 @@ def main() -> None:
     for p in teacher.parameters():
         p.requires_grad_(False)
 
-    # Student — same checkpoint, FP8 fake-quantized linears, gradient checkpointing.
+    # Student — same checkpoint, quantized linears, gradient checkpointing.
     student = AutoModelForCausalLM.from_pretrained(
-        args.model, dtype=torch.bfloat16, attn_implementation="flash_attention_2"
+        args.model, dtype=torch.float32, attn_implementation="flash_attention_2"
     ).to(device)
-    apply_fp8_linear(student)
+    quant_entry["apply"](student, **quant_params)
     student.config.use_cache = False
     student.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
     student.train()
@@ -301,7 +408,7 @@ def main() -> None:
 
     if rank == 0:
         n_params = sum(p.numel() for p in student.parameters()) / 1e9
-        print(f"Model: {args.model}  ({n_params:.1f}B params)", flush=True)
+        print(f"Model: {args.model}  ({n_params:.1f}B params)  quantizer={args.quantizer}  hash={quant_hash}", flush=True)
         print("Loading and tokenizing dataset …", flush=True)
 
     train_raw, val_raw = get_tulu_train_val()
@@ -318,9 +425,16 @@ def main() -> None:
         print(f"Train: {len(train_chunks)} docs/rank  ({len(train_chunks) * world_size} total)", flush=True)
         print(f"Val:   {len(val_chunks)} docs/rank", flush=True)
 
-    # DistAdamW handles gradient reduction — no DDP wrapper required
+    # DistAdamW handles gradient reduction — no DDP wrapper required.
+    # Quantizers that need separate LR / weight_decay per parameter class (e.g. gsq2bit)
+    # supply a param_groups builder; others fall back to a single group over all params.
+    _pg_fn = quant_entry["param_groups"]
+    if _pg_fn is not None:
+        param_groups = _pg_fn(student, lr=args.lr, lr_scale_ratio=args.lr_scale_ratio)
+    else:
+        param_groups = [{"params": list(student.parameters())}]
     optimizer = DistAdamW(
-        [{"params": list(student.parameters())}],
+        param_groups,
         lr=args.lr,
         betas=(0.9, 0.95),
         weight_decay=args.weight_decay,
@@ -375,12 +489,13 @@ def main() -> None:
             input_ids   = torch.stack(ids_list).to(device)  # [mbs, T]
             labels_data = torch.stack(lbl_list).to(device)  # [mbs, T]
 
-            # Teacher: hidden states only, no gradients
-            with torch.no_grad():
-                t_hidden = teacher.model(input_ids=input_ids).last_hidden_state
+            with torch.amp.autocast("cuda", dtype=torch.bfloat16):
+                # Teacher: hidden states only, no gradients
+                with torch.no_grad():
+                    t_hidden = teacher.model(input_ids=input_ids).last_hidden_state
 
-            # Student: base transformer; lm_head handled by Liger below
-            s_hidden = student.model(input_ids=input_ids).last_hidden_state
+                # Student: base transformer; lm_head handled by Liger below
+                s_hidden = student.model(input_ids=input_ids).last_hidden_state
 
             # Causal shift: hidden state at t predicts token at t+1.
             # labels_data[t+1] is the target (assistant token or -100).
@@ -424,6 +539,10 @@ def main() -> None:
 
         optimizer.step()
 
+        # Refresh hard-quantized weight buffers and advance annealing schedules.
+        if quant_entry["post_update"] is not None:
+            quant_entry["post_update"](student, step, total_steps)
+
         with torch.no_grad():
             weight_norm = torch.sqrt(sum(
                 p.float().norm() ** 2
@@ -441,7 +560,7 @@ def main() -> None:
                 "train/lr":          lr,
             }, step=step)
 
-        if step > 0 and step % args.val_every == 0:
+        if step % args.val_every == 0 or step == total_steps - 1:
             ntp = eval_ntp(student, val_chunks, device, args.eval_batch_size)
             if rank == 0:
                 pbar.write(f"step {step:5d} | val_ntp={ntp:.4f}")

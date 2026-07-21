@@ -18,13 +18,18 @@ def fake_fp8(x: Tensor) -> Tensor:
     return x + (xq - x).detach()
 
 
-class FP8Linear(nn.Module):
-    """nn.Linear replacement: fake-quantizes both weight and input activation to FP8."""
+class FP8Linear(nn.Linear):
+    """nn.Linear replacement: fake-quantizes both weight and input activation to FP8.
+
+    Inherits from nn.Linear so isinstance(layer, nn.Linear) checks in HuggingFace
+    (e.g. get_target_dtype in flash_attention_2) still find this layer.
+    """
 
     def __init__(self, weight: nn.Parameter, bias: nn.Parameter | None):
-        super().__init__()
-        # nn.Module.__setattr__ detects nn.Parameter and registers it
-        self.weight = weight
+        nn.Module.__init__(self)  # skip nn.Linear.__init__ to avoid duplicate weight
+        self.in_features  = weight.shape[1]
+        self.out_features = weight.shape[0]
+        self.weight = weight  # nn.Module.__setattr__ registers nn.Parameter
         self.bias = bias
 
     def forward(self, x: Tensor) -> Tensor:
