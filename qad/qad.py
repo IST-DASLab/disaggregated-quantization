@@ -4,7 +4,7 @@ Quantization-aware distillation (QAD) via KL(student‖teacher).
 Student linear weights and activations are fake-quantized to FP8 E4M3 using
 per-tensor absmax scaling + straight-through estimator (STE). The teacher model
 is identical but frozen in bf16. KL(student‖teacher) is minimized using
-LigerFusedLinearJSDLoss (beta=1 collapses JSD to forward KL) which fuses both
+LigerFusedLinearJSDLoss (beta=0 collapses JSD to KL(teacher‖student)) which fuses both
 lm_head projections with the KL computation for memory efficiency.
 Gradient sync uses nanochat DistAdamW (ZeRO-2 style) — no DDP wrapper needed.
 
@@ -245,10 +245,13 @@ def main() -> None:
     parser.add_argument("--micro-batch-size", type=int, default=8, help="sequences per GPU per forward pass")
     parser.add_argument("--global-batch-size", type=int, default=64, help="total sequences per optimizer step across all GPUs")
     parser.add_argument("--eval-batch-size",  type=int, default=1, help="sequences per GPU during validation")
-    parser.add_argument("--lr", type=float, default=3e-5)
+    parser.add_argument("--lr", type=float, default=1e-5)
     parser.add_argument("--warmup-steps", type=int, default=100)
     parser.add_argument("--weight-decay", type=float, default=0.1)
     parser.add_argument("--grad-clip", type=float, default=1.0)
+    parser.add_argument("--include-prefill-loss", action="store_true",
+                        help="compute KL loss on all token positions (paper behaviour); "
+                             "default is assistant-reply tokens only")
     parser.add_argument("--run-name", type=str, default="qad")
     parser.add_argument("--ckpt-dir", type=str, default="checkpoints")
     parser.add_argument("--chunk-cache-dir", type=str, default=None, help="directory to cache tokenized chunks")
@@ -323,15 +326,15 @@ def main() -> None:
         weight_decay=args.weight_decay,
     )
 
-    # KL(student‖teacher): JSD with beta=1 → forward KL; weight_hard_loss=0 → no CE term.
+    # beta=0 → JSD degenerates to KL(teacher‖student) = Σ p_teacher·log(p_teacher/p_student),
+    # matching the paper's objective. beta=1 was KL(student‖teacher) — the wrong direction.
     # return_soft_hard_loss=True: also return the raw CE (NTP) loss for logging without
     # affecting gradients (weight_hard_loss=0 keeps it out of the backward).
-    # compiled=False: the NeMo container's Triton version is incompatible with inductor
-    # KernelMetadata (cluster_dims missing), so we run Liger eager.
+    # compiled=False: the NeMo container's Triton is incompatible with inductor (cluster_dims).
     kl_loss_fn = LigerFusedLinearJSDLoss(
         weight_hard_loss=0.0,
         weight_soft_loss=1.0,
-        beta=1.0,
+        beta=0.0,
         ignore_index=-100,
         compiled=False,
         chunk_size=256,          # smaller chunks → lower peak memory per torch.func VJP
@@ -385,7 +388,12 @@ def main() -> None:
             N = B * (T - 1)
             s_hidden_q = s_hidden[:, :-1].reshape(N, H).contiguous()
             t_hidden_f = t_hidden[:, :-1].reshape(N, H).contiguous()
-            labels = labels_data[:, 1:].reshape(N)
+            # With --include-prefill-loss: compute KL on all positions (paper behaviour).
+            # Default: assistant reply tokens only (labels_data has -100 elsewhere).
+            if args.include_prefill_loss:
+                labels = input_ids[:, 1:].reshape(N)
+            else:
+                labels = labels_data[:, 1:].reshape(N)
 
             s_lm_w = student.lm_head.weight
             t_lm_w = teacher.lm_head.weight
