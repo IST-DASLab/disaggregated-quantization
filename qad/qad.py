@@ -45,7 +45,7 @@ from data_utils import get_tulu_train_val
 from dist_adamw import DistAdamW
 from fp8 import apply_fp8_linear
 from gsq2bit import apply_gsq2bit, apply_gsq3bit, gsq_param_groups, post_update_all
-from ste_quant import apply_ste2bit, apply_ste3bit
+from ste_quant import apply_ste2bit, apply_ste3bit, apply_ste4bit
 from quant import QuantizedLinear
 
 
@@ -101,6 +101,12 @@ _QUANTIZER_REGISTRY: dict = {
     },
     "ste3bit": {
         "apply":        apply_ste3bit,
+        "param_groups": None,
+        "post_update":  post_update_all,
+        "defaults":     {"groupsize": 128},
+    },
+    "ste4bit": {
+        "apply":        apply_ste4bit,
         "param_groups": None,
         "post_update":  post_update_all,
         "defaults":     {"groupsize": 128},
@@ -267,6 +273,15 @@ def save_checkpoint(
         },
         path,
     )
+
+
+def save_weights(student: nn.Module, step: int, args: argparse.Namespace) -> None:
+    """Save master weights only (no optimizer state) — cheap intermediate snapshot."""
+    if dist.get_rank() != 0:
+        return
+    path = Path(args.ckpt_dir) / args.ckpt_tag / "weights" / f"step_{step:07d}.pt"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save({"step": step, "model": student.state_dict()}, path)
     print(f"[rank0] checkpoint → {path}", flush=True)
 
 
@@ -425,6 +440,14 @@ def main() -> None:
         print(f"Train: {len(train_chunks)} docs/rank  ({len(train_chunks) * world_size} total)", flush=True)
         print(f"Val:   {len(val_chunks)} docs/rank", flush=True)
 
+    # Teacher val loss is a constant (frozen model) — compute once here.
+    if rank == 0:
+        print("Computing teacher val baseline …", flush=True)
+    teacher_val_ntp = _ntp_loss(teacher, val_chunks, device, args.eval_batch_size)
+    if rank == 0:
+        print(f"Teacher val_ntp: {teacher_val_ntp:.4f}", flush=True)
+        wandb.log({"val/teacher_ntp": teacher_val_ntp}, step=0)
+
     # DistAdamW handles gradient reduction — no DDP wrapper required.
     # Quantizers that need separate LR / weight_decay per parameter class (e.g. gsq2bit)
     # supply a param_groups builder; others fall back to a single group over all params.
@@ -451,8 +474,18 @@ def main() -> None:
         beta=0.0,
         ignore_index=-100,
         compiled=False,
-        chunk_size=256,          # smaller chunks → lower peak memory per torch.func VJP
+        chunk_size=256,
         return_soft_hard_loss=True,
+    )
+    # Teacher CE loss on training batches: pass teacher hidden as both "student" and "teacher"
+    # with weight_hard=1, weight_soft=0 — only the chunked CE is computed, no KL.
+    teacher_ce_fn = LigerFusedLinearJSDLoss(
+        weight_hard_loss=1.0,
+        weight_soft_loss=0.0,
+        beta=0.0,
+        ignore_index=-100,
+        compiled=False,
+        chunk_size=256,
     )
 
 
@@ -479,8 +512,9 @@ def main() -> None:
             g["lr"] = lr
 
         optimizer.zero_grad()
-        accum_kl = 0.0
-        accum_ntp = 0.0
+        accum_kl          = 0.0
+        accum_ntp         = 0.0
+        accum_teacher_ntp = 0.0
 
         for acc in range(grad_accum):
             chunk_start = step * chunks_per_step + acc * mbs
@@ -517,6 +551,11 @@ def main() -> None:
                 s_hidden_q, s_lm_w, t_hidden_f, t_lm_w, true_labels=labels
             )
             (loss / grad_accum).backward()
+
+            # Teacher NTP on this training batch: CE(teacher_logits, labels), no grad.
+            with torch.no_grad():
+                t_ntp = teacher_ce_fn(t_hidden_f, t_lm_w, t_hidden_f, t_lm_w, true_labels=labels)
+            accum_teacher_ntp += t_ntp.item() / grad_accum
             accum_kl  += kl_soft.item()  / grad_accum
             accum_ntp += ntp_hard.item() / grad_accum
 
@@ -549,30 +588,47 @@ def main() -> None:
                 for p in student.parameters()
             )).item()
 
-        pbar.set_postfix(kl=f"{accum_kl:.4f}", ntp=f"{accum_ntp:.4f}", lr=f"{lr:.2e}")
+        # Reduce all three train metrics across ranks before logging
+        metrics_t = torch.tensor(
+            [accum_kl, accum_ntp, accum_teacher_ntp], device=device
+        )
+        dist.all_reduce(metrics_t, op=dist.ReduceOp.AVG)
+        accum_kl, accum_ntp, teacher_ntp_step = metrics_t.tolist()
+        train_ntp_delta = accum_ntp - teacher_ntp_step
+
+        pbar.set_postfix(kl=f"{accum_kl:.4f}", ntp=f"{accum_ntp:.4f}", Δ=f"{train_ntp_delta:+.4f}", lr=f"{lr:.2e}")
 
         if rank == 0:
             wandb.log({
-                "train/kl":          accum_kl,
-                "train/ntp":         accum_ntp,
-                "train/grad_norm":   grad_norm,
-                "train/weight_norm": weight_norm,
-                "train/lr":          lr,
+                "train/kl":           accum_kl,
+                "train/ntp":          accum_ntp,
+                "train/teacher_ntp":  teacher_ntp_step,
+                "train/ntp_delta":    train_ntp_delta,
+                "train/grad_norm":    grad_norm,
+                "train/weight_norm":  weight_norm,
+                "train/lr":           lr,
             }, step=step)
 
         if step % args.val_every == 0 or step == total_steps - 1:
             ntp = eval_ntp(student, val_chunks, device, args.eval_batch_size)
+            save_weights(student, step, args)
             if rank == 0:
-                pbar.write(f"step {step:5d} | val_ntp={ntp:.4f}")
-                wandb.log({"val/ntp_loss": ntp}, step=step)
+                delta = ntp - teacher_val_ntp
+                pbar.write(f"step {step:5d} | val_ntp={ntp:.4f}  teacher={teacher_val_ntp:.4f}  Δ={delta:+.4f}")
+                wandb.log({
+                    "val/ntp_loss":     ntp,
+                    "val/ntp_delta":    delta,
+                }, step=step)
 
         if step % args.save_every == 0:
             save_checkpoint(student, optimizer, step, args)
 
     ntp = eval_ntp(student, val_chunks, device, args.eval_batch_size)
+    save_weights(student, total_steps, args)
     if rank == 0:
-        print(f"Final    | val_ntp={ntp:.4f}", flush=True)
-        wandb.log({"val/ntp_loss": ntp}, step=total_steps)
+        delta = ntp - teacher_val_ntp
+        print(f"Final    | val_ntp={ntp:.4f}  Δ={delta:+.4f}", flush=True)
+        wandb.log({"val/ntp_loss": ntp, "val/ntp_delta": delta}, step=total_steps)
         wandb.finish()
     save_checkpoint(student, optimizer, total_steps, args)
 

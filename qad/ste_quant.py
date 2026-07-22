@@ -82,3 +82,7 @@ def apply_ste2bit(model: nn.Module, **kwargs) -> None:
 
 def apply_ste3bit(model: nn.Module, **kwargs) -> None:
     _apply_ste(model, bits=3, **kwargs)
+
+
+def apply_ste4bit(model: nn.Module, **kwargs) -> None:
+    _apply_ste(model, bits=4, **kwargs)
