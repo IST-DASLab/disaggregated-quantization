@@ -4,8 +4,8 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --gpus-per-node=8
 #SBATCH --partition=batch
-#SBATCH --qos=short
-#SBATCH --time=2:00:00
+#SBATCH --qos=normal
+#SBATCH --time=02:00:00
 #SBATCH --exclusive
 #SBATCH --mem=0
 #SBATCH --account=adlr_psx_numerics
@@ -28,6 +28,7 @@ SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
 CONTAINER=/lustre/fsw/portfolios/adlr/users/apanferov/containers/nemo:26.02.nemotron_3_super_luts_v2.sqsh
 HF_CACHE=/lustre/fsw/portfolios/adlr/users/apanferov/hf_cache
 MODEL=${MODEL:-Qwen/Qwen3-4B}
+CKPT_DIR=${CKPT_DIR:-$SCRIPT_DIR/checkpoints}   # absolute so the container CWD doesn't matter
 MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -1)
 
 mkdir -p "$SCRIPT_DIR/logs"
@@ -53,5 +54,7 @@ srun \
             $SCRIPT_DIR/qad.py \
                 --model $MODEL \
                 --run-name qad-\$(echo $MODEL | tr '/' '-') \
+                --ckpt-dir $CKPT_DIR \
+                --global-batch-size 64 \
                 \$@
     " -- "${EXTRA_ARGS[@]}"

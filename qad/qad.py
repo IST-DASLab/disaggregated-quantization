@@ -46,6 +46,7 @@ from dist_adamw import DistAdamW
 from fp8 import apply_fp8_linear
 from gsq2bit import apply_gsq2bit, apply_gsq3bit, gsq_param_groups, post_update_all
 from ste_quant import apply_ste2bit, apply_ste3bit, apply_ste4bit
+from quest import apply_quest2bit, apply_quest3bit, apply_quest4bit
 from quant import QuantizedLinear
 
 
@@ -107,6 +108,24 @@ _QUANTIZER_REGISTRY: dict = {
     },
     "ste4bit": {
         "apply":        apply_ste4bit,
+        "param_groups": None,
+        "post_update":  post_update_all,
+        "defaults":     {"groupsize": 128},
+    },
+    "quest2bit": {
+        "apply":        apply_quest2bit,
+        "param_groups": None,
+        "post_update":  post_update_all,
+        "defaults":     {"groupsize": 128},
+    },
+    "quest3bit": {
+        "apply":        apply_quest3bit,
+        "param_groups": None,
+        "post_update":  post_update_all,
+        "defaults":     {"groupsize": 128},
+    },
+    "quest4bit": {
+        "apply":        apply_quest4bit,
         "param_groups": None,
         "post_update":  post_update_all,
         "defaults":     {"groupsize": 128},
@@ -215,6 +234,12 @@ def build_chunks(
         # Truncate
         ids = ids[:max_seq_len]
         lbls = lbls[:max_seq_len]
+
+        # Skip documents whose assistant reply was entirely cut off by truncation —
+        # they produce all-(-100) labels, causing CE(mean of empty set) = NaN.
+        if all(l == -100 for l in lbls):
+            continue
+
         real_len = len(ids)
 
         # Pad to max_seq_len
@@ -276,13 +301,44 @@ def save_checkpoint(
 
 
 def save_weights(student: nn.Module, step: int, args: argparse.Namespace) -> None:
-    """Save master weights only (no optimizer state) — cheap intermediate snapshot."""
+    """Save eval-only safetensors checkpoint (~8 GB vs ~24 GB full state dict).
+
+    Includes:
+      - _wq buffers from every QuantizedLinear  (hard-quantized BF16 weights)
+      - all parameters/buffers outside QuantizedLinear  (layer norms, embeddings, lm_head)
+    Excludes:
+      - FP32 master weights and learnable quant params (quant_logits, scales, weight)
+        — these are only needed for training, not inference.
+    """
     if dist.get_rank() != 0:
         return
-    path = Path(args.ckpt_dir) / args.ckpt_tag / "weights" / f"step_{step:07d}.pt"
+    from safetensors.torch import save_file
+    path = Path(args.ckpt_dir) / args.ckpt_tag / "weights" / f"step_{step:07d}.safetensors"
     path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save({"step": step, "model": student.state_dict()}, path)
-    print(f"[rank0] checkpoint → {path}", flush=True)
+
+    # Set of dot-paths that are QuantizedLinear modules
+    quant_paths: set[str] = {
+        name for name, mod in student.named_modules()
+        if isinstance(mod, QuantizedLinear)
+    }
+
+    state: dict[str, torch.Tensor] = {}
+
+    for name, buf in student.named_buffers():
+        parent = name.rsplit(".", 1)[0] if "." in name else ""
+        if parent in quant_paths:
+            if name.endswith("._wq"):          # only the quantized-weight cache
+                state[name] = buf.bfloat16()
+        else:
+            state[name] = buf.bfloat16()
+
+    for name, param in student.named_parameters():
+        parent = name.rsplit(".", 1)[0] if "." in name else ""
+        if parent not in quant_paths:           # skip master weights / quant params
+            state[name] = param.data.bfloat16()
+
+    save_file(state, str(path), metadata={"step": str(step)})
+    print(f"[rank0] weights → {path}  ({len(state)} tensors)", flush=True)
 
 
 # ---------------------------------------------------------------------------
@@ -300,9 +356,11 @@ def _ntp_loss(model: nn.Module, val_chunks, device, batch_size) -> float:
         ids_b, lbl_b, _ = zip(*batch)
         input_ids   = torch.stack(ids_b).to(device)
         labels_data = torch.stack(lbl_b).to(device)
+        n = (labels_data[:, 1:] != -100).sum().item()
+        if n == 0:
+            continue
         with torch.amp.autocast("cuda", dtype=torch.bfloat16):
             out = model(input_ids=input_ids, labels=labels_data)
-        n = (labels_data[:, 1:] != -100).sum().item()
         total_loss += out.loss * n
         total_n    += n
     dist.all_reduce(total_loss)
@@ -328,9 +386,11 @@ def eval_ntp(
         ids_b, lbl_b, _ = zip(*batch)
         input_ids   = torch.stack(ids_b).to(device)
         labels_data = torch.stack(lbl_b).to(device)
+        n = (labels_data[:, 1:] != -100).sum().item()
+        if n == 0:
+            continue
         with torch.amp.autocast("cuda", dtype=torch.bfloat16):
             out = student(input_ids=input_ids, labels=labels_data)
-        n = (labels_data[:, 1:] != -100).sum().item()
         total_loss += out.loss * n
         total_n    += n
     dist.all_reduce(total_loss)
@@ -347,7 +407,7 @@ def main() -> None:
     parser.add_argument("--model", required=True, help="HuggingFace model name or path")
     parser.add_argument("--train-tokens", type=int, default=10_000_000)
     parser.add_argument("--val-tokens", type=int, default=100_000)
-    parser.add_argument("--max-seq-len", type=int, default=8192)
+    parser.add_argument("--max-seq-len", type=int, default=2048)
     parser.add_argument("--micro-batch-size", type=int, default=8, help="sequences per GPU per forward pass")
     parser.add_argument("--global-batch-size", type=int, default=64, help="total sequences per optimizer step across all GPUs")
     parser.add_argument("--eval-batch-size",  type=int, default=1, help="sequences per GPU during validation")
