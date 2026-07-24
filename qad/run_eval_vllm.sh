@@ -11,7 +11,7 @@
 #   sbatch run_eval.sh --quantizer ste3bit --iter 50          # single step
 #   sbatch run_eval.sh --unquantized                          # BF16 baseline
 
-#SBATCH --job-name=qad-eval
+#SBATCH --job-name=qad-vllm
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gpus-per-node=1
@@ -29,13 +29,15 @@
 CONTAINER=/lustre/fsw/portfolios/adlr/users/apanferov/containers/nemo:26.02.nemotron_3_super_luts_v2.sqsh
 HF_CACHE=/lustre/fsw/portfolios/adlr/users/apanferov/hf_cache
 LM_EVAL_OVERLAY=/lustre/fsw/portfolios/adlr/users/apanferov/prefill-decode/lm_eval_overlay
-LOG_KIND=eval_transformers   # log subfolder: logs/<LOG_KIND>/<timestamp>_<tag>/
+LOG_KIND=eval_vllm   # log subfolder: logs/<LOG_KIND>/<timestamp>_<tag>/
 
 # ---------------------------------------------------------------------------
-# STAGE 0: pre-submit (login node). Create nested per-submission log dir and
-# re-submit into it (SLURM can't create --output dirs; mkdir-in-job is too late).
-# Invoke directly, e.g.:
-#   ./run_eval.sh --array=0,25,... --quantizer ste3bit --tasks "gsm8k ..."
+# STAGE 0: pre-submit (login node, no SLURM allocation yet).
+# SLURM can't create --output directories and mkdir-in-job is too late (slurmd
+# opens the log file before the script runs), so the nested dir must exist
+# BEFORE sbatch. When invoked directly (not via sbatch) we create it and
+# re-submit into it. Invoke as:
+#   ./run_eval_vllm.sh --array=0,25,... --quantizer ste4bit --tasks "gsm8k ..."
 # ---------------------------------------------------------------------------
 if [ -z "$SLURM_JOB_ID" ]; then
     SELF="$(realpath "$0")"
@@ -135,12 +137,12 @@ if [ "$UNQUANTIZED" = "0" ] && [ -z "$ITER" ]; then
     exit 1
 fi
 
+# vLLM does its own continuous batching — no --batch-size.
 ARGS=(
     --model "$MODEL"
     --ckpt-dir "$CKPT_DIR"
     --quantizer "$QUANTIZER"
     --tasks $TASKS
-    --batch-size "$BATCH_SIZE"
 )
 [ -n "$ITER" ]         && ARGS+=(--iter "$ITER")
 [ "$UNQUANTIZED" = 1 ] && ARGS+=(--unquantized)
@@ -148,4 +150,4 @@ ARGS=(
 [ "$LOG_SAMPLES" = 1 ] && ARGS+=(--log-samples)
 [ -n "$RUN_NAME" ]     && ARGS+=(--run-name "$RUN_NAME")
 
-exec python "$SCRIPT_DIR/eval_transformers.py" "${ARGS[@]}"
+exec python "$SCRIPT_DIR/eval_vllm.py" "${ARGS[@]}"

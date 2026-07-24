@@ -300,45 +300,54 @@ def save_checkpoint(
     )
 
 
-def save_weights(student: nn.Module, step: int, args: argparse.Namespace) -> None:
-    """Save eval-only safetensors checkpoint (~8 GB vs ~24 GB full state dict).
+def build_hf_state_dict(student: nn.Module) -> dict[str, torch.Tensor]:
+    """Remap the quantized student into a vanilla HF state dict.
 
-    Includes:
-      - _wq buffers from every QuantizedLinear  (hard-quantized BF16 weights)
-      - all parameters/buffers outside QuantizedLinear  (layer norms, embeddings, lm_head)
-    Excludes:
-      - FP32 master weights and learnable quant params (quant_logits, scales, weight)
-        — these are only needed for training, not inference.
+    Each QuantizedLinear's hard-quantized weight (_wq) is written to the standard
+    `<module>.weight` slot, so the result is bit-identical in structure to a plain
+    Qwen3ForCausalLM. All quant-internal tensors (master weight, _mask, scales,
+    quant_logits, schedule buffers, _values, _idx) are dropped. Everything else
+    (embeddings, norms, lm_head, rotary buffers) is kept at its native dtype.
     """
-    if dist.get_rank() != 0:
-        return
-    from safetensors.torch import save_file
-    path = Path(args.ckpt_dir) / args.ckpt_tag / "weights" / f"step_{step:07d}.safetensors"
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Set of dot-paths that are QuantizedLinear modules
     quant_paths: set[str] = {
         name for name, mod in student.named_modules()
         if isinstance(mod, QuantizedLinear)
     }
-
-    state: dict[str, torch.Tensor] = {}
-
-    for name, buf in student.named_buffers():
-        parent = name.rsplit(".", 1)[0] if "." in name else ""
+    out: dict[str, torch.Tensor] = {}
+    for key, tensor in student.state_dict().items():
+        parent, _, leaf = key.rpartition(".")
         if parent in quant_paths:
-            if name.endswith("._wq"):          # only the quantized-weight cache
-                state[name] = buf.bfloat16()
+            if leaf == "_wq":
+                out[f"{parent}.weight"] = tensor.detach().to(torch.bfloat16).cpu()
+            elif leaf == "bias":
+                out[key] = tensor.detach().to(torch.bfloat16).cpu()
+            # drop all other quant-internal tensors
         else:
-            state[name] = buf.bfloat16()
+            out[key] = tensor.detach().cpu()
+    return out
 
-    for name, param in student.named_parameters():
-        parent = name.rsplit(".", 1)[0] if "." in name else ""
-        if parent not in quant_paths:           # skip master weights / quant params
-            state[name] = param.data.bfloat16()
 
-    save_file(state, str(path), metadata={"step": str(step)})
-    print(f"[rank0] weights → {path}  ({len(state)} tensors)", flush=True)
+def save_weights(student: nn.Module, step: int, args: argparse.Namespace) -> None:
+    """Save an eval-ready HuggingFace checkpoint (dequantized weights in `weight`).
+
+    Written as a standard HF model directory so evaluation is a single, fast
+    from_pretrained() — no quantizer wrapping, no base-model read, no manual
+    load_state_dict.
+    """
+    if dist.get_rank() != 0:
+        return
+    from safetensors.torch import save_file
+    out_dir = Path(args.ckpt_dir) / args.ckpt_tag / "weights" / f"step_{step:07d}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    state = build_hf_state_dict(student)
+    save_file(state, str(out_dir / "model.safetensors"), metadata={"format": "pt", "step": str(step)})
+    # Write config (+ generation_config) so from_pretrained rebuilds the architecture.
+    student.config.save_pretrained(out_dir)
+    if getattr(student, "generation_config", None) is not None:
+        student.generation_config.save_pretrained(out_dir)
+
+    print(f"[rank0] HF checkpoint → {out_dir}  ({len(state)} tensors)", flush=True)
 
 
 # ---------------------------------------------------------------------------

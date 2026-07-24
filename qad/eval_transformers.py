@@ -31,18 +31,17 @@ from qad import _QUANTIZER_REGISTRY, _build_quantizer_params
 
 
 def resolve_checkpoint(ckpt_dir: Path, ckpt_tag: str, step: int) -> Path:
-    """Return the best available checkpoint path for this step (safetensors preferred)."""
-    candidates = [
-        ckpt_dir / ckpt_tag / "weights" / f"step_{step:07d}.safetensors",
-        ckpt_dir / ckpt_tag / "weights" / f"step_{step:07d}.pt",
-        ckpt_dir / ckpt_tag / f"step_{step:07d}" / "ckpt.pt",
-    ]
-    for p in candidates:
-        if p.exists():
-            return p
+    """Return the HF checkpoint directory for this step.
+
+    New format is a self-contained HF model dir (config.json + model.safetensors)
+    that loads directly with from_pretrained.
+    """
+    hf_dir = ckpt_dir / ckpt_tag / "weights" / f"step_{step:07d}"
+    if (hf_dir / "model.safetensors").exists() and (hf_dir / "config.json").exists():
+        return hf_dir
     raise FileNotFoundError(
-        f"No checkpoint found for step {step} under {ckpt_dir / ckpt_tag}\n"
-        + "\n".join(f"  tried: {p}" for p in candidates)
+        f"No HF checkpoint found for step {step} at {hf_dir}\n"
+        f"  (expected {hf_dir}/model.safetensors + config.json)"
     )
 
 
@@ -62,6 +61,10 @@ def main() -> None:
     parser.add_argument("--no-think",         action="store_true",
                         help="disable Qwen3 thinking mode (sets generation_config.enable_thinking=False)")
     parser.add_argument("--batch-size",       type=int, default=16)
+    parser.add_argument("--log-samples",      action="store_true",
+                        help="dump per-sample generations to JSONL for inspection")
+    parser.add_argument("--limit",            type=int, default=None,
+                        help="limit eval to N docs per task (diagnostic only)")
     parser.add_argument("--output-dir",       default=str(_QAD_DIR / "eval_results"))
     args = parser.parse_args()
 
@@ -81,51 +84,34 @@ def main() -> None:
         step_key = 0
         print(f"Model: {args.model}  [unquantized BF16 baseline]", flush=True)
     else:
-        # Reconstruct ckpt_tag using the same logic as qad.py
-        quant_params, quant_hash = _build_quantizer_params(args.quantizer, args.quantizer_params)
+        # Reconstruct ckpt_tag (matches qad.py) for path resolution / result naming.
+        _, quant_hash = _build_quantizer_params(args.quantizer, args.quantizer_params)
         model_short = args.model.replace("/", "-")
         run_name    = args.run_name or f"qad-{model_short}"
-        run_tag     = f"{run_name}-{args.quantizer}"
-        ckpt_tag    = f"{run_tag}-{quant_hash}"
+        ckpt_tag    = f"{run_name}-{args.quantizer}-{quant_hash}"
 
-        ckpt_path = resolve_checkpoint(Path(args.ckpt_dir), ckpt_tag, args.iter)
-        print(f"Loading checkpoint: {ckpt_path}", flush=True)
+        ckpt_dir = resolve_checkpoint(Path(args.ckpt_dir), ckpt_tag, args.iter)
+        print(f"Loading HF checkpoint: {ckpt_dir}", flush=True)
 
-        # Load base model in BF16 — base weights are overwritten by the checkpoint
-        # anyway, so loading as FP32 just doubles IO (16 GB vs 8 GB) for no benefit.
+        # Checkpoints are saved as standard HF models (dequantized weights in `weight`),
+        # so this is a single fast sharded load straight to GPU — no base-model read,
+        # no quantizer wrapping, no manual load_state_dict.
         model = AutoModelForCausalLM.from_pretrained(
-            args.model, dtype=torch.bfloat16, attn_implementation="flash_attention_2"
-        )
-
-        # Apply quantizer to restore the student architecture
-        quant_entry = _QUANTIZER_REGISTRY[args.quantizer]
-        quant_entry["apply"](model, **quant_params)
-
-        # mmap=True: maps the file near-instantly; pages are read lazily during
-        # load_state_dict rather than front-loading all 24 GB at once.
-        if str(ckpt_path).endswith(".safetensors"):
-            from safetensors.torch import load_file
-            # New format: _wq + non-quantized params only (~8 GB, BF16)
-            state = load_file(str(ckpt_path), device="cpu")
-        else:
-            # Legacy format: full state dict (~24 GB, FP32 + BF16 mixed)
-            ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False, mmap=True)
-            state = ckpt.get("model", ckpt)
-        # strict=False: new checkpoints omit master weights and quant params intentionally
-        model.load_state_dict(state, strict=False)
-        del state
-
-        model = model.to(device=device, dtype=torch.bfloat16)
+            ckpt_dir, dtype=torch.bfloat16, attn_implementation="flash_attention_2",
+        ).to(device)
         model.eval()
         step_key = args.iter
         print(f"Model: {args.model}  quantizer={args.quantizer}  step={args.iter}", flush=True)
-    if args.no_think and hasattr(model, "generation_config"):
-        model.generation_config.enable_thinking = False
-        print("Thinking mode disabled.", flush=True)
-
-    # Compile with dynamic shapes: handles variable sequence lengths during generation.
-    model = torch.compile(model, dynamic=True)
-    print("Model compiled (dynamic=True).", flush=True)
+    if args.no_think:
+        # Qwen3 suppresses thinking via the chat template kwarg, not generation_config.
+        # The template checks: {%- if enable_thinking is defined and enable_thinking is false %}
+        # Patch the tokenizer so lm_eval's apply_chat_template call injects it automatically.
+        _orig_act = tokenizer.apply_chat_template
+        def _no_think_act(conversation, **kwargs):
+            kwargs.setdefault("enable_thinking", False)
+            return _orig_act(conversation, **kwargs)
+        tokenizer.apply_chat_template = _no_think_act
+        print("Thinking suppressed via tokenizer.apply_chat_template patch.", flush=True)
 
     print(f"Tasks: {args.tasks}  batch_size={args.batch_size}", flush=True)
 
@@ -136,15 +122,20 @@ def main() -> None:
         pretrained=model,
         tokenizer=tokenizer,
         batch_size=args.batch_size,
-        dtype="bfloat16",   # autocast inside lm-eval for efficiency
+        dtype="bfloat16",
+        apply_chat_template=True,
+        max_length=8192,  # total context (prompt + generation) cap
     )
 
     results = evaluator.simple_evaluate(
         model=lm,
         tasks=args.tasks,
         num_fewshot=args.num_fewshot,
+        # Cap generation so tasks with large defaults (e.g. aime25=32768) don't
+        # exceed max_length=8192.
         gen_kwargs="max_gen_toks=4096",
-        log_samples=False,
+        log_samples=args.log_samples,
+        limit=args.limit,
     )
 
     # Print summary
@@ -152,9 +143,39 @@ def main() -> None:
         key_metrics = {k: v for k, v in metrics.items() if not k.endswith("_stderr")}
         print(f"  {task}: {key_metrics}", flush=True)
 
-    # Save full results
-    out_path = Path(args.output_dir) / ckpt_tag / f"step_{step_key:07d}.json"
-    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_dir = Path(args.output_dir) / ckpt_tag
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Dump per-sample generations (prompt, resp, target, filtered) to JSONL so we can
+    # inspect actual model outputs — is it truncating, looping, or just wrong?
+    samples = results.pop("samples", None)
+    if samples:
+        for task, recs in samples.items():
+            sp = out_dir / f"step_{step_key:07d}_samples_{task}.jsonl"
+            with open(sp, "w") as f:
+                for r in recs:
+                    slim = {
+                        "doc_id": r.get("doc_id"),
+                        "target": r.get("target"),
+                        "resps": r.get("resps"),
+                        "filtered_resps": r.get("filtered_resps"),
+                        "exact_match": r.get("exact_match"),
+                        "arguments": r.get("arguments"),  # includes the prompt
+                    }
+                    f.write(json.dumps(slim, default=str) + "\n")
+            print(f"Samples → {sp}  ({len(recs)} docs)", flush=True)
+
+    # Save full results — merge with existing file so separate task runs accumulate.
+    out_path = out_dir / f"step_{step_key:07d}.json"
+    if out_path.exists():
+        merged = json.loads(out_path.read_text())
+        for key in ("results", "configs", "versions", "n-shot"):
+            if key in results:
+                if key in merged and isinstance(merged[key], dict):
+                    merged[key].update(results[key])
+                else:
+                    merged[key] = results[key]
+        results = merged
     with open(out_path, "w") as f:
         json.dump(results, f, indent=2, default=str)
     print(f"Results saved → {out_path}", flush=True)

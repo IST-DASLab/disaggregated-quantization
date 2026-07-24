@@ -12,15 +12,36 @@
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 
-# --debug: resubmit with interactive QoS (run as `bash run_qad.sh --debug`, not via sbatch)
-EXTRA_ARGS=()
-DEBUG=0
-for arg in "$@"; do
-    if [ "$arg" = "--debug" ]; then DEBUG=1; else EXTRA_ARGS+=("$arg"); fi
-done
-if [ "$DEBUG" = "1" ] && [ -z "$SLURM_JOB_ID" ]; then
-    exec sbatch --qos=interactive --time=1:00:00 "$0" "${EXTRA_ARGS[@]}"
+# ---------------------------------------------------------------------------
+# STAGE 0: pre-submit (login node). Create nested log dir logs/train/<stamp>_<tag>/
+# and re-submit into it (SLURM can't create --output dirs; mkdir-in-job is too
+# late). Invoke directly, e.g.:
+#   ./run_qad.sh --quantizer ste4bit            # normal
+#   ./run_qad.sh --quantizer ste4bit --debug    # interactive QoS
+# ---------------------------------------------------------------------------
+if [ -z "$SLURM_JOB_ID" ]; then
+    SELF="$(realpath "$0")"
+    ROOT="$(dirname "$SELF")/.."
+    STAMP="$(date +%Y%m%d_%H%M%S)"
+    TAG="run"; QOS_ARGS=(); PASS=()
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --debug)       QOS_ARGS=(--qos=interactive --time=1:00:00);   shift ;;
+            --quantizer=*) TAG="${1#--quantizer=}"; PASS+=("$1");      shift ;;
+            --quantizer)   TAG="$2";                PASS+=("$1" "$2"); shift 2 ;;
+            *)             PASS+=("$1");                                 shift ;;
+        esac
+    done
+    LOGDIR="$ROOT/logs/train/${STAMP}_${TAG}"
+    mkdir -p "$LOGDIR"
+    echo "logs → $LOGDIR"
+    exec sbatch "${QOS_ARGS[@]}" \
+        --output="$LOGDIR/%x_%j.out" --error="$LOGDIR/%x_%j.err" \
+        "$SELF" "${PASS[@]}"
 fi
+
+# ---- under SLURM allocation ----
+EXTRA_ARGS=("$@")   # --debug already consumed in STAGE 0
 
 SCRIPT_PATH=$(scontrol show job "$SLURM_JOB_ID" | awk -F= '/Command=/{print $2}')
 SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
@@ -30,8 +51,6 @@ HF_CACHE=/lustre/fsw/portfolios/adlr/users/apanferov/hf_cache
 MODEL=${MODEL:-Qwen/Qwen3-4B}
 CKPT_DIR=${CKPT_DIR:-$SCRIPT_DIR/checkpoints}   # absolute so the container CWD doesn't matter
 MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -1)
-
-mkdir -p "$SCRIPT_DIR/logs"
 
 srun \
     --ntasks-per-node=1 \
