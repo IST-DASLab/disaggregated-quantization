@@ -4,10 +4,10 @@
       "name": "gsm8k",
       "alias": "gsm8k",
       "sample_len": 1319,
-      "exact_match,strict-match": 0.6823351023502654,
-      "exact_match_stderr,strict-match": 0.012824066621488835,
-      "exact_match,flexible-extract": 0.8635329795299469,
-      "exact_match_stderr,flexible-extract": 0.009455741998815537
+      "exact_match,strict-match": 0.6921910538286581,
+      "exact_match_stderr,strict-match": 0.012714401009923644,
+      "exact_match,flexible-extract": 0.8764215314632298,
+      "exact_match_stderr,flexible-extract": 0.009065050306776923
     },
     "minerva_math500": {
       "name": "minerva_math500",
@@ -15,24 +15,24 @@
       "sample_len": 500,
       "exact_match,none": 0.0,
       "exact_match_stderr,none": 0.0,
-      "math_verify,none": 0.786,
-      "math_verify_stderr,none": 0.01835979750238704
+      "math_verify,none": 0.826,
+      "math_verify_stderr,none": 0.016971271257516105
     },
     "aime25": {
       "name": "aime25",
       "alias": "aime25",
       "sample_len": 30,
-      "exact_match,none": 0.0,
-      "exact_match_stderr,none": 0.0
+      "exact_match,none": 0.1,
+      "exact_match_stderr,none": 0.055708601453115555
     },
     "mmlu_flan_cot_zeroshot_abstract_algebra": {
       "name": "mmlu_flan_cot_zeroshot_abstract_algebra",
       "alias": "mmlu_flan_cot_zeroshot_abstract_algebra",
       "sample_len": 11,
-      "exact_match,strict-match": 0.2727272727272727,
-      "exact_match_stderr,strict-match": 0.14083575804390605,
-      "exact_match,flexible-extract": 0.5454545454545454,
-      "exact_match_stderr,flexible-extract": 0.1574591643244434
+      "exact_match,strict-match": 0.0,
+      "exact_match_stderr,strict-match": 0.0,
+      "exact_match,flexible-extract": 0.7272727272727273,
+      "exact_match_stderr,flexible-extract": 0.14083575804390605
     },
     "mmlu_flan_cot_zeroshot_anatomy": {
       "name": "mmlu_flan_cot_zeroshot_anatomy",
@@ -41,32 +41,32 @@
       "exact_match,strict-match": 0.14285714285714285,
       "exact_match_stderr,strict-match": 0.09705231721239393,
       "exact_match,flexible-extract": 0.7857142857142857,
-      "exact_match_stderr,flexible-extract": 0.1138039295450988
+      "exact_match_stderr,flexible-extract": 0.11380392954509883
     },
     "mmlu_flan_cot_zeroshot_astronomy": {
       "name": "mmlu_flan_cot_zeroshot_astronomy",
       "alias": "mmlu_flan_cot_zeroshot_astronomy",
-      "sample_len": 16,
-      "exact_match,strict-match": 0.375,
-      "exact_match_stderr,strict-match": 0.125,
-      "exact_match,flexible-extract": 0.75,
-      "exact_match_stderr,flexible-extract": 0.11180339887498948
-    },
-    "mmlu_flan_cot_zeroshot_college_biology": {
-      "name": "mmlu_flan_cot_zeroshot_college_biology",
-      "alias": "mmlu_flan_cot_zeroshot_college_biology",
       "sample_len": 16,
       "exact_match,strict-match": 0.25,
       "exact_match_stderr,strict-match": 0.11180339887498948,
       "exact_match,flexible-extract": 0.9375,
       "exact_match_stderr,flexible-extract": 0.0625
     },
+    "mmlu_flan_cot_zeroshot_college_biology": {
+      "name": "mmlu_flan_cot_zeroshot_college_biology",
+      "alias": "mmlu_flan_cot_zeroshot_college_biology",
+      "sample_len": 16,
+      "exact_match,strict-match": 0.1875,
+      "exact_match_stderr,strict-match": 0.10077822185373188,
+      "exact_match,flexible-extract": 0.6875,
+      "exact_match_stderr,flexible-extract": 0.11967838846954226
+    },
     "mmlu_flan_cot_zeroshot_college_chemistry": {
       "name": "mmlu_flan_cot_zeroshot_college_chemistry",
       "alias": "mmlu_flan_cot_zeroshot_college_chemistry",
       "sample_len": 8,
-      "exact_match,strict-match": 0.125,
-      "exact_match_stderr,strict-match": 0.125,
+      "exact_match,strict-match": 0.375,
+      "exact_match_stderr,strict-match": 0.18298126367784995,
       "exact_match,flexible-extract": 0.625,
       "exact_match_stderr,flexible-extract": 0.18298126367784995
     },
@@ -74,53 +74,53 @@
       "name": "mmlu_flan_cot_zeroshot_college_computer_science",
       "alias": "mmlu_flan_cot_zeroshot_college_computer_science",
       "sample_len": 11,
-      "exact_match,strict-match": 0.0,
-      "exact_match_stderr,strict-match": 0.0,
-      "exact_match,flexible-extract": 0.5454545454545454,
-      "exact_match_stderr,flexible-extract": 0.1574591643244434
+      "exact_match,strict-match": 0.2727272727272727,
+      "exact_match_stderr,strict-match": 0.14083575804390605,
+      "exact_match,flexible-extract": 0.9090909090909091,
+      "exact_match_stderr,flexible-extract": 0.09090909090909091
     },
     "mmlu_flan_cot_zeroshot_college_mathematics": {
       "name": "mmlu_flan_cot_zeroshot_college_mathematics",
       "alias": "mmlu_flan_cot_zeroshot_college_mathematics",
       "sample_len": 11,
-      "exact_match,strict-match": 0.2727272727272727,
-      "exact_match_stderr,strict-match": 0.14083575804390605,
-      "exact_match,flexible-extract": 0.2727272727272727,
-      "exact_match_stderr,flexible-extract": 0.14083575804390605
+      "exact_match,strict-match": 0.36363636363636365,
+      "exact_match_stderr,strict-match": 0.15212000482437738,
+      "exact_match,flexible-extract": 0.45454545454545453,
+      "exact_match_stderr,flexible-extract": 0.15745916432444335
     },
     "mmlu_flan_cot_zeroshot_college_physics": {
       "name": "mmlu_flan_cot_zeroshot_college_physics",
       "alias": "mmlu_flan_cot_zeroshot_college_physics",
       "sample_len": 11,
-      "exact_match,strict-match": 0.2727272727272727,
-      "exact_match_stderr,strict-match": 0.14083575804390605,
-      "exact_match,flexible-extract": 0.8181818181818182,
-      "exact_match_stderr,flexible-extract": 0.12196734422726126
+      "exact_match,strict-match": 0.09090909090909091,
+      "exact_match_stderr,strict-match": 0.0909090909090909,
+      "exact_match,flexible-extract": 0.9090909090909091,
+      "exact_match_stderr,flexible-extract": 0.09090909090909091
     },
     "mmlu_flan_cot_zeroshot_computer_security": {
       "name": "mmlu_flan_cot_zeroshot_computer_security",
       "alias": "mmlu_flan_cot_zeroshot_computer_security",
       "sample_len": 11,
-      "exact_match,strict-match": 0.18181818181818182,
-      "exact_match_stderr,strict-match": 0.12196734422726124,
-      "exact_match,flexible-extract": 0.6363636363636364,
-      "exact_match_stderr,flexible-extract": 0.15212000482437738
+      "exact_match,strict-match": 0.0,
+      "exact_match_stderr,strict-match": 0.0,
+      "exact_match,flexible-extract": 0.45454545454545453,
+      "exact_match_stderr,flexible-extract": 0.15745916432444335
     },
     "mmlu_flan_cot_zeroshot_conceptual_physics": {
       "name": "mmlu_flan_cot_zeroshot_conceptual_physics",
       "alias": "mmlu_flan_cot_zeroshot_conceptual_physics",
       "sample_len": 26,
-      "exact_match,strict-match": 0.23076923076923078,
-      "exact_match_stderr,strict-match": 0.08426500884694861,
-      "exact_match,flexible-extract": 0.8461538461538461,
-      "exact_match_stderr,flexible-extract": 0.072160242458822
+      "exact_match,strict-match": 0.07692307692307693,
+      "exact_match_stderr,strict-match": 0.05329387100211932,
+      "exact_match,flexible-extract": 0.8846153846153846,
+      "exact_match_stderr,flexible-extract": 0.06389710663783135
     },
     "mmlu_flan_cot_zeroshot_electrical_engineering": {
       "name": "mmlu_flan_cot_zeroshot_electrical_engineering",
       "alias": "mmlu_flan_cot_zeroshot_electrical_engineering",
       "sample_len": 16,
-      "exact_match,strict-match": 0.125,
-      "exact_match_stderr,strict-match": 0.08539125638299665,
+      "exact_match,strict-match": 0.25,
+      "exact_match_stderr,strict-match": 0.11180339887498948,
       "exact_match,flexible-extract": 0.8125,
       "exact_match_stderr,flexible-extract": 0.10077822185373188
     },
@@ -128,17 +128,17 @@
       "name": "mmlu_flan_cot_zeroshot_elementary_mathematics",
       "alias": "mmlu_flan_cot_zeroshot_elementary_mathematics",
       "sample_len": 41,
-      "exact_match,strict-match": 0.36585365853658536,
-      "exact_match_stderr,strict-match": 0.07615851217559023,
-      "exact_match,flexible-extract": 0.8048780487804879,
-      "exact_match_stderr,flexible-extract": 0.06265967111543964
+      "exact_match,strict-match": 0.2926829268292683,
+      "exact_match_stderr,strict-match": 0.07194088392074452,
+      "exact_match,flexible-extract": 0.926829268292683,
+      "exact_match_stderr,flexible-extract": 0.04117547077105887
     },
     "mmlu_flan_cot_zeroshot_high_school_biology": {
       "name": "mmlu_flan_cot_zeroshot_high_school_biology",
       "alias": "mmlu_flan_cot_zeroshot_high_school_biology",
       "sample_len": 32,
-      "exact_match,strict-match": 0.4375,
-      "exact_match_stderr,strict-match": 0.08909830562090465,
+      "exact_match,strict-match": 0.1875,
+      "exact_match_stderr,strict-match": 0.0701021719786843,
       "exact_match,flexible-extract": 0.75,
       "exact_match_stderr,flexible-extract": 0.07777137710478188
     },
@@ -148,8 +148,8 @@
       "sample_len": 22,
       "exact_match,strict-match": 0.13636363636363635,
       "exact_match_stderr,strict-match": 0.0748867700952649,
-      "exact_match,flexible-extract": 0.6363636363636364,
-      "exact_match_stderr,flexible-extract": 0.1049727762162956
+      "exact_match,flexible-extract": 0.5909090909090909,
+      "exact_match_stderr,flexible-extract": 0.10729033533674225
     },
     "mmlu_flan_cot_zeroshot_high_school_computer_science": {
       "name": "mmlu_flan_cot_zeroshot_high_school_computer_science",
@@ -157,71 +157,71 @@
       "sample_len": 9,
       "exact_match,strict-match": 0.4444444444444444,
       "exact_match_stderr,strict-match": 0.17568209223157663,
-      "exact_match,flexible-extract": 0.8888888888888888,
-      "exact_match_stderr,flexible-extract": 0.11111111111111112
+      "exact_match,flexible-extract": 1.0,
+      "exact_match_stderr,flexible-extract": 0.0
     },
     "mmlu_flan_cot_zeroshot_high_school_mathematics": {
       "name": "mmlu_flan_cot_zeroshot_high_school_mathematics",
       "alias": "mmlu_flan_cot_zeroshot_high_school_mathematics",
       "sample_len": 29,
-      "exact_match,strict-match": 0.3103448275862069,
-      "exact_match_stderr,strict-match": 0.08742975048915692,
-      "exact_match,flexible-extract": 0.6551724137931034,
-      "exact_match_stderr,flexible-extract": 0.08982552969857373
+      "exact_match,strict-match": 0.3448275862068966,
+      "exact_match_stderr,strict-match": 0.08982552969857373,
+      "exact_match,flexible-extract": 0.6206896551724138,
+      "exact_match_stderr,flexible-extract": 0.09169709590633637
     },
     "mmlu_flan_cot_zeroshot_high_school_physics": {
       "name": "mmlu_flan_cot_zeroshot_high_school_physics",
       "alias": "mmlu_flan_cot_zeroshot_high_school_physics",
       "sample_len": 17,
-      "exact_match,strict-match": 0.058823529411764705,
-      "exact_match_stderr,strict-match": 0.05882352941176471,
-      "exact_match,flexible-extract": 0.7647058823529411,
-      "exact_match_stderr,flexible-extract": 0.10604562574894086
+      "exact_match,strict-match": 0.23529411764705882,
+      "exact_match_stderr,strict-match": 0.10604562574894086,
+      "exact_match,flexible-extract": 0.6470588235294118,
+      "exact_match_stderr,flexible-extract": 0.11947115300935236
     },
     "mmlu_flan_cot_zeroshot_high_school_statistics": {
       "name": "mmlu_flan_cot_zeroshot_high_school_statistics",
       "alias": "mmlu_flan_cot_zeroshot_high_school_statistics",
       "sample_len": 23,
-      "exact_match,strict-match": 0.2608695652173913,
-      "exact_match_stderr,strict-match": 0.09361833424764437,
-      "exact_match,flexible-extract": 0.782608695652174,
-      "exact_match_stderr,flexible-extract": 0.08793911249520549
+      "exact_match,strict-match": 0.34782608695652173,
+      "exact_match_stderr,strict-match": 0.10154334054280734,
+      "exact_match,flexible-extract": 0.7391304347826086,
+      "exact_match_stderr,flexible-extract": 0.09361833424764439
     },
     "mmlu_flan_cot_zeroshot_machine_learning": {
       "name": "mmlu_flan_cot_zeroshot_machine_learning",
       "alias": "mmlu_flan_cot_zeroshot_machine_learning",
       "sample_len": 11,
-      "exact_match,strict-match": 0.18181818181818182,
-      "exact_match_stderr,strict-match": 0.12196734422726124,
-      "exact_match,flexible-extract": 0.5454545454545454,
-      "exact_match_stderr,flexible-extract": 0.1574591643244434
+      "exact_match,strict-match": 0.09090909090909091,
+      "exact_match_stderr,strict-match": 0.09090909090909091,
+      "exact_match,flexible-extract": 0.45454545454545453,
+      "exact_match_stderr,flexible-extract": 0.15745916432444335
     },
     "mmlu_flan_cot_zeroshot_business_ethics": {
       "name": "mmlu_flan_cot_zeroshot_business_ethics",
       "alias": "mmlu_flan_cot_zeroshot_business_ethics",
       "sample_len": 11,
-      "exact_match,strict-match": 0.36363636363636365,
-      "exact_match_stderr,strict-match": 0.15212000482437738,
-      "exact_match,flexible-extract": 0.7272727272727273,
-      "exact_match_stderr,flexible-extract": 0.14083575804390605
+      "exact_match,strict-match": 0.0,
+      "exact_match_stderr,strict-match": 0.0,
+      "exact_match,flexible-extract": 0.6363636363636364,
+      "exact_match_stderr,flexible-extract": 0.15212000482437738
     },
     "mmlu_flan_cot_zeroshot_clinical_knowledge": {
       "name": "mmlu_flan_cot_zeroshot_clinical_knowledge",
       "alias": "mmlu_flan_cot_zeroshot_clinical_knowledge",
       "sample_len": 29,
       "exact_match,strict-match": 0.20689655172413793,
-      "exact_match_stderr,strict-match": 0.07655305550699534,
-      "exact_match,flexible-extract": 0.8620689655172413,
-      "exact_match_stderr,flexible-extract": 0.06516628844986677
+      "exact_match_stderr,strict-match": 0.07655305550699533,
+      "exact_match,flexible-extract": 0.7586206896551724,
+      "exact_match_stderr,flexible-extract": 0.08086923723833501
     },
     "mmlu_flan_cot_zeroshot_college_medicine": {
       "name": "mmlu_flan_cot_zeroshot_college_medicine",
       "alias": "mmlu_flan_cot_zeroshot_college_medicine",
       "sample_len": 22,
-      "exact_match,strict-match": 0.18181818181818182,
-      "exact_match_stderr,strict-match": 0.08416546361568647,
-      "exact_match,flexible-extract": 0.8636363636363636,
-      "exact_match_stderr,flexible-extract": 0.07488677009526491
+      "exact_match,strict-match": 0.22727272727272727,
+      "exact_match_stderr,strict-match": 0.09144861547306321,
+      "exact_match,flexible-extract": 0.9545454545454546,
+      "exact_match_stderr,flexible-extract": 0.045454545454545484
     },
     "mmlu_flan_cot_zeroshot_global_facts": {
       "name": "mmlu_flan_cot_zeroshot_global_facts",
@@ -229,24 +229,24 @@
       "sample_len": 10,
       "exact_match,strict-match": 0.0,
       "exact_match_stderr,strict-match": 0.0,
-      "exact_match,flexible-extract": 0.5,
-      "exact_match_stderr,flexible-extract": 0.16666666666666666
+      "exact_match,flexible-extract": 0.4,
+      "exact_match_stderr,flexible-extract": 0.1632993161855452
     },
     "mmlu_flan_cot_zeroshot_human_aging": {
       "name": "mmlu_flan_cot_zeroshot_human_aging",
       "alias": "mmlu_flan_cot_zeroshot_human_aging",
       "sample_len": 23,
-      "exact_match,strict-match": 0.17391304347826086,
-      "exact_match_stderr,strict-match": 0.08081046758996391,
+      "exact_match,strict-match": 0.08695652173913043,
+      "exact_match_stderr,strict-match": 0.060073850409370216,
       "exact_match,flexible-extract": 0.782608695652174,
-      "exact_match_stderr,flexible-extract": 0.08793911249520549
+      "exact_match_stderr,flexible-extract": 0.08793911249520547
     },
     "mmlu_flan_cot_zeroshot_management": {
       "name": "mmlu_flan_cot_zeroshot_management",
       "alias": "mmlu_flan_cot_zeroshot_management",
       "sample_len": 11,
-      "exact_match,strict-match": 0.09090909090909091,
-      "exact_match_stderr,strict-match": 0.0909090909090909,
+      "exact_match,strict-match": 0.2727272727272727,
+      "exact_match_stderr,strict-match": 0.14083575804390605,
       "exact_match,flexible-extract": 0.9090909090909091,
       "exact_match_stderr,flexible-extract": 0.09090909090909091
     },
@@ -255,81 +255,81 @@
       "alias": "mmlu_flan_cot_zeroshot_marketing",
       "sample_len": 25,
       "exact_match,strict-match": 0.04,
-      "exact_match_stderr,strict-match": 0.04,
-      "exact_match,flexible-extract": 0.72,
-      "exact_match_stderr,flexible-extract": 0.09165151389911678
+      "exact_match_stderr,strict-match": 0.040000000000000015,
+      "exact_match,flexible-extract": 0.76,
+      "exact_match_stderr,flexible-extract": 0.08717797887081345
     },
     "mmlu_flan_cot_zeroshot_medical_genetics": {
       "name": "mmlu_flan_cot_zeroshot_medical_genetics",
       "alias": "mmlu_flan_cot_zeroshot_medical_genetics",
       "sample_len": 11,
-      "exact_match,strict-match": 0.45454545454545453,
-      "exact_match_stderr,strict-match": 0.15745916432444335,
-      "exact_match,flexible-extract": 0.8181818181818182,
-      "exact_match_stderr,flexible-extract": 0.12196734422726126
+      "exact_match,strict-match": 0.2727272727272727,
+      "exact_match_stderr,strict-match": 0.14083575804390605,
+      "exact_match,flexible-extract": 1.0,
+      "exact_match_stderr,flexible-extract": 0.0
     },
     "mmlu_flan_cot_zeroshot_miscellaneous": {
       "name": "mmlu_flan_cot_zeroshot_miscellaneous",
       "alias": "mmlu_flan_cot_zeroshot_miscellaneous",
       "sample_len": 86,
-      "exact_match,strict-match": 0.18604651162790697,
-      "exact_match_stderr,strict-match": 0.0422086145568851,
-      "exact_match,flexible-extract": 0.813953488372093,
-      "exact_match_stderr,flexible-extract": 0.042208614556885106
+      "exact_match,strict-match": 0.20930232558139536,
+      "exact_match_stderr,strict-match": 0.04412480456048907,
+      "exact_match,flexible-extract": 0.8023255813953488,
+      "exact_match_stderr,flexible-extract": 0.04319575725815515
     },
     "mmlu_flan_cot_zeroshot_nutrition": {
       "name": "mmlu_flan_cot_zeroshot_nutrition",
       "alias": "mmlu_flan_cot_zeroshot_nutrition",
       "sample_len": 33,
-      "exact_match,strict-match": 0.15151515151515152,
-      "exact_match_stderr,strict-match": 0.06338333534349057,
-      "exact_match,flexible-extract": 0.5757575757575758,
-      "exact_match_stderr,flexible-extract": 0.08736789844447573
+      "exact_match,strict-match": 0.12121212121212122,
+      "exact_match_stderr,strict-match": 0.05769525080199928,
+      "exact_match,flexible-extract": 0.7272727272727273,
+      "exact_match_stderr,flexible-extract": 0.0787295821622217
     },
     "mmlu_flan_cot_zeroshot_professional_accounting": {
       "name": "mmlu_flan_cot_zeroshot_professional_accounting",
       "alias": "mmlu_flan_cot_zeroshot_professional_accounting",
       "sample_len": 31,
-      "exact_match,strict-match": 0.03225806451612903,
-      "exact_match_stderr,strict-match": 0.03225806451612904,
-      "exact_match,flexible-extract": 0.7096774193548387,
-      "exact_match_stderr,flexible-extract": 0.08287246824945245
+      "exact_match,strict-match": 0.12903225806451613,
+      "exact_match_stderr,strict-match": 0.06120537406777509,
+      "exact_match,flexible-extract": 0.5483870967741935,
+      "exact_match_stderr,flexible-extract": 0.09085862440549507
     },
     "mmlu_flan_cot_zeroshot_professional_medicine": {
       "name": "mmlu_flan_cot_zeroshot_professional_medicine",
       "alias": "mmlu_flan_cot_zeroshot_professional_medicine",
       "sample_len": 31,
-      "exact_match,strict-match": 0.12903225806451613,
-      "exact_match_stderr,strict-match": 0.06120537406777505,
-      "exact_match,flexible-extract": 0.7419354838709677,
-      "exact_match_stderr,flexible-extract": 0.07988892740217941
+      "exact_match,strict-match": 0.1935483870967742,
+      "exact_match_stderr,strict-match": 0.07213122508063838,
+      "exact_match,flexible-extract": 0.7096774193548387,
+      "exact_match_stderr,flexible-extract": 0.08287246824945245
     },
     "mmlu_flan_cot_zeroshot_virology": {
       "name": "mmlu_flan_cot_zeroshot_virology",
       "alias": "mmlu_flan_cot_zeroshot_virology",
       "sample_len": 18,
-      "exact_match,strict-match": 0.1111111111111111,
-      "exact_match_stderr,strict-match": 0.07622159339667062,
-      "exact_match,flexible-extract": 0.5,
-      "exact_match_stderr,flexible-extract": 0.12126781251816651
+      "exact_match,strict-match": 0.16666666666666666,
+      "exact_match_stderr,strict-match": 0.0903876907577734,
+      "exact_match,flexible-extract": 0.5555555555555556,
+      "exact_match_stderr,flexible-extract": 0.12051692101036454
     },
     "mmlu_flan_cot_zeroshot_econometrics": {
       "name": "mmlu_flan_cot_zeroshot_econometrics",
       "alias": "mmlu_flan_cot_zeroshot_econometrics",
       "sample_len": 12,
-      "exact_match,strict-match": 0.25,
-      "exact_match_stderr,strict-match": 0.1305582419667734,
-      "exact_match,flexible-extract": 0.75,
-      "exact_match_stderr,flexible-extract": 0.1305582419667734
+      "exact_match,strict-match": 0.16666666666666666,
+      "exact_match_stderr,strict-match": 0.1123666437438737,
+      "exact_match,flexible-extract": 0.6666666666666666,
+      "exact_match_stderr,flexible-extract": 0.1421338109037403
     },
     "mmlu_flan_cot_zeroshot_high_school_geography": {
       "name": "mmlu_flan_cot_zeroshot_high_school_geography",
       "alias": "mmlu_flan_cot_zeroshot_high_school_geography",
       "sample_len": 22,
-      "exact_match,strict-match": 0.18181818181818182,
-      "exact_match_stderr,strict-match": 0.08416546361568647,
-      "exact_match,flexible-extract": 0.7272727272727273,
-      "exact_match_stderr,flexible-extract": 0.0971859061499725
+      "exact_match,strict-match": 0.045454545454545456,
+      "exact_match_stderr,strict-match": 0.04545454545454547,
+      "exact_match,flexible-extract": 1.0,
+      "exact_match_stderr,flexible-extract": 0.0
     },
     "mmlu_flan_cot_zeroshot_high_school_government_and_politics": {
       "name": "mmlu_flan_cot_zeroshot_high_school_government_and_politics",
@@ -344,8 +344,8 @@
       "name": "mmlu_flan_cot_zeroshot_high_school_macroeconomics",
       "alias": "mmlu_flan_cot_zeroshot_high_school_macroeconomics",
       "sample_len": 43,
-      "exact_match,strict-match": 0.23255813953488372,
-      "exact_match_stderr,strict-match": 0.06518743146295214,
+      "exact_match,strict-match": 0.3488372093023256,
+      "exact_match_stderr,strict-match": 0.07354134093414838,
       "exact_match,flexible-extract": 0.8837209302325582,
       "exact_match_stderr,flexible-extract": 0.049463369732286364
     },
@@ -354,63 +354,63 @@
       "alias": "mmlu_flan_cot_zeroshot_high_school_microeconomics",
       "sample_len": 26,
       "exact_match,strict-match": 0.2692307692307692,
-      "exact_match_stderr,strict-match": 0.08871201995900614,
-      "exact_match,flexible-extract": 0.9230769230769231,
-      "exact_match_stderr,flexible-extract": 0.053293871002119304
+      "exact_match_stderr,strict-match": 0.08871201995900616,
+      "exact_match,flexible-extract": 0.8846153846153846,
+      "exact_match_stderr,flexible-extract": 0.06389710663783134
     },
     "mmlu_flan_cot_zeroshot_high_school_psychology": {
       "name": "mmlu_flan_cot_zeroshot_high_school_psychology",
       "alias": "mmlu_flan_cot_zeroshot_high_school_psychology",
       "sample_len": 60,
-      "exact_match,strict-match": 0.2,
-      "exact_match_stderr,strict-match": 0.05207556439232954,
-      "exact_match,flexible-extract": 0.9166666666666666,
-      "exact_match_stderr,flexible-extract": 0.03598231413236442
+      "exact_match,strict-match": 0.13333333333333333,
+      "exact_match_stderr,strict-match": 0.04425571983630766,
+      "exact_match,flexible-extract": 0.9,
+      "exact_match_stderr,flexible-extract": 0.039056673294247134
     },
     "mmlu_flan_cot_zeroshot_human_sexuality": {
       "name": "mmlu_flan_cot_zeroshot_human_sexuality",
       "alias": "mmlu_flan_cot_zeroshot_human_sexuality",
       "sample_len": 12,
-      "exact_match,strict-match": 0.0,
-      "exact_match_stderr,strict-match": 0.0,
-      "exact_match,flexible-extract": 0.8333333333333334,
-      "exact_match_stderr,flexible-extract": 0.11236664374387367
+      "exact_match,strict-match": 0.16666666666666666,
+      "exact_match_stderr,strict-match": 0.11236664374387367,
+      "exact_match,flexible-extract": 0.75,
+      "exact_match_stderr,flexible-extract": 0.1305582419667734
     },
     "mmlu_flan_cot_zeroshot_professional_psychology": {
       "name": "mmlu_flan_cot_zeroshot_professional_psychology",
       "alias": "mmlu_flan_cot_zeroshot_professional_psychology",
       "sample_len": 69,
       "exact_match,strict-match": 0.11594202898550725,
-      "exact_match_stderr,strict-match": 0.03882454402978924,
-      "exact_match,flexible-extract": 0.6811594202898551,
-      "exact_match_stderr,flexible-extract": 0.05651408783764653
+      "exact_match_stderr,strict-match": 0.03882454402978923,
+      "exact_match,flexible-extract": 0.6521739130434783,
+      "exact_match_stderr,flexible-extract": 0.057757492535223574
     },
     "mmlu_flan_cot_zeroshot_public_relations": {
       "name": "mmlu_flan_cot_zeroshot_public_relations",
       "alias": "mmlu_flan_cot_zeroshot_public_relations",
       "sample_len": 12,
-      "exact_match,strict-match": 0.25,
-      "exact_match_stderr,strict-match": 0.1305582419667734,
-      "exact_match,flexible-extract": 0.5,
-      "exact_match_stderr,flexible-extract": 0.15075567228888181
+      "exact_match,strict-match": 0.16666666666666666,
+      "exact_match_stderr,strict-match": 0.11236664374387369,
+      "exact_match,flexible-extract": 0.5833333333333334,
+      "exact_match_stderr,flexible-extract": 0.1486470975026408
     },
     "mmlu_flan_cot_zeroshot_security_studies": {
       "name": "mmlu_flan_cot_zeroshot_security_studies",
       "alias": "mmlu_flan_cot_zeroshot_security_studies",
       "sample_len": 27,
       "exact_match,strict-match": 0.1111111111111111,
-      "exact_match_stderr,strict-match": 0.061633355136136575,
-      "exact_match,flexible-extract": 0.6666666666666666,
-      "exact_match_stderr,flexible-extract": 0.09245003270420483
+      "exact_match_stderr,strict-match": 0.06163335513613659,
+      "exact_match,flexible-extract": 0.7037037037037037,
+      "exact_match_stderr,flexible-extract": 0.0895511888632576
     },
     "mmlu_flan_cot_zeroshot_sociology": {
       "name": "mmlu_flan_cot_zeroshot_sociology",
       "alias": "mmlu_flan_cot_zeroshot_sociology",
       "sample_len": 22,
-      "exact_match,strict-match": 0.13636363636363635,
-      "exact_match_stderr,strict-match": 0.07488677009526491,
-      "exact_match,flexible-extract": 0.8181818181818182,
-      "exact_match_stderr,flexible-extract": 0.08416546361568648
+      "exact_match,strict-match": 0.18181818181818182,
+      "exact_match_stderr,strict-match": 0.08416546361568647,
+      "exact_match,flexible-extract": 0.8636363636363636,
+      "exact_match_stderr,flexible-extract": 0.07488677009526491
     },
     "mmlu_flan_cot_zeroshot_us_foreign_policy": {
       "name": "mmlu_flan_cot_zeroshot_us_foreign_policy",
@@ -425,26 +425,26 @@
       "name": "mmlu_flan_cot_zeroshot_formal_logic",
       "alias": "mmlu_flan_cot_zeroshot_formal_logic",
       "sample_len": 14,
-      "exact_match,strict-match": 0.2857142857142857,
-      "exact_match_stderr,strict-match": 0.12529400275814703,
-      "exact_match,flexible-extract": 0.7857142857142857,
-      "exact_match_stderr,flexible-extract": 0.11380392954509881
+      "exact_match,strict-match": 0.35714285714285715,
+      "exact_match_stderr,strict-match": 0.13289435848843761,
+      "exact_match,flexible-extract": 0.9285714285714286,
+      "exact_match_stderr,flexible-extract": 0.0714285714285714
     },
     "mmlu_flan_cot_zeroshot_high_school_european_history": {
       "name": "mmlu_flan_cot_zeroshot_high_school_european_history",
       "alias": "mmlu_flan_cot_zeroshot_high_school_european_history",
       "sample_len": 18,
-      "exact_match,strict-match": 0.16666666666666666,
-      "exact_match_stderr,strict-match": 0.09038769075777339,
-      "exact_match,flexible-extract": 0.7222222222222222,
-      "exact_match_stderr,flexible-extract": 0.1086324845659782
+      "exact_match,strict-match": 0.2222222222222222,
+      "exact_match_stderr,strict-match": 0.1008316903303367,
+      "exact_match,flexible-extract": 0.7777777777777778,
+      "exact_match_stderr,flexible-extract": 0.1008316903303367
     },
     "mmlu_flan_cot_zeroshot_high_school_us_history": {
       "name": "mmlu_flan_cot_zeroshot_high_school_us_history",
       "alias": "mmlu_flan_cot_zeroshot_high_school_us_history",
       "sample_len": 22,
-      "exact_match,strict-match": 0.13636363636363635,
-      "exact_match_stderr,strict-match": 0.07488677009526491,
+      "exact_match,strict-match": 0.2727272727272727,
+      "exact_match_stderr,strict-match": 0.09718590614997252,
       "exact_match,flexible-extract": 0.8636363636363636,
       "exact_match_stderr,flexible-extract": 0.0748867700952649
     },
@@ -452,19 +452,19 @@
       "name": "mmlu_flan_cot_zeroshot_high_school_world_history",
       "alias": "mmlu_flan_cot_zeroshot_high_school_world_history",
       "sample_len": 26,
-      "exact_match,strict-match": 0.23076923076923078,
-      "exact_match_stderr,strict-match": 0.08426500884694862,
-      "exact_match,flexible-extract": 0.7692307692307693,
-      "exact_match_stderr,flexible-extract": 0.08426500884694864
+      "exact_match,strict-match": 0.19230769230769232,
+      "exact_match_stderr,strict-match": 0.07882269819968922,
+      "exact_match,flexible-extract": 0.8461538461538461,
+      "exact_match_stderr,flexible-extract": 0.072160242458822
     },
     "mmlu_flan_cot_zeroshot_international_law": {
       "name": "mmlu_flan_cot_zeroshot_international_law",
       "alias": "mmlu_flan_cot_zeroshot_international_law",
       "sample_len": 13,
-      "exact_match,strict-match": 0.23076923076923078,
-      "exact_match_stderr,strict-match": 0.12162606385262997,
-      "exact_match,flexible-extract": 0.8461538461538461,
-      "exact_match_stderr,flexible-extract": 0.10415433852097385
+      "exact_match,strict-match": 0.15384615384615385,
+      "exact_match_stderr,strict-match": 0.10415433852097386,
+      "exact_match,flexible-extract": 0.7692307692307693,
+      "exact_match_stderr,flexible-extract": 0.12162606385262997
     },
     "mmlu_flan_cot_zeroshot_jurisprudence": {
       "name": "mmlu_flan_cot_zeroshot_jurisprudence",
@@ -472,24 +472,24 @@
       "sample_len": 11,
       "exact_match,strict-match": 0.09090909090909091,
       "exact_match_stderr,strict-match": 0.0909090909090909,
-      "exact_match,flexible-extract": 0.6363636363636364,
-      "exact_match_stderr,flexible-extract": 0.15212000482437738
+      "exact_match,flexible-extract": 0.8181818181818182,
+      "exact_match_stderr,flexible-extract": 0.12196734422726124
     },
     "mmlu_flan_cot_zeroshot_logical_fallacies": {
       "name": "mmlu_flan_cot_zeroshot_logical_fallacies",
       "alias": "mmlu_flan_cot_zeroshot_logical_fallacies",
       "sample_len": 18,
-      "exact_match,strict-match": 0.2222222222222222,
-      "exact_match_stderr,strict-match": 0.10083169033033672,
-      "exact_match,flexible-extract": 0.7777777777777778,
-      "exact_match_stderr,flexible-extract": 0.10083169033033673
+      "exact_match,strict-match": 0.2777777777777778,
+      "exact_match_stderr,strict-match": 0.1086324845659782,
+      "exact_match,flexible-extract": 0.8333333333333334,
+      "exact_match_stderr,flexible-extract": 0.0903876907577734
     },
     "mmlu_flan_cot_zeroshot_moral_disputes": {
       "name": "mmlu_flan_cot_zeroshot_moral_disputes",
       "alias": "mmlu_flan_cot_zeroshot_moral_disputes",
       "sample_len": 38,
-      "exact_match,strict-match": 0.05263157894736842,
-      "exact_match_stderr,strict-match": 0.03670978065594293,
+      "exact_match,strict-match": 0.10526315789473684,
+      "exact_match_stderr,strict-match": 0.05045276771256955,
       "exact_match,flexible-extract": 0.6052631578947368,
       "exact_match_stderr,flexible-extract": 0.0803572542664568
     },
@@ -497,123 +497,123 @@
       "name": "mmlu_flan_cot_zeroshot_moral_scenarios",
       "alias": "mmlu_flan_cot_zeroshot_moral_scenarios",
       "sample_len": 100,
-      "exact_match,strict-match": 0.17,
-      "exact_match_stderr,strict-match": 0.0377525168068637,
-      "exact_match,flexible-extract": 0.57,
-      "exact_match_stderr,flexible-extract": 0.04975698519562426
+      "exact_match,strict-match": 0.21,
+      "exact_match_stderr,strict-match": 0.040936018074033256,
+      "exact_match,flexible-extract": 0.54,
+      "exact_match_stderr,flexible-extract": 0.05009082659620333
     },
     "mmlu_flan_cot_zeroshot_philosophy": {
       "name": "mmlu_flan_cot_zeroshot_philosophy",
       "alias": "mmlu_flan_cot_zeroshot_philosophy",
       "sample_len": 34,
-      "exact_match,strict-match": 0.14705882352941177,
-      "exact_match_stderr,strict-match": 0.061652134066029464,
-      "exact_match,flexible-extract": 0.6764705882352942,
-      "exact_match_stderr,flexible-extract": 0.081437488852138
+      "exact_match,strict-match": 0.029411764705882353,
+      "exact_match_stderr,strict-match": 0.029411764705882342,
+      "exact_match,flexible-extract": 0.7941176470588235,
+      "exact_match_stderr,flexible-extract": 0.07038741487212932
     },
     "mmlu_flan_cot_zeroshot_prehistory": {
       "name": "mmlu_flan_cot_zeroshot_prehistory",
       "alias": "mmlu_flan_cot_zeroshot_prehistory",
       "sample_len": 35,
-      "exact_match,strict-match": 0.14285714285714285,
-      "exact_match_stderr,strict-match": 0.06001200360120041,
-      "exact_match,flexible-extract": 0.7428571428571429,
-      "exact_match_stderr,flexible-extract": 0.07495496847387484
+      "exact_match,strict-match": 0.05714285714285714,
+      "exact_match_stderr,strict-match": 0.039807459772527774,
+      "exact_match,flexible-extract": 0.8571428571428571,
+      "exact_match_stderr,flexible-extract": 0.06001200360120041
     },
     "mmlu_flan_cot_zeroshot_professional_law": {
       "name": "mmlu_flan_cot_zeroshot_professional_law",
       "alias": "mmlu_flan_cot_zeroshot_professional_law",
       "sample_len": 170,
-      "exact_match,strict-match": 0.13529411764705881,
-      "exact_match_stderr,strict-match": 0.026310573321459974,
-      "exact_match,flexible-extract": 0.45294117647058824,
-      "exact_match_stderr,flexible-extract": 0.03829081085618105
+      "exact_match,strict-match": 0.08235294117647059,
+      "exact_match_stderr,strict-match": 0.021146283159362792,
+      "exact_match,flexible-extract": 0.4764705882352941,
+      "exact_match_stderr,flexible-extract": 0.038418927687108306
     },
     "mmlu_flan_cot_zeroshot_world_religions": {
       "name": "mmlu_flan_cot_zeroshot_world_religions",
       "alias": "mmlu_flan_cot_zeroshot_world_religions",
       "sample_len": 19,
-      "exact_match,strict-match": 0.10526315789473684,
-      "exact_match_stderr,strict-match": 0.07233518641434492,
-      "exact_match,flexible-extract": 0.7894736842105263,
-      "exact_match_stderr,flexible-extract": 0.0960916767552923
+      "exact_match,strict-match": 0.05263157894736842,
+      "exact_match_stderr,strict-match": 0.05263157894736842,
+      "exact_match,flexible-extract": 0.8421052631578947,
+      "exact_match_stderr,flexible-extract": 0.08594700851870798
     },
     "mmlu_pro_biology": {
       "name": "mmlu_pro_biology",
       "alias": "biology",
       "sample_len": 717,
-      "exact_match,custom-extract": 0.7210599721059973,
-      "exact_match_stderr,custom-extract": 0.016760408620091188
+      "exact_match,custom-extract": 0.7280334728033473,
+      "exact_match_stderr,custom-extract": 0.016629411889128195
     },
     "mmlu_pro_business": {
       "name": "mmlu_pro_business",
       "alias": "business",
       "sample_len": 789,
-      "exact_match,custom-extract": 0.6666666666666666,
-      "exact_match_stderr,custom-extract": 0.016793090728662707
+      "exact_match,custom-extract": 0.6514575411913816,
+      "exact_match_stderr,custom-extract": 0.0169749222771433
     },
     "mmlu_pro_chemistry": {
       "name": "mmlu_pro_chemistry",
       "alias": "chemistry",
       "sample_len": 1132,
-      "exact_match,custom-extract": 0.6121908127208481,
-      "exact_match_stderr,custom-extract": 0.014488424036822132
+      "exact_match,custom-extract": 0.6643109540636042,
+      "exact_match_stderr,custom-extract": 0.014041806669685108
     },
     "mmlu_pro_computer_science": {
       "name": "mmlu_pro_computer_science",
       "alias": "computer_science",
       "sample_len": 410,
-      "exact_match,custom-extract": 0.6390243902439025,
-      "exact_match_stderr,custom-extract": 0.023748489537211658
+      "exact_match,custom-extract": 0.6268292682926829,
+      "exact_match_stderr,custom-extract": 0.023914800723686756
     },
     "mmlu_pro_economics": {
       "name": "mmlu_pro_economics",
       "alias": "economics",
       "sample_len": 844,
-      "exact_match,custom-extract": 0.6575829383886256,
-      "exact_match_stderr,custom-extract": 0.016343278408706637
+      "exact_match,custom-extract": 0.6812796208530806,
+      "exact_match_stderr,custom-extract": 0.016049216233579015
     },
     "mmlu_pro_engineering": {
       "name": "mmlu_pro_engineering",
       "alias": "engineering",
       "sample_len": 969,
-      "exact_match,custom-extract": 0.3384932920536636,
-      "exact_match_stderr,custom-extract": 0.01520913381264452
+      "exact_match,custom-extract": 0.35810113519091846,
+      "exact_match_stderr,custom-extract": 0.015409852225959987
     },
     "mmlu_pro_health": {
       "name": "mmlu_pro_health",
       "alias": "health",
       "sample_len": 818,
-      "exact_match,custom-extract": 0.5244498777506112,
-      "exact_match_stderr,custom-extract": 0.017471858943175007
+      "exact_match,custom-extract": 0.5366748166259169,
+      "exact_match_stderr,custom-extract": 0.017445665179880242
     },
     "mmlu_pro_history": {
       "name": "mmlu_pro_history",
       "alias": "history",
       "sample_len": 381,
-      "exact_match,custom-extract": 0.3989501312335958,
-      "exact_match_stderr,custom-extract": 0.02512018081680921
+      "exact_match,custom-extract": 0.4120734908136483,
+      "exact_match_stderr,custom-extract": 0.025249748773231766
     },
     "mmlu_pro_law": {
       "name": "mmlu_pro_law",
       "alias": "law",
       "sample_len": 1101,
-      "exact_match,custom-extract": 0.23069936421435058,
-      "exact_match_stderr,custom-extract": 0.012702081703600753
+      "exact_match,custom-extract": 0.2670299727520436,
+      "exact_match_stderr,custom-extract": 0.013339107452902472
     },
     "mmlu_pro_math": {
       "name": "mmlu_pro_math",
       "alias": "math",
       "sample_len": 1351,
-      "exact_match,custom-extract": 0.7823834196891192,
-      "exact_match_stderr,custom-extract": 0.011230237103287721
+      "exact_match,custom-extract": 0.8164322723908216,
+      "exact_match_stderr,custom-extract": 0.010536378497573613
     },
     "mmlu_pro_other": {
       "name": "mmlu_pro_other",
       "alias": "other",
       "sample_len": 924,
-      "exact_match,custom-extract": 0.5162337662337663,
-      "exact_match_stderr,custom-extract": 0.016449023814056486
+      "exact_match,custom-extract": 0.5151515151515151,
+      "exact_match_stderr,custom-extract": 0.01645014239512041
     },
     "mmlu_pro_philosophy": {
       "name": "mmlu_pro_philosophy",
@@ -626,15 +626,15 @@
       "name": "mmlu_pro_physics",
       "alias": "physics",
       "sample_len": 1299,
-      "exact_match,custom-extract": 0.6358737490377213,
-      "exact_match_stderr,custom-extract": 0.013355928847496203
+      "exact_match,custom-extract": 0.6797536566589685,
+      "exact_match_stderr,custom-extract": 0.012950320593735555
     },
     "mmlu_pro_psychology": {
       "name": "mmlu_pro_psychology",
       "alias": "psychology",
       "sample_len": 798,
-      "exact_match,custom-extract": 0.6365914786967418,
-      "exact_match_stderr,custom-extract": 0.01703722280884383
+      "exact_match,custom-extract": 0.6240601503759399,
+      "exact_match_stderr,custom-extract": 0.017157074879768554
     },
     "mmlu_flan_cot_zeroshot::stem": {
       "alias": "mmlu_flan_cot_zeroshot::stem",
@@ -665,8 +665,8 @@
       "alias": "mmlu_pro",
       "name": "mmlu_pro",
       "sample_len": 12032,
-      "exact_match,custom-extract": 0.5674035904255319,
-      "exact_match_stderr,custom-extract": 0.004282126252037927,
+      "exact_match,custom-extract": 0.5867686170212766,
+      "exact_match_stderr,custom-extract": 0.004252226237812442,
       "sample_count": {
         "exact_match,custom-extract": 12032
       }
@@ -674,59 +674,6 @@
   },
   "group_subtasks": {},
   "configs": {
-    "aime25": {
-      "task": "aime25",
-      "dataset_path": "math-ai/aime25",
-      "training_split": "test",
-      "test_split": "test",
-      "fewshot_split": "test",
-      "doc_to_text": "Question: {{problem}}\nAnswer:",
-      "doc_to_target": "{{answer}}",
-      "unsafe_code": false,
-      "process_results": "def process_results(doc: dict, results: List[str]) -> Dict[str, int]:\n    retval = 0\n    response = results[0]\n\n    # Try to extract answer from $...$ format first\n    indices = [pos for pos, char in enumerate(response) if char == \"$\"]\n    if len(indices) <= 1:\n        answer = response\n    else:\n        answer = response[indices[0] + 1 : indices[-1]]\n\n    # Extract from \\\\boxed{} if present\n    boxed_answer = last_boxed_only_string(response)\n    if boxed_answer is not None:\n        try:\n            boxed_content = remove_boxed(boxed_answer)\n            if boxed_content is not None:\n                answer = boxed_content\n        except (AssertionError, IndexError):\n            pass\n\n    # Check if answer matches target\n    answer_key = next(k for k in doc.keys() if k.lower() == \"answer\")\n    target = str(doc[answer_key])\n    if is_equiv(answer, target):\n        retval = 1\n\n    return {\"exact_match\": retval}\n",
-      "description": "",
-      "target_delimiter": " ",
-      "fewshot_delimiter": "\n\n",
-      "fewshot_config": {
-        "sampler": "default",
-        "split": "test",
-        "process_docs": null,
-        "fewshot_indices": null,
-        "samples": null,
-        "doc_to_text": "Question: {{problem}}\nAnswer:",
-        "doc_to_choice": null,
-        "doc_to_target": "{{answer}}",
-        "gen_prefix": null,
-        "fewshot_delimiter": "\n\n",
-        "target_delimiter": " "
-      },
-      "num_fewshot": 0,
-      "metric_list": [
-        {
-          "metric": "exact_match",
-          "aggregation": "mean",
-          "higher_is_better": true
-        }
-      ],
-      "output_type": "generate_until",
-      "generation_kwargs": {
-        "until": [
-          "Question:",
-          "</s>",
-          "<|im_end|>",
-          "<|eot_id|>"
-        ],
-        "do_sample": false,
-        "temperature": 0.0,
-        "max_gen_toks": 4096
-      },
-      "repeats": 1,
-      "should_decontaminate": false,
-      "metadata": {
-        "version": 0.0,
-        "config_source": "/lustre/fsw/portfolios/adlr/users/apanferov/prefill-decode/lm_eval_overlay/lm_eval/tasks/aime/aime25.yaml"
-      }
-    },
     "gsm8k": {
       "task": "gsm8k",
       "dataset_path": "openai/gsm8k",
@@ -814,6 +761,59 @@
         "config_source": "/lustre/fsw/portfolios/adlr/users/apanferov/prefill-decode/lm_eval_overlay/lm_eval/tasks/gsm8k/gsm8k.yaml"
       }
     },
+    "aime25": {
+      "task": "aime25",
+      "dataset_path": "math-ai/aime25",
+      "training_split": "test",
+      "test_split": "test",
+      "fewshot_split": "test",
+      "doc_to_text": "Question: {{problem}}\nAnswer:",
+      "doc_to_target": "{{answer}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: List[str]) -> Dict[str, int]:\n    retval = 0\n    response = results[0]\n\n    # Try to extract answer from $...$ format first\n    indices = [pos for pos, char in enumerate(response) if char == \"$\"]\n    if len(indices) <= 1:\n        answer = response\n    else:\n        answer = response[indices[0] + 1 : indices[-1]]\n\n    # Extract from \\\\boxed{} if present\n    boxed_answer = last_boxed_only_string(response)\n    if boxed_answer is not None:\n        try:\n            boxed_content = remove_boxed(boxed_answer)\n            if boxed_content is not None:\n                answer = boxed_content\n        except (AssertionError, IndexError):\n            pass\n\n    # Check if answer matches target\n    answer_key = next(k for k in doc.keys() if k.lower() == \"answer\")\n    target = str(doc[answer_key])\n    if is_equiv(answer, target):\n        retval = 1\n\n    return {\"exact_match\": retval}\n",
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "default",
+        "split": "test",
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": null,
+        "doc_to_text": "Question: {{problem}}\nAnswer:",
+        "doc_to_choice": null,
+        "doc_to_target": "{{answer}}",
+        "gen_prefix": null,
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "exact_match",
+          "aggregation": "mean",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "until": [
+          "Question:",
+          "</s>",
+          "<|im_end|>",
+          "<|eot_id|>"
+        ],
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 4096
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": {
+        "version": 0.0,
+        "config_source": "/lustre/fsw/portfolios/adlr/users/apanferov/prefill-decode/lm_eval_overlay/lm_eval/tasks/aime/aime25.yaml"
+      }
+    },
     "minerva_math500": {
       "task": "minerva_math500",
       "dataset_path": "HuggingFaceH4/MATH-500",
@@ -830,10 +830,10 @@
       "fewshot_config": {
         "sampler": "first_n",
         "split": null,
-        "process_docs": "<function process_docs at 0x7ffb65d84220>",
+        "process_docs": "<function process_docs at 0x7ffb5c486ca0>",
         "fewshot_indices": null,
-        "samples": "<function list_fewshot_samples at 0x7ffb65a7f600>",
-        "doc_to_text": "<function doc_to_text at 0x7ffb65ea8540>",
+        "samples": "<function list_fewshot_samples at 0x7ffb5c192020>",
+        "doc_to_text": "<function doc_to_text at 0x7ffb5c4379c0>",
         "doc_to_choice": null,
         "doc_to_target": "{{answer if few_shot is undefined else solution}}",
         "gen_prefix": null,
@@ -5549,8 +5549,8 @@
       "dataset_path": "TIGER-Lab/MMLU-Pro",
       "test_split": "test",
       "fewshot_split": "validation",
-      "process_docs": "functools.partial(<function process_docs at 0x7ffb5d6ec7c0>, subject='biology')",
-      "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5d6ec0e0>, including_answer=False)",
+      "process_docs": "functools.partial(<function process_docs at 0x7ffb5577e660>, subject='biology')",
+      "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5577f100>, including_answer=False)",
       "doc_to_target": "answer",
       "unsafe_code": false,
       "description": "The following are multiple choice questions (with answers) about biology. Think step by step and then finish your answer with \"the answer is (X)\" where X is the correct letter choice.\n",
@@ -5559,12 +5559,12 @@
       "fewshot_config": {
         "sampler": "first_n",
         "split": "validation",
-        "process_docs": "functools.partial(<function process_docs at 0x7ffb5d6ec7c0>, subject='biology')",
+        "process_docs": "functools.partial(<function process_docs at 0x7ffb5577e660>, subject='biology')",
         "fewshot_indices": null,
         "samples": null,
-        "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5d6ec0e0>, including_answer=False)",
+        "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5577f100>, including_answer=False)",
         "doc_to_choice": null,
-        "doc_to_target": "functools.partial(<function format_cot_target at 0x7ffb5d6efd80>, including_answer=True)",
+        "doc_to_target": "functools.partial(<function format_cot_target at 0x7ffb5577c040>, including_answer=True)",
         "gen_prefix": null,
         "fewshot_delimiter": "\n\n",
         "target_delimiter": " "
@@ -5615,8 +5615,8 @@
       "dataset_path": "TIGER-Lab/MMLU-Pro",
       "test_split": "test",
       "fewshot_split": "validation",
-      "process_docs": "functools.partial(<function process_docs at 0x7ffb5d6ec7c0>, subject='business')",
-      "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5d6ec0e0>, including_answer=False)",
+      "process_docs": "functools.partial(<function process_docs at 0x7ffb5577e660>, subject='business')",
+      "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5577f100>, including_answer=False)",
       "doc_to_target": "answer",
       "unsafe_code": false,
       "description": "The following are multiple choice questions (with answers) about business. Think step by step and then finish your answer with \"the answer is (X)\" where X is the correct letter choice.\n",
@@ -5625,12 +5625,12 @@
       "fewshot_config": {
         "sampler": "first_n",
         "split": "validation",
-        "process_docs": "functools.partial(<function process_docs at 0x7ffb5d6ec7c0>, subject='business')",
+        "process_docs": "functools.partial(<function process_docs at 0x7ffb5577e660>, subject='business')",
         "fewshot_indices": null,
         "samples": null,
-        "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5d6ec0e0>, including_answer=False)",
+        "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5577f100>, including_answer=False)",
         "doc_to_choice": null,
-        "doc_to_target": "functools.partial(<function format_cot_target at 0x7ffb5d6efd80>, including_answer=True)",
+        "doc_to_target": "functools.partial(<function format_cot_target at 0x7ffb5577c040>, including_answer=True)",
         "gen_prefix": null,
         "fewshot_delimiter": "\n\n",
         "target_delimiter": " "
@@ -5681,8 +5681,8 @@
       "dataset_path": "TIGER-Lab/MMLU-Pro",
       "test_split": "test",
       "fewshot_split": "validation",
-      "process_docs": "functools.partial(<function process_docs at 0x7ffb5d6ec7c0>, subject='chemistry')",
-      "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5d6ec0e0>, including_answer=False)",
+      "process_docs": "functools.partial(<function process_docs at 0x7ffb5577e660>, subject='chemistry')",
+      "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5577f100>, including_answer=False)",
       "doc_to_target": "answer",
       "unsafe_code": false,
       "description": "The following are multiple choice questions (with answers) about chemistry. Think step by step and then finish your answer with \"the answer is (X)\" where X is the correct letter choice.\n",
@@ -5691,12 +5691,12 @@
       "fewshot_config": {
         "sampler": "first_n",
         "split": "validation",
-        "process_docs": "functools.partial(<function process_docs at 0x7ffb5d6ec7c0>, subject='chemistry')",
+        "process_docs": "functools.partial(<function process_docs at 0x7ffb5577e660>, subject='chemistry')",
         "fewshot_indices": null,
         "samples": null,
-        "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5d6ec0e0>, including_answer=False)",
+        "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5577f100>, including_answer=False)",
         "doc_to_choice": null,
-        "doc_to_target": "functools.partial(<function format_cot_target at 0x7ffb5d6efd80>, including_answer=True)",
+        "doc_to_target": "functools.partial(<function format_cot_target at 0x7ffb5577c040>, including_answer=True)",
         "gen_prefix": null,
         "fewshot_delimiter": "\n\n",
         "target_delimiter": " "
@@ -5747,8 +5747,8 @@
       "dataset_path": "TIGER-Lab/MMLU-Pro",
       "test_split": "test",
       "fewshot_split": "validation",
-      "process_docs": "functools.partial(<function process_docs at 0x7ffb5d6ec7c0>, subject='computer science')",
-      "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5d6ec0e0>, including_answer=False)",
+      "process_docs": "functools.partial(<function process_docs at 0x7ffb5577e660>, subject='computer science')",
+      "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5577f100>, including_answer=False)",
       "doc_to_target": "answer",
       "unsafe_code": false,
       "description": "The following are multiple choice questions (with answers) about computer science. Think step by step and then finish your answer with \"the answer is (X)\" where X is the correct letter choice.\n",
@@ -5757,12 +5757,12 @@
       "fewshot_config": {
         "sampler": "first_n",
         "split": "validation",
-        "process_docs": "functools.partial(<function process_docs at 0x7ffb5d6ec7c0>, subject='computer science')",
+        "process_docs": "functools.partial(<function process_docs at 0x7ffb5577e660>, subject='computer science')",
         "fewshot_indices": null,
         "samples": null,
-        "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5d6ec0e0>, including_answer=False)",
+        "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5577f100>, including_answer=False)",
         "doc_to_choice": null,
-        "doc_to_target": "functools.partial(<function format_cot_target at 0x7ffb5d6efd80>, including_answer=True)",
+        "doc_to_target": "functools.partial(<function format_cot_target at 0x7ffb5577c040>, including_answer=True)",
         "gen_prefix": null,
         "fewshot_delimiter": "\n\n",
         "target_delimiter": " "
@@ -5813,8 +5813,8 @@
       "dataset_path": "TIGER-Lab/MMLU-Pro",
       "test_split": "test",
       "fewshot_split": "validation",
-      "process_docs": "functools.partial(<function process_docs at 0x7ffb5d6ec7c0>, subject='economics')",
-      "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5d6ec0e0>, including_answer=False)",
+      "process_docs": "functools.partial(<function process_docs at 0x7ffb5577e660>, subject='economics')",
+      "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5577f100>, including_answer=False)",
       "doc_to_target": "answer",
       "unsafe_code": false,
       "description": "The following are multiple choice questions (with answers) about economics. Think step by step and then finish your answer with \"the answer is (X)\" where X is the correct letter choice.\n",
@@ -5823,12 +5823,12 @@
       "fewshot_config": {
         "sampler": "first_n",
         "split": "validation",
-        "process_docs": "functools.partial(<function process_docs at 0x7ffb5d6ec7c0>, subject='economics')",
+        "process_docs": "functools.partial(<function process_docs at 0x7ffb5577e660>, subject='economics')",
         "fewshot_indices": null,
         "samples": null,
-        "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5d6ec0e0>, including_answer=False)",
+        "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5577f100>, including_answer=False)",
         "doc_to_choice": null,
-        "doc_to_target": "functools.partial(<function format_cot_target at 0x7ffb5d6efd80>, including_answer=True)",
+        "doc_to_target": "functools.partial(<function format_cot_target at 0x7ffb5577c040>, including_answer=True)",
         "gen_prefix": null,
         "fewshot_delimiter": "\n\n",
         "target_delimiter": " "
@@ -5879,8 +5879,8 @@
       "dataset_path": "TIGER-Lab/MMLU-Pro",
       "test_split": "test",
       "fewshot_split": "validation",
-      "process_docs": "functools.partial(<function process_docs at 0x7ffb5d6ec7c0>, subject='engineering')",
-      "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5d6ec0e0>, including_answer=False)",
+      "process_docs": "functools.partial(<function process_docs at 0x7ffb5577e660>, subject='engineering')",
+      "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5577f100>, including_answer=False)",
       "doc_to_target": "answer",
       "unsafe_code": false,
       "description": "The following are multiple choice questions (with answers) about engineering. Think step by step and then finish your answer with \"the answer is (X)\" where X is the correct letter choice.\n",
@@ -5889,12 +5889,12 @@
       "fewshot_config": {
         "sampler": "first_n",
         "split": "validation",
-        "process_docs": "functools.partial(<function process_docs at 0x7ffb5d6ec7c0>, subject='engineering')",
+        "process_docs": "functools.partial(<function process_docs at 0x7ffb5577e660>, subject='engineering')",
         "fewshot_indices": null,
         "samples": null,
-        "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5d6ec0e0>, including_answer=False)",
+        "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5577f100>, including_answer=False)",
         "doc_to_choice": null,
-        "doc_to_target": "functools.partial(<function format_cot_target at 0x7ffb5d6efd80>, including_answer=True)",
+        "doc_to_target": "functools.partial(<function format_cot_target at 0x7ffb5577c040>, including_answer=True)",
         "gen_prefix": null,
         "fewshot_delimiter": "\n\n",
         "target_delimiter": " "
@@ -5945,8 +5945,8 @@
       "dataset_path": "TIGER-Lab/MMLU-Pro",
       "test_split": "test",
       "fewshot_split": "validation",
-      "process_docs": "functools.partial(<function process_docs at 0x7ffb5d6ec7c0>, subject='health')",
-      "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5d6ec0e0>, including_answer=False)",
+      "process_docs": "functools.partial(<function process_docs at 0x7ffb5577e660>, subject='health')",
+      "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5577f100>, including_answer=False)",
       "doc_to_target": "answer",
       "unsafe_code": false,
       "description": "The following are multiple choice questions (with answers) about health. Think step by step and then finish your answer with \"the answer is (X)\" where X is the correct letter choice.\n",
@@ -5955,12 +5955,12 @@
       "fewshot_config": {
         "sampler": "first_n",
         "split": "validation",
-        "process_docs": "functools.partial(<function process_docs at 0x7ffb5d6ec7c0>, subject='health')",
+        "process_docs": "functools.partial(<function process_docs at 0x7ffb5577e660>, subject='health')",
         "fewshot_indices": null,
         "samples": null,
-        "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5d6ec0e0>, including_answer=False)",
+        "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5577f100>, including_answer=False)",
         "doc_to_choice": null,
-        "doc_to_target": "functools.partial(<function format_cot_target at 0x7ffb5d6efd80>, including_answer=True)",
+        "doc_to_target": "functools.partial(<function format_cot_target at 0x7ffb5577c040>, including_answer=True)",
         "gen_prefix": null,
         "fewshot_delimiter": "\n\n",
         "target_delimiter": " "
@@ -6011,8 +6011,8 @@
       "dataset_path": "TIGER-Lab/MMLU-Pro",
       "test_split": "test",
       "fewshot_split": "validation",
-      "process_docs": "functools.partial(<function process_docs at 0x7ffb5d6ec7c0>, subject='history')",
-      "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5d6ec0e0>, including_answer=False)",
+      "process_docs": "functools.partial(<function process_docs at 0x7ffb5577e660>, subject='history')",
+      "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5577f100>, including_answer=False)",
       "doc_to_target": "answer",
       "unsafe_code": false,
       "description": "The following are multiple choice questions (with answers) about history. Think step by step and then finish your answer with \"the answer is (X)\" where X is the correct letter choice.\n",
@@ -6021,12 +6021,12 @@
       "fewshot_config": {
         "sampler": "first_n",
         "split": "validation",
-        "process_docs": "functools.partial(<function process_docs at 0x7ffb5d6ec7c0>, subject='history')",
+        "process_docs": "functools.partial(<function process_docs at 0x7ffb5577e660>, subject='history')",
         "fewshot_indices": null,
         "samples": null,
-        "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5d6ec0e0>, including_answer=False)",
+        "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5577f100>, including_answer=False)",
         "doc_to_choice": null,
-        "doc_to_target": "functools.partial(<function format_cot_target at 0x7ffb5d6efd80>, including_answer=True)",
+        "doc_to_target": "functools.partial(<function format_cot_target at 0x7ffb5577c040>, including_answer=True)",
         "gen_prefix": null,
         "fewshot_delimiter": "\n\n",
         "target_delimiter": " "
@@ -6077,8 +6077,8 @@
       "dataset_path": "TIGER-Lab/MMLU-Pro",
       "test_split": "test",
       "fewshot_split": "validation",
-      "process_docs": "functools.partial(<function process_docs at 0x7ffb5d6ec7c0>, subject='law')",
-      "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5d6ec0e0>, including_answer=False)",
+      "process_docs": "functools.partial(<function process_docs at 0x7ffb5577e660>, subject='law')",
+      "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5577f100>, including_answer=False)",
       "doc_to_target": "answer",
       "unsafe_code": false,
       "description": "The following are multiple choice questions (with answers) about law. Think step by step and then finish your answer with \"the answer is (X)\" where X is the correct letter choice.\n",
@@ -6087,12 +6087,12 @@
       "fewshot_config": {
         "sampler": "first_n",
         "split": "validation",
-        "process_docs": "functools.partial(<function process_docs at 0x7ffb5d6ec7c0>, subject='law')",
+        "process_docs": "functools.partial(<function process_docs at 0x7ffb5577e660>, subject='law')",
         "fewshot_indices": null,
         "samples": null,
-        "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5d6ec0e0>, including_answer=False)",
+        "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5577f100>, including_answer=False)",
         "doc_to_choice": null,
-        "doc_to_target": "functools.partial(<function format_cot_target at 0x7ffb5d6efd80>, including_answer=True)",
+        "doc_to_target": "functools.partial(<function format_cot_target at 0x7ffb5577c040>, including_answer=True)",
         "gen_prefix": null,
         "fewshot_delimiter": "\n\n",
         "target_delimiter": " "
@@ -6143,8 +6143,8 @@
       "dataset_path": "TIGER-Lab/MMLU-Pro",
       "test_split": "test",
       "fewshot_split": "validation",
-      "process_docs": "functools.partial(<function process_docs at 0x7ffb5d6ec7c0>, subject='math')",
-      "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5d6ec0e0>, including_answer=False)",
+      "process_docs": "functools.partial(<function process_docs at 0x7ffb5577e660>, subject='math')",
+      "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5577f100>, including_answer=False)",
       "doc_to_target": "answer",
       "unsafe_code": false,
       "description": "The following are multiple choice questions (with answers) about math. Think step by step and then finish your answer with \"the answer is (X)\" where X is the correct letter choice.\n",
@@ -6153,12 +6153,12 @@
       "fewshot_config": {
         "sampler": "first_n",
         "split": "validation",
-        "process_docs": "functools.partial(<function process_docs at 0x7ffb5d6ec7c0>, subject='math')",
+        "process_docs": "functools.partial(<function process_docs at 0x7ffb5577e660>, subject='math')",
         "fewshot_indices": null,
         "samples": null,
-        "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5d6ec0e0>, including_answer=False)",
+        "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5577f100>, including_answer=False)",
         "doc_to_choice": null,
-        "doc_to_target": "functools.partial(<function format_cot_target at 0x7ffb5d6efd80>, including_answer=True)",
+        "doc_to_target": "functools.partial(<function format_cot_target at 0x7ffb5577c040>, including_answer=True)",
         "gen_prefix": null,
         "fewshot_delimiter": "\n\n",
         "target_delimiter": " "
@@ -6209,8 +6209,8 @@
       "dataset_path": "TIGER-Lab/MMLU-Pro",
       "test_split": "test",
       "fewshot_split": "validation",
-      "process_docs": "functools.partial(<function process_docs at 0x7ffb5d6ec7c0>, subject='other')",
-      "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5d6ec0e0>, including_answer=False)",
+      "process_docs": "functools.partial(<function process_docs at 0x7ffb5577e660>, subject='other')",
+      "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5577f100>, including_answer=False)",
       "doc_to_target": "answer",
       "unsafe_code": false,
       "description": "The following are multiple choice questions (with answers) about other. Think step by step and then finish your answer with \"the answer is (X)\" where X is the correct letter choice.\n",
@@ -6219,12 +6219,12 @@
       "fewshot_config": {
         "sampler": "first_n",
         "split": "validation",
-        "process_docs": "functools.partial(<function process_docs at 0x7ffb5d6ec7c0>, subject='other')",
+        "process_docs": "functools.partial(<function process_docs at 0x7ffb5577e660>, subject='other')",
         "fewshot_indices": null,
         "samples": null,
-        "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5d6ec0e0>, including_answer=False)",
+        "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5577f100>, including_answer=False)",
         "doc_to_choice": null,
-        "doc_to_target": "functools.partial(<function format_cot_target at 0x7ffb5d6efd80>, including_answer=True)",
+        "doc_to_target": "functools.partial(<function format_cot_target at 0x7ffb5577c040>, including_answer=True)",
         "gen_prefix": null,
         "fewshot_delimiter": "\n\n",
         "target_delimiter": " "
@@ -6275,8 +6275,8 @@
       "dataset_path": "TIGER-Lab/MMLU-Pro",
       "test_split": "test",
       "fewshot_split": "validation",
-      "process_docs": "functools.partial(<function process_docs at 0x7ffb5d6ec7c0>, subject='philosophy')",
-      "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5d6ec0e0>, including_answer=False)",
+      "process_docs": "functools.partial(<function process_docs at 0x7ffb5577e660>, subject='philosophy')",
+      "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5577f100>, including_answer=False)",
       "doc_to_target": "answer",
       "unsafe_code": false,
       "description": "The following are multiple choice questions (with answers) about philosophy. Think step by step and then finish your answer with \"the answer is (X)\" where X is the correct letter choice.\n",
@@ -6285,12 +6285,12 @@
       "fewshot_config": {
         "sampler": "first_n",
         "split": "validation",
-        "process_docs": "functools.partial(<function process_docs at 0x7ffb5d6ec7c0>, subject='philosophy')",
+        "process_docs": "functools.partial(<function process_docs at 0x7ffb5577e660>, subject='philosophy')",
         "fewshot_indices": null,
         "samples": null,
-        "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5d6ec0e0>, including_answer=False)",
+        "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5577f100>, including_answer=False)",
         "doc_to_choice": null,
-        "doc_to_target": "functools.partial(<function format_cot_target at 0x7ffb5d6efd80>, including_answer=True)",
+        "doc_to_target": "functools.partial(<function format_cot_target at 0x7ffb5577c040>, including_answer=True)",
         "gen_prefix": null,
         "fewshot_delimiter": "\n\n",
         "target_delimiter": " "
@@ -6341,8 +6341,8 @@
       "dataset_path": "TIGER-Lab/MMLU-Pro",
       "test_split": "test",
       "fewshot_split": "validation",
-      "process_docs": "functools.partial(<function process_docs at 0x7ffb5d6ec7c0>, subject='physics')",
-      "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5d6ec0e0>, including_answer=False)",
+      "process_docs": "functools.partial(<function process_docs at 0x7ffb5577e660>, subject='physics')",
+      "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5577f100>, including_answer=False)",
       "doc_to_target": "answer",
       "unsafe_code": false,
       "description": "The following are multiple choice questions (with answers) about physics. Think step by step and then finish your answer with \"the answer is (X)\" where X is the correct letter choice.\n",
@@ -6351,12 +6351,12 @@
       "fewshot_config": {
         "sampler": "first_n",
         "split": "validation",
-        "process_docs": "functools.partial(<function process_docs at 0x7ffb5d6ec7c0>, subject='physics')",
+        "process_docs": "functools.partial(<function process_docs at 0x7ffb5577e660>, subject='physics')",
         "fewshot_indices": null,
         "samples": null,
-        "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5d6ec0e0>, including_answer=False)",
+        "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5577f100>, including_answer=False)",
         "doc_to_choice": null,
-        "doc_to_target": "functools.partial(<function format_cot_target at 0x7ffb5d6efd80>, including_answer=True)",
+        "doc_to_target": "functools.partial(<function format_cot_target at 0x7ffb5577c040>, including_answer=True)",
         "gen_prefix": null,
         "fewshot_delimiter": "\n\n",
         "target_delimiter": " "
@@ -6407,8 +6407,8 @@
       "dataset_path": "TIGER-Lab/MMLU-Pro",
       "test_split": "test",
       "fewshot_split": "validation",
-      "process_docs": "functools.partial(<function process_docs at 0x7ffb5d6ec7c0>, subject='psychology')",
-      "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5d6ec0e0>, including_answer=False)",
+      "process_docs": "functools.partial(<function process_docs at 0x7ffb5577e660>, subject='psychology')",
+      "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5577f100>, including_answer=False)",
       "doc_to_target": "answer",
       "unsafe_code": false,
       "description": "The following are multiple choice questions (with answers) about psychology. Think step by step and then finish your answer with \"the answer is (X)\" where X is the correct letter choice.\n",
@@ -6417,12 +6417,12 @@
       "fewshot_config": {
         "sampler": "first_n",
         "split": "validation",
-        "process_docs": "functools.partial(<function process_docs at 0x7ffb5d6ec7c0>, subject='psychology')",
+        "process_docs": "functools.partial(<function process_docs at 0x7ffb5577e660>, subject='psychology')",
         "fewshot_indices": null,
         "samples": null,
-        "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5d6ec0e0>, including_answer=False)",
+        "doc_to_text": "functools.partial(<function format_cot_example at 0x7ffb5577f100>, including_answer=False)",
         "doc_to_choice": null,
-        "doc_to_target": "functools.partial(<function format_cot_target at 0x7ffb5d6efd80>, including_answer=True)",
+        "doc_to_target": "functools.partial(<function format_cot_target at 0x7ffb5577c040>, including_answer=True)",
         "gen_prefix": null,
         "fewshot_delimiter": "\n\n",
         "target_delimiter": " "
@@ -6469,8 +6469,8 @@
     }
   },
   "versions": {
-    "aime25": 0.0,
     "gsm8k": 3.0,
+    "aime25": 0.0,
     "minerva_math500": 3.0,
     "mmlu_flan_cot_zeroshot": "2",
     "mmlu_flan_cot_zeroshot::humanities": "N/A",
@@ -6551,8 +6551,8 @@
     "mmlu_pro_psychology": 3.1
   },
   "n-shot": {
-    "aime25": 0,
     "gsm8k": 5,
+    "aime25": 0,
     "minerva_math500": 4,
     "mmlu_flan_cot_zeroshot::humanities": 0,
     "mmlu_flan_cot_zeroshot::other": 0,
@@ -6632,29 +6632,14 @@
     "mmlu_pro_psychology": 5
   },
   "higher_is_better": {
-    "aime25": {
-      "exact_match": true
-    },
     "gsm8k": {
       "exact_match": true
-    },
-    "minerva_math500": {
-      "exact_match": true,
-      "math_verify": true
     }
   },
   "n-samples": {
     "gsm8k": {
       "original": 1319,
       "effective": 1319
-    },
-    "minerva_math500": {
-      "original": 500,
-      "effective": 500
-    },
-    "aime25": {
-      "original": 30,
-      "effective": 30
     }
   },
   "config": {
@@ -6675,7 +6660,7 @@
     "fewshot_seed": 1234
   },
   "git_hash": null,
-  "date": 1784827894.6855001,
+  "date": 1784918669.228287,
   "pretty_env_info": "PyTorch version: 2.10.0a0+b558c986e8.nv25.11\nIs debug build: False\nCUDA used to build PyTorch: 13.0\nROCM used to build PyTorch: N/A\n\nOS: Ubuntu 24.04.3 LTS (x86_64)\nGCC version: (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0\nClang version: Could not collect\nCMake version: version 3.31.6\nLibc version: glibc-2.39\n\nPython version: 3.12.3 (main, Aug 14 2025, 17:47:21) [GCC 13.3.0] (64-bit runtime)\nPython platform: Linux-6.14.0-1021-gcp-x86_64-with-glibc2.39\nIs CUDA available: True\nCUDA runtime version: 13.0.88\nCUDA_MODULE_LOADING set to: LAZY\nGPU models and configuration: GPU 0: NVIDIA B200\nNvidia driver version: 580.105.08\ncuDNN version: Probably one of the following:\n/usr/lib/x86_64-linux-gnu/libcudnn.so.9.18.1\n/usr/lib/x86_64-linux-gnu/libcudnn_adv.so.9.18.1\n/usr/lib/x86_64-linux-gnu/libcudnn_cnn.so.9.18.1\n/usr/lib/x86_64-linux-gnu/libcudnn_engines_precompiled.so.9.18.1\n/usr/lib/x86_64-linux-gnu/libcudnn_engines_runtime_compiled.so.9.18.1\n/usr/lib/x86_64-linux-gnu/libcudnn_graph.so.9.18.1\n/usr/lib/x86_64-linux-gnu/libcudnn_heuristic.so.9.18.1\n/usr/lib/x86_64-linux-gnu/libcudnn_ops.so.9.18.1\nIs XPU available: False\nHIP runtime version: N/A\nMIOpen runtime version: N/A\nIs XNNPACK available: True\n\nCPU:\nArchitecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           52 bits physical, 57 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  224\nOn-line CPU(s) list:                     0-223\nVendor ID:                               GenuineIntel\nModel name:                              INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.10GHz\nCPU family:                              6\nModel:                                   207\nThread(s) per core:                      2\nCore(s) per socket:                      56\nSocket(s):                               2\nStepping:                                2\nBogoMIPS:                                4200.00\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss ht syscall nx pdpe1gb rdtscp lm constant_tsc rep_good nopl xtopology nonstop_tsc cpuid tsc_known_freq pni pclmulqdq monitor ssse3 fma cx16 pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch ssbd ibrs ibpb stibp ibrs_enhanced fsgsbase tsc_adjust bmi1 hle avx2 smep bmi2 erms invpcid rtm avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx_vnni avx512_bf16 wbnoinvd arat avx512vbmi umip avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid cldemote movdiri movdir64b fsrm md_clear serialize tsxldtrk amx_bf16 avx512_fp16 amx_tile amx_int8 arch_capabilities\nHypervisor vendor:                       KVM\nVirtualization type:                     full\nL1d cache:                               5.3 MiB (112 instances)\nL1i cache:                               3.5 MiB (112 instances)\nL2 cache:                                224 MiB (112 instances)\nL3 cache:                                520 MiB (2 instances)\nNUMA node(s):                            2\nNUMA node0 CPU(s):                       0-55,112-167\nNUMA node1 CPU(s):                       56-111,168-223\nVulnerability Gather data sampling:      Not affected\nVulnerability Ghostwrite:                Not affected\nVulnerability Indirect target selection: Mitigation; Aligned branch/return thunks\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Not affected\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Enhanced / Automatic IBRS; IBPB conditional; PBRSB-eIBRS SW sequence; BHI SW loop, KVM SW loop\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Not affected\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Not affected\n\nVersions of relevant libraries:\n[pip3] flake8==7.3.0\n[pip3] intel-openmp==2021.4.0\n[pip3] mkl==2021.1.1\n[pip3] mkl-devel==2021.1.1\n[pip3] mkl-include==2021.1.1\n[pip3] mypy==1.19.1\n[pip3] mypy_extensions==1.1.0\n[pip3] numpy==2.5.1\n[pip3] nv-one-logger-pytorch-lightning-integration==2.3.1\n[pip3] nvidia-cudnn-frontend==1.18.0\n[pip3] nvidia-pytriton==0.7.0\n[pip3] nvtx==0.2.14\n[pip3] onnx==1.18.0\n[pip3] onnx_graphsurgeon==0.5.8\n[pip3] onnx-ir==0.1.16\n[pip3] onnxconverter-common==1.16.0\n[pip3] onnxruntime-gpu==1.24.3\n[pip3] onnxscript==0.6.3.dev20260214\n[pip3] onnxslim==0.1.88\n[pip3] open_clip_torch==3.2.0\n[pip3] optree==0.17.0\n[pip3] pytorch-lightning==2.6.1\n[pip3] pytorch-triton==3.5.0+gitde3506d2\n[pip3] tbb==2021.13.1\n[pip3] torch==2.10.0a0+b558c986e8.nv25.11\n[pip3] torch_tensorrt==2.10.0a0\n[pip3] torchao==0.14.0+git\n[pip3] torchdata==0.11.0\n[pip3] torchmetrics==1.8.2\n[pip3] torchprofile==0.0.4\n[pip3] torchtitan==0.1.0\n[pip3] torchvision==0.25.0a0+7a13ad0f\n[pip3] torchx==0.7.0\n[pip3] triton==3.6.0\n[pip3] triton_kernels==1.0.0+nv25.11\n[pip3] tritonclient==2.51.0\n[conda] Could not collect",
   "transformers_version": "5.3.0",
   "lm_eval_version": "0.4.12",

@@ -81,6 +81,10 @@ def main() -> None:
     from lm_eval import evaluator
     from lm_eval.models.vllm_causallms import VLLM
 
+    # NVFP4 checkpoints carry a compressed-tensors `quantization_config` in their
+    # config.json (quant_method="compressed-tensors", nvfp4-pack-quantized), so vLLM
+    # auto-detects the format and serves true W4A4 (CompressedTensorsW4A4Fp4: packed
+    # FP4 weights + FP8 block scales + dynamic FP4 activations) with no extra flag.
     lm = VLLM(
         pretrained=model_path,
         tokenizer=args.model,              # tokenizer always from the base model id

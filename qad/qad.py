@@ -47,6 +47,7 @@ from fp8 import apply_fp8_linear
 from gsq2bit import apply_gsq2bit, apply_gsq3bit, gsq_param_groups, post_update_all
 from ste_quant import apply_ste2bit, apply_ste3bit, apply_ste4bit
 from quest import apply_quest2bit, apply_quest3bit, apply_quest4bit
+from nvfp4 import apply_nvfp4, calibrate_nvfp4, save_nvfp4_checkpoint
 from quant import QuantizedLinear
 
 
@@ -129,6 +130,13 @@ _QUANTIZER_REGISTRY: dict = {
         "param_groups": None,
         "post_update":  post_update_all,
         "defaults":     {"groupsize": 128},
+    },
+    "nvfp4": {
+        # W4A4: NVFP4 fake-quant on both weights and activations (STE), block=16.
+        "apply":        apply_nvfp4,
+        "param_groups": None,          # single weight param per layer
+        "post_update":  post_update_all,
+        "defaults":     {},
     },
 }
 
@@ -327,13 +335,30 @@ def build_hf_state_dict(student: nn.Module) -> dict[str, torch.Tensor]:
     return out
 
 
-def save_weights(student: nn.Module, step: int, args: argparse.Namespace) -> None:
+def save_weights(student: nn.Module, step: int, args: argparse.Namespace,
+                 val_chunks=None, device=None) -> None:
     """Save an eval-ready HuggingFace checkpoint (dequantized weights in `weight`).
 
     Written as a standard HF model directory so evaluation is a single, fast
     from_pretrained() — no quantizer wrapping, no base-model read, no manual
     load_state_dict.
+
+    For the NVFP4 (W4A4) quantizer a real ModelOpt-format checkpoint is written
+    instead: packed FP4 weights + FP8 block scales + a static per-layer
+    input_scale (calibrated here on a few val batches) so vLLM serves true W4A4.
     """
+    if args.quantizer == "nvfp4":
+        # Calibrate the static activation scale on every rank's model, but only
+        # rank 0 writes (rank 0's calibration is what gets exported).
+        if val_chunks is not None and dist.get_rank() == 0:
+            calibrate_nvfp4(student, val_chunks, device)
+        if dist.get_rank() != 0:
+            return
+        out_dir = Path(args.ckpt_dir) / args.ckpt_tag / "weights" / f"step_{step:07d}"
+        n = save_nvfp4_checkpoint(student, out_dir)
+        print(f"[rank0] NVFP4 checkpoint → {out_dir}  ({n} tensors)", flush=True)
+        return
+
     if dist.get_rank() != 0:
         return
     from safetensors.torch import save_file
@@ -680,7 +705,7 @@ def main() -> None:
 
         if step % args.val_every == 0 or step == total_steps - 1:
             ntp = eval_ntp(student, val_chunks, device, args.eval_batch_size)
-            save_weights(student, step, args)
+            save_weights(student, step, args, val_chunks, device)
             if rank == 0:
                 delta = ntp - teacher_val_ntp
                 pbar.write(f"step {step:5d} | val_ntp={ntp:.4f}  teacher={teacher_val_ntp:.4f}  Δ={delta:+.4f}")
@@ -693,7 +718,7 @@ def main() -> None:
             save_checkpoint(student, optimizer, step, args)
 
     ntp = eval_ntp(student, val_chunks, device, args.eval_batch_size)
-    save_weights(student, total_steps, args)
+    save_weights(student, total_steps, args, val_chunks, device)
     if rank == 0:
         delta = ntp - teacher_val_ntp
         print(f"Final    | val_ntp={ntp:.4f}  Δ={delta:+.4f}", flush=True)
