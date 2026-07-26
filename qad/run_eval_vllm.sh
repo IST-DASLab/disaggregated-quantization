@@ -66,7 +66,13 @@ fi
 # HOST mode: resolve paths and re-invoke via srun inside the container
 # ---------------------------------------------------------------------------
 if command -v scontrol &>/dev/null; then
-    SCRIPT_PATH=$(scontrol show job "$SLURM_JOB_ID" | awk -F= '/Command=/{print $2}')
+    # NOTE: `exit` after the first match is REQUIRED for job arrays. SLURM gives the
+    # LAST array element a JobId equal to the array's base job id, and for that id
+    # `scontrol show job` prints EVERY array record — without `exit` the awk returns
+    # one Command= line per record and SCRIPT_PATH becomes a multi-line string, so
+    # bash fails with "No such file or directory" (exit 127). That silently killed
+    # the final step of every sweep (step 200 here, 225 on the 4B runs).
+    SCRIPT_PATH=$(scontrol show job "$SLURM_JOB_ID" | awk -F= '/Command=/{print $2; exit}')
     SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
     mkdir -p "$SCRIPT_DIR/logs"
 
@@ -74,6 +80,7 @@ if command -v scontrol &>/dev/null; then
     export SCRIPT_DIR HF_CACHE LM_EVAL_OVERLAY
     export MODEL=${MODEL:-Qwen/Qwen3-4B}
     export CKPT_DIR=${CKPT_DIR:-$SCRIPT_DIR/checkpoints}
+    export HF_HUB_OFFLINE HF_DATASETS_OFFLINE
 
     srun \
         --ntasks=1 \
@@ -91,6 +98,15 @@ fi
 export HF_HOME=$HF_CACHE
 export TOKENIZERS_PARALLELISM=false
 export PYTHONPATH=$LM_EVAL_OVERLAY:$SCRIPT_DIR:${PYTHONPATH:-}
+# The eval datasets (gsm8k, math500, aime25, mmlu[57 subjects], mmlu_pro) are cached.
+# Read them from cache with NO hub API calls — otherwise many parallel array tasks
+# collectively trip HF's 1000-req/5-min rate limit (429) enumerating MMLU subjects.
+# Keep the HUB online though: vLLM resolves the tokenizer via snapshot_download, and
+# full HF_HUB_OFFLINE trips IncompleteSnapshotError on the cached model snapshot
+# (missing trivial files like README/LICENSE). The per-job model call is tiny and
+# never rate-limits.
+export HF_DATASETS_OFFLINE=${HF_DATASETS_OFFLINE:-1}
+export HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-0}
 
 # Install lm_eval into overlay on first run; reuse on subsequent jobs
 if [ ! -d "$LM_EVAL_OVERLAY/lm_eval" ]; then

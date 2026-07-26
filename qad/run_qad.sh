@@ -43,7 +43,10 @@ fi
 # ---- under SLURM allocation ----
 EXTRA_ARGS=("$@")   # --debug already consumed in STAGE 0
 
-SCRIPT_PATH=$(scontrol show job "$SLURM_JOB_ID" | awk -F= '/Command=/{print $2}')
+# `exit` after the first match: `scontrol show job` can print more than one record
+# (always the case for the last element of a job array), which would otherwise make
+# SCRIPT_PATH a multi-line string and fail with bash "No such file" (exit 127).
+SCRIPT_PATH=$(scontrol show job "$SLURM_JOB_ID" | awk -F= '/Command=/{print $2; exit}')
 SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
 
 CONTAINER=/lustre/fsw/portfolios/adlr/users/apanferov/containers/nemo:26.02.nemotron_3_super_luts_v2.sqsh

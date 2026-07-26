@@ -64,7 +64,10 @@ fi
 # HOST mode: resolve paths and re-invoke via srun inside the container
 # ---------------------------------------------------------------------------
 if command -v scontrol &>/dev/null; then
-    SCRIPT_PATH=$(scontrol show job "$SLURM_JOB_ID" | awk -F= '/Command=/{print $2}')
+    # `exit` after the first match is REQUIRED for job arrays: the last array element
+    # has JobId == the array base id, for which `scontrol show job` prints every array
+    # record, yielding a multi-line SCRIPT_PATH and a bash "No such file" (exit 127).
+    SCRIPT_PATH=$(scontrol show job "$SLURM_JOB_ID" | awk -F= '/Command=/{print $2; exit}')
     SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
     mkdir -p "$SCRIPT_DIR/logs"
 
