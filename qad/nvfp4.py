@@ -138,11 +138,15 @@ class NVFP4Linear(QuantizedLinear):
     scale for that first pass (self._observed flips true once amax>0).
     """
 
-    def __init__(self, weight: Tensor, bias, block_size: int = BLOCK):
+    def __init__(self, weight: Tensor, bias, block_size: int = BLOCK,
+                 quantize_act: bool = True):
         out, in_ = weight.shape
         super().__init__(out, in_, bias, dtype=weight.dtype, device=weight.device)
         self.weight = nn.Parameter(weight.clone())
         self.block_size = block_size
+        # W4A4 (True) vs weight-only W4A16 (False: activations stay bf16, and no
+        # input_global_scale is exported → vLLM picks CompressedTensorsW4A16Fp4).
+        self.quantize_act = quantize_act
         self.calibrating = False
         self._observed = False  # python flag: has act_amax ever been set (>0)?
         self._group = None      # fused-group siblings (set by link_fused_groups)
@@ -171,6 +175,9 @@ class NVFP4Linear(QuantizedLinear):
         return self.weight + (self._wq - self.weight).detach()
 
     def forward(self, x: Tensor) -> Tensor:
+        w = self._wq if not self.training else self._differentiable_weight()
+        if not self.quantize_act:
+            return F.linear(x, w, self.bias)   # W4A16: activations stay bf16
         if self.training or self.calibrating:
             with torch.no_grad():
                 self.act_amax = torch.maximum(
@@ -181,7 +188,6 @@ class NVFP4Linear(QuantizedLinear):
         # a dynamic per-forward scale only until the observer has seen data.
         gscale = (self.act_amax / _GLOBAL_DEN) if self._observed else None
         xq = _fake_quant_ste(x, self.block_size, global_scale=gscale)
-        w = self._wq if not self.training else self._differentiable_weight()
         return F.linear(xq, w, self.bias)
 
     @classmethod
@@ -215,7 +221,7 @@ def link_fused_groups(model: nn.Module) -> None:
 
 def apply_nvfp4(model: nn.Module, **kwargs) -> None:
     """Replace every nn.Linear (except lm_head) with NVFP4Linear, in-place, and
-    link fused groups so weight global scales are shared (matches vLLM)."""
+    link fused groups so weight global scales are shared (matches vLLM). W4A4."""
     for name, module in list(model.named_modules()):
         if not isinstance(module, nn.Linear) or name == "lm_head":
             continue
@@ -223,6 +229,11 @@ def apply_nvfp4(model: nn.Module, **kwargs) -> None:
         parent = model.get_submodule(parent_name) if parent_name else model
         setattr(parent, child_name, NVFP4Linear.from_linear(module, **kwargs))
     link_fused_groups(model)
+
+
+def apply_nvfp4a16(model: nn.Module, **kwargs) -> None:
+    """Weight-only NVFP4 (W4A16): 4-bit NVFP4 weights, activations left in bf16."""
+    apply_nvfp4(model, quantize_act=False, **kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -277,16 +288,23 @@ _CT_GRP = {
 }
 
 
-def ct_quant_config() -> dict:
-    """compressed-tensors quantization_config for NVFP4 W4A4 (group_size 16).
-    input_activations.dynamic="local" → static per-tensor input_global_scale with
-    dynamic per-block FP4 activation quant. Field set matches a real RedHatAI
-    NVFP4 W4A4 checkpoint; `quant_method` and the absence of a `weight_shape`
-    tensor are both required for vLLM to load it."""
+def ct_quant_config(quantize_act: bool = True) -> dict:
+    """compressed-tensors quantization_config for NVFP4 (group_size 16).
+
+    W4A4 (quantize_act=True): input_activations.dynamic="local" → static per-tensor
+    input_global_scale with dynamic per-block FP4 activation quant; vLLM selects
+    CompressedTensorsW4A4Fp4. Field set matches a real RedHatAI NVFP4 W4A4 checkpoint.
+
+    W4A16 (quantize_act=False): input_activations=None — vLLM's _is_fp4a16_nvfp4()
+    keys on `input_quant is None` to select the weight-only CompressedTensorsW4A16Fp4,
+    which registers NO input_global_scale param (so we must not emit that tensor).
+
+    `quant_method` and the absence of a `weight_shape` tensor are both required.
+    """
     return {
         "config_groups": {
             "group_0": {
-                "input_activations": {**_CT_GRP, "dynamic": "local"},
+                "input_activations": {**_CT_GRP, "dynamic": "local"} if quantize_act else None,
                 "output_activations": None,
                 "targets": ["Linear"],
                 "weights": {**_CT_GRP, "dynamic": False},
@@ -317,8 +335,9 @@ def build_nvfp4_state_dict(student: nn.Module) -> dict[str, Tensor]:
         out[f"{name}.weight_packed"] = packed.cpu()
         out[f"{name}.weight_scale"] = wscale.cpu()
         out[f"{name}.weight_global_scale"] = (1.0 / wscale2).reshape(1).cpu()  # 2688/group_amax
-        act = m.act_amax.float().clamp(min=1e-8)
-        out[f"{name}.input_global_scale"] = (_GLOBAL_DEN / act).reshape(1).cpu()  # 2688/act_amax
+        if m.quantize_act:   # W4A4 only — the W4A16 scheme registers no such param
+            act = m.act_amax.float().clamp(min=1e-8)
+            out[f"{name}.input_global_scale"] = (_GLOBAL_DEN / act).reshape(1).cpu()  # 2688/act_amax
         if m.bias is not None:
             out[f"{name}.bias"] = m.bias.data.to(torch.bfloat16).cpu()
     # non-quantized tensors (embed/norm/lm_head/rotary + dropped quant internals)
@@ -331,7 +350,8 @@ def build_nvfp4_state_dict(student: nn.Module) -> dict[str, Tensor]:
 
 
 def save_nvfp4_checkpoint(student: nn.Module, out_dir: Path) -> int:
-    """Write a real compressed-tensors NVFP4 W4A4 checkpoint dir. Returns tensor count."""
+    """Write a real compressed-tensors NVFP4 checkpoint dir (W4A4 or W4A16, matching
+    how the model was quantized). Returns tensor count."""
     from safetensors.torch import save_file
     out_dir.mkdir(parents=True, exist_ok=True)
     state = build_nvfp4_state_dict(student)
@@ -340,8 +360,10 @@ def save_nvfp4_checkpoint(student: nn.Module, out_dir: Path) -> int:
     if getattr(student, "generation_config", None) is not None:
         student.generation_config.save_pretrained(out_dir)
     # Self-contained: embed the quantization_config so vLLM auto-detects (no flag).
+    quantize_act = next(m.quantize_act for m in student.modules()
+                        if isinstance(m, NVFP4Linear))
     cfg_path = out_dir / "config.json"
     cfg = json.loads(cfg_path.read_text())
-    cfg["quantization_config"] = ct_quant_config()
+    cfg["quantization_config"] = ct_quant_config(quantize_act)
     cfg_path.write_text(json.dumps(cfg, indent=2))
     return len(state)

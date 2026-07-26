@@ -47,7 +47,7 @@ from fp8 import apply_fp8_linear
 from gsq2bit import apply_gsq2bit, apply_gsq3bit, gsq_param_groups, post_update_all
 from ste_quant import apply_ste2bit, apply_ste3bit, apply_ste4bit
 from quest import apply_quest2bit, apply_quest3bit, apply_quest4bit
-from nvfp4 import apply_nvfp4, calibrate_nvfp4, save_nvfp4_checkpoint
+from nvfp4 import apply_nvfp4, apply_nvfp4a16, calibrate_nvfp4, save_nvfp4_checkpoint
 from quant import QuantizedLinear
 
 
@@ -135,6 +135,13 @@ _QUANTIZER_REGISTRY: dict = {
         # W4A4: NVFP4 fake-quant on both weights and activations (STE), block=16.
         "apply":        apply_nvfp4,
         "param_groups": None,          # single weight param per layer
+        "post_update":  post_update_all,
+        "defaults":     {},
+    },
+    "nvfp4a16": {
+        # W4A16: NVFP4 weights only — activations stay bf16 (no input_global_scale).
+        "apply":        apply_nvfp4a16,
+        "param_groups": None,
         "post_update":  post_update_all,
         "defaults":     {},
     },
@@ -343,14 +350,15 @@ def save_weights(student: nn.Module, step: int, args: argparse.Namespace,
     from_pretrained() — no quantizer wrapping, no base-model read, no manual
     load_state_dict.
 
-    For the NVFP4 (W4A4) quantizer a real ModelOpt-format checkpoint is written
-    instead: packed FP4 weights + FP8 block scales + a static per-layer
-    input_scale (calibrated here on a few val batches) so vLLM serves true W4A4.
+    For the NVFP4 quantizers a real compressed-tensors checkpoint is written instead:
+    packed FP4 weights + FP8 block scales (+ a static per-layer input_global_scale for
+    W4A4, calibrated here on a few val batches) so vLLM serves true W4A4 / W4A16.
     """
-    if args.quantizer == "nvfp4":
+    if args.quantizer.startswith("nvfp4"):
         # Calibrate the static activation scale on every rank's model, but only
         # rank 0 writes (rank 0's calibration is what gets exported).
-        if val_chunks is not None and dist.get_rank() == 0:
+        # No-op for nvfp4a16 (weight-only): activations aren't quantized.
+        if val_chunks is not None and dist.get_rank() == 0 and args.quantizer == "nvfp4":
             calibrate_nvfp4(student, val_chunks, device)
         if dist.get_rank() != 0:
             return
