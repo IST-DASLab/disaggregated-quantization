@@ -27,7 +27,7 @@ _QAD_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(_QAD_DIR))
 sys.path.insert(0, str(_QAD_DIR.parent / "third_party" / "Liger-Kernel" / "src"))
 
-from qad import _QUANTIZER_REGISTRY, _build_quantizer_params
+from quantizers import REGISTRY, build_quantizer_params
 
 
 def resolve_checkpoint(ckpt_dir: Path, ckpt_tag: str, step: int) -> Path:
@@ -48,7 +48,7 @@ def resolve_checkpoint(ckpt_dir: Path, ckpt_tag: str, step: int) -> Path:
 def main() -> None:
     parser = argparse.ArgumentParser(description="QAD checkpoint evaluator")
     parser.add_argument("--model",            required=True, help="HuggingFace model id")
-    parser.add_argument("--quantizer",        required=True, choices=list(_QUANTIZER_REGISTRY))
+    parser.add_argument("--quantizer",        required=True, choices=list(REGISTRY))
     parser.add_argument("--quantizer-params", default="",   help="JSON overrides for quantizer")
     parser.add_argument("--iter",             type=int, default=None, help="checkpoint step (required unless --unquantized)")
     parser.add_argument("--run-name",         default=None,
@@ -85,7 +85,7 @@ def main() -> None:
         print(f"Model: {args.model}  [unquantized BF16 baseline]", flush=True)
     else:
         # Reconstruct ckpt_tag (matches qad.py) for path resolution / result naming.
-        _, quant_hash = _build_quantizer_params(args.quantizer, args.quantizer_params)
+        _, quant_hash = build_quantizer_params(args.quantizer, args.quantizer_params)
         model_short = args.model.replace("/", "-")
         run_name    = args.run_name or f"qad-{model_short}"
         ckpt_tag    = f"{run_name}-{args.quantizer}-{quant_hash}"

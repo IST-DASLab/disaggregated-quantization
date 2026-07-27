@@ -5,7 +5,7 @@
 #SBATCH --gpus-per-node=8
 #SBATCH --partition=batch
 #SBATCH --qos=normal
-#SBATCH --time=02:00:00
+#SBATCH --time=04:00:00
 #SBATCH --exclusive
 #SBATCH --mem=0
 #SBATCH --account=adlr_psx_numerics
@@ -52,6 +52,9 @@ SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
 CONTAINER=/lustre/fsw/portfolios/adlr/users/apanferov/containers/nemo:26.02.nemotron_3_super_luts_v2.sqsh
 HF_CACHE=/lustre/fsw/portfolios/adlr/users/apanferov/hf_cache
 MODEL=${MODEL:-Qwen/Qwen3-4B}
+# RUN_PREFIX namespaces the checkpoint tag (<prefix>-<model>-<quant>-<hash>).
+# Use a fresh prefix for a new training recipe so earlier runs are never overwritten.
+RUN_PREFIX=${RUN_PREFIX:-qad}
 CKPT_DIR=${CKPT_DIR:-$SCRIPT_DIR/checkpoints}   # absolute so the container CWD doesn't matter
 MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -1)
 
@@ -65,6 +68,7 @@ srun \
         export TOKENIZERS_PARALLELISM=false
         export PYTHONPATH=$SCRIPT_DIR:\$PYTHONPATH
         export WANDB_MODE=${WANDB_MODE:-online}
+        export RUN_PREFIX=$RUN_PREFIX
         export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
         python -m torch.distributed.run \
@@ -75,7 +79,7 @@ srun \
             --master_port=29500 \
             $SCRIPT_DIR/qad.py \
                 --model $MODEL \
-                --run-name qad-\$(echo $MODEL | tr '/' '-') \
+                --run-name $RUN_PREFIX-\$(echo $MODEL | tr '/' '-') \
                 --ckpt-dir $CKPT_DIR \
                 --global-batch-size 64 \
                 \$@

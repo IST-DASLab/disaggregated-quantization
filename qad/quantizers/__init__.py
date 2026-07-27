@@ -1,0 +1,148 @@
+"""Quantizer registry.
+
+Each entry maps a CLI name to:
+  apply(model, **params)            – replace linears in-place
+  param_groups(model, lr, **params) – DistAdamW param groups (None -> one group over all)
+  post_update                       – callable(model, step, total_steps) or None
+  defaults                          – hyperparameters merged with --quantizer-params
+  export                            – "compressed_tensors" (real quantized checkpoint)
+                                      or "dequantized" (pseudo-quant: plain bf16 HF model)
+
+NOTE: `defaults` is hashed into the checkpoint tag (see build_quantizer_params), so
+changing a defaults dict renames every checkpoint/eval directory for that method.
+Current hashes: {} -> 99914b93, {"groupsize": 128} -> 1a17550c.
+"""
+
+import hashlib
+import json
+
+from .base import QuantizedLinear, post_update_all
+from .fp8 import apply_fp8_linear
+from .gsq import apply_gsq2bit, apply_gsq3bit, gsq_param_groups
+from .lloyd import apply_lloyd3bit
+from .nvfp4 import apply_nvfp4, apply_nvfp4a16, calibrate_nvfp4
+from .quest import apply_quest2bit, apply_quest3bit, apply_quest4bit
+from .ste import apply_ste2bit, apply_ste3bit, apply_ste4bit
+
+_GSQ_DEFAULTS = {
+    "groupsize":   128,
+    "std":         0.01,
+    "strength":    6.0,
+    "temp_start":  2.0,
+    "temp_end":    0.05,
+    "scale_start": 100.0,
+    "scale_end":   500.0,
+}
+
+REGISTRY: dict = {
+    "fp8": {
+        "apply":        lambda model, **_: apply_fp8_linear(model),
+        "param_groups": None,          # all params equally
+        "post_update":  None,          # FP8 recomputes each forward via STE
+        "defaults":     {},
+        "export":       "dequantized",
+    },
+    "gsq2bit": {
+        "apply":        apply_gsq2bit,
+        "param_groups": gsq_param_groups,
+        "post_update":  post_update_all,
+        "defaults":     dict(_GSQ_DEFAULTS),
+        "export":       "dequantized",
+    },
+    "gsq3bit": {
+        "apply":        apply_gsq3bit,
+        "param_groups": gsq_param_groups,
+        "post_update":  post_update_all,
+        "defaults":     dict(_GSQ_DEFAULTS),
+        "export":       "dequantized",
+    },
+    "ste2bit": {
+        "apply":        apply_ste2bit,
+        "param_groups": None,          # single weight param, no split needed
+        "post_update":  post_update_all,
+        "defaults":     {"groupsize": 128},
+        "export":       "dequantized",
+    },
+    "ste3bit": {
+        "apply":        apply_ste3bit,
+        "param_groups": None,
+        "post_update":  post_update_all,
+        "defaults":     {"groupsize": 128},
+        "export":       "dequantized",
+    },
+    "ste4bit": {
+        "apply":        apply_ste4bit,
+        "param_groups": None,
+        "post_update":  post_update_all,
+        "defaults":     {"groupsize": 128},
+        "export":       "dequantized",
+    },
+    "quest2bit": {
+        "apply":        apply_quest2bit,
+        "param_groups": None,
+        "post_update":  post_update_all,
+        "defaults":     {"groupsize": 128},
+        "export":       "dequantized",
+    },
+    "quest3bit": {
+        "apply":        apply_quest3bit,
+        "param_groups": None,
+        "post_update":  post_update_all,
+        "defaults":     {"groupsize": 128},
+        "export":       "dequantized",
+    },
+    "quest4bit": {
+        "apply":        apply_quest4bit,
+        "param_groups": None,
+        "post_update":  post_update_all,
+        "defaults":     {"groupsize": 128},
+        "export":       "dequantized",
+    },
+    "nvfp4": {
+        # W4A4: NVFP4 fake-quant on both weights and activations (STE), block=16.
+        "apply":        apply_nvfp4,
+        "param_groups": None,          # single weight param per layer
+        "post_update":  post_update_all,
+        "defaults":     {},
+        "export":       "compressed_tensors",
+    },
+    "nvfp4a16": {
+        # W4A16: NVFP4 weights only — activations stay bf16 (no input_global_scale).
+        "apply":        apply_nvfp4a16,
+        "param_groups": None,
+        "post_update":  post_update_all,
+        "defaults":     {},
+        "export":       "compressed_tensors",
+    },
+    "lloyd3bit": {
+        # Weight-only signed-Lloyd 3-bit; pseudo-quantized (no 3-bit LUT kernel),
+        # so the checkpoint holds dequantized bf16 weights and vLLM serves it as
+        # an ordinary bf16 model.
+        "apply":        apply_lloyd3bit,
+        "param_groups": None,
+        "post_update":  post_update_all,
+        "defaults":     {"block_size": 16, "grid": "lloyd"},
+        "export":       "dequantized",
+    },
+}
+
+
+def build_quantizer_params(name: str, overrides_json: str) -> tuple[dict, str]:
+    """Merge --quantizer-params over the registry defaults.
+    Returns (params, 8-char hash) — the hash goes into the checkpoint tag."""
+    params = dict(REGISTRY[name]["defaults"])
+    if overrides_json:
+        params.update(json.loads(overrides_json))
+    h = hashlib.md5(json.dumps(params, sort_keys=True).encode()).hexdigest()[:8]
+    return params, h
+
+
+def uses_compressed_tensors(name: str) -> bool:
+    """True if this quantizer exports a real quantized (compressed-tensors) checkpoint."""
+    return REGISTRY[name]["export"] == "compressed_tensors"
+
+
+__all__ = [
+    "REGISTRY", "build_quantizer_params", "uses_compressed_tensors",
+    "QuantizedLinear", "post_update_all", "calibrate_nvfp4",
+]

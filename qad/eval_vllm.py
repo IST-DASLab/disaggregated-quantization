@@ -29,7 +29,7 @@ from pathlib import Path
 _QAD_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(_QAD_DIR))
 
-from qad import _QUANTIZER_REGISTRY, _build_quantizer_params
+from quantizers import REGISTRY, build_quantizer_params
 
 
 def resolve_checkpoint(ckpt_dir: Path, ckpt_tag: str, step: int) -> Path:
@@ -42,7 +42,7 @@ def resolve_checkpoint(ckpt_dir: Path, ckpt_tag: str, step: int) -> Path:
 def main() -> None:
     p = argparse.ArgumentParser(description="QAD vLLM evaluator")
     p.add_argument("--model", required=True, help="HF model id (also the tokenizer source)")
-    p.add_argument("--quantizer", default="ste3bit", choices=list(_QUANTIZER_REGISTRY))
+    p.add_argument("--quantizer", default="ste3bit", choices=list(REGISTRY))
     p.add_argument("--quantizer-params", default="")
     p.add_argument("--iter", type=int, default=None)
     p.add_argument("--unquantized", action="store_true")
@@ -71,7 +71,7 @@ def main() -> None:
         ckpt_tag = f"{args.model.replace('/', '-')}-unquantized"
         step_key = 0
     else:
-        _, quant_hash = _build_quantizer_params(args.quantizer, args.quantizer_params)
+        _, quant_hash = build_quantizer_params(args.quantizer, args.quantizer_params)
         run_name = args.run_name or f"qad-{args.model.replace('/', '-')}"
         ckpt_tag = f"{run_name}-{args.quantizer}-{quant_hash}"
         model_path = str(resolve_checkpoint(Path(args.ckpt_dir), ckpt_tag, args.iter))

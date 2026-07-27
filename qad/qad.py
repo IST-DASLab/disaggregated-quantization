@@ -22,9 +22,11 @@ Notes:
 """
 
 import argparse
+import hashlib
 import math
 import os
 import sys
+from datetime import timedelta
 from pathlib import Path
 
 import torch
@@ -41,252 +43,30 @@ sys.path.insert(
 )
 from liger_kernel.chunked_loss import LigerFusedLinearJSDLoss
 
-from data_utils import get_tulu_train_val
-from dist_adamw import DistAdamW
-from fp8 import apply_fp8_linear
-from gsq2bit import apply_gsq2bit, apply_gsq3bit, gsq_param_groups, post_update_all
-from ste_quant import apply_ste2bit, apply_ste3bit, apply_ste4bit
-from quest import apply_quest2bit, apply_quest3bit, apply_quest4bit
-from nvfp4 import apply_nvfp4, apply_nvfp4a16, calibrate_nvfp4, save_nvfp4_checkpoint
-from quant import QuantizedLinear
-
-
-# ---------------------------------------------------------------------------
-# Quantizer registry
-# ---------------------------------------------------------------------------
-# Each entry maps a name to:
-#   apply(model, **params)            – replace linears in-place
-#   param_groups(model, lr, **params) – DistAdamW-compatible param groups (or None → all params)
-#   post_update                       – callable(model, step, total_steps) or None
-#   defaults                          – default hyperparameter dict merged with --quantizer-params
-
-_QUANTIZER_REGISTRY: dict = {
-    "fp8": {
-        "apply":        lambda model, **_: apply_fp8_linear(model),
-        "param_groups": None,          # all params equally
-        "post_update":  None,          # FP8 recomputes each forward via STE; no buffer to refresh
-        "defaults":     {},
-    },
-    "gsq2bit": {
-        "apply":        apply_gsq2bit,
-        "param_groups": gsq_param_groups,
-        "post_update":  post_update_all,
-        "defaults": {
-            "groupsize":   128,
-            "std":         0.01,
-            "strength":    6.0,
-            "temp_start":  2.0,
-            "temp_end":    0.05,
-            "scale_start": 100.0,
-            "scale_end":   500.0,
-        },
-    },
-    "gsq3bit": {
-        "apply":        apply_gsq3bit,
-        "param_groups": gsq_param_groups,
-        "post_update":  post_update_all,
-        "defaults": {
-            "groupsize":   128,
-            "std":         0.01,
-            "strength":    6.0,
-            "temp_start":  2.0,
-            "temp_end":    0.05,
-            "scale_start": 100.0,
-            "scale_end":   500.0,
-        },
-    },
-    "ste2bit": {
-        "apply":        apply_ste2bit,
-        "param_groups": None,          # single weight param, no split needed
-        "post_update":  post_update_all,
-        "defaults":     {"groupsize": 128},
-    },
-    "ste3bit": {
-        "apply":        apply_ste3bit,
-        "param_groups": None,
-        "post_update":  post_update_all,
-        "defaults":     {"groupsize": 128},
-    },
-    "ste4bit": {
-        "apply":        apply_ste4bit,
-        "param_groups": None,
-        "post_update":  post_update_all,
-        "defaults":     {"groupsize": 128},
-    },
-    "quest2bit": {
-        "apply":        apply_quest2bit,
-        "param_groups": None,
-        "post_update":  post_update_all,
-        "defaults":     {"groupsize": 128},
-    },
-    "quest3bit": {
-        "apply":        apply_quest3bit,
-        "param_groups": None,
-        "post_update":  post_update_all,
-        "defaults":     {"groupsize": 128},
-    },
-    "quest4bit": {
-        "apply":        apply_quest4bit,
-        "param_groups": None,
-        "post_update":  post_update_all,
-        "defaults":     {"groupsize": 128},
-    },
-    "nvfp4": {
-        # W4A4: NVFP4 fake-quant on both weights and activations (STE), block=16.
-        "apply":        apply_nvfp4,
-        "param_groups": None,          # single weight param per layer
-        "post_update":  post_update_all,
-        "defaults":     {},
-    },
-    "nvfp4a16": {
-        # W4A16: NVFP4 weights only — activations stay bf16 (no input_global_scale).
-        "apply":        apply_nvfp4a16,
-        "param_groups": None,
-        "post_update":  post_update_all,
-        "defaults":     {},
-    },
-}
-
-
-def _build_quantizer_params(name: str, overrides_json: str) -> dict:
-    import json, hashlib
-    entry = _QUANTIZER_REGISTRY[name]
-    params = dict(entry["defaults"])
-    if overrides_json:
-        params.update(json.loads(overrides_json))
-    # stable hash of the effective overrides for checkpoint naming
-    h = hashlib.md5(json.dumps(params, sort_keys=True).encode()).hexdigest()[:8]
-    return params, h
-
-
-# ---------------------------------------------------------------------------
-# Data
-# ---------------------------------------------------------------------------
-def _tokenize_with_labels(tokenizer, messages: list[dict]) -> tuple[list[int], list[int]]:
-    """Tokenize a chat example. Returns (input_ids, labels) where labels[t] equals
-    input_ids[t] for tokens that belong to an assistant reply and -100 otherwise.
-
-    Uses prefix-diff: for each assistant turn, the span is
-    [len(tokens up to start-of-assistant-turn), len(tokens up to end-of-turn)).
-    add_generation_prompt=True on the prefix captures the turn-start marker so we
-    predict from the first content token (not the role header).
-    """
-    full_text = tokenizer.apply_chat_template(
-        messages, tokenize=False, add_generation_prompt=False
-    )
-    full_ids = tokenizer(full_text, add_special_tokens=False)["input_ids"]
-    labels = [-100] * len(full_ids)
-
-    for i, msg in enumerate(messages):
-        if msg["role"] != "assistant":
-            continue
-        prefix = tokenizer.apply_chat_template(
-            messages[:i], tokenize=False, add_generation_prompt=True
-        )
-        start = len(tokenizer(prefix, add_special_tokens=False)["input_ids"])
-        suffix = tokenizer.apply_chat_template(
-            messages[: i + 1], tokenize=False, add_generation_prompt=False
-        )
-        end = len(tokenizer(suffix, add_special_tokens=False)["input_ids"])
-        for j in range(start, min(end, len(full_ids))):
-            labels[j] = full_ids[j]
-
-    return full_ids, labels
-
-
-def _chunk_cache_path(
-    cache_dir: Path, model: str, split: str,
-    target_tokens: int, max_seq_len: int, rank: int, world_size: int, seed: int,
-) -> Path:
-    tag = (
-        f"{model.replace('/', '__')}.{split}.sft.nopacking"
-        f".tok{target_tokens}.seq{max_seq_len}.r{rank}of{world_size}.s{seed}"
-    )
-    return cache_dir / f"chunks_{tag}.pt"
-
-
-def build_chunks(
-    tokenizer,
-    raw_dataset,
-    target_tokens: int,
-    max_seq_len: int,
-    rank: int,
-    world_size: int,
-    seed: int = 42,
-    cache_dir: Path | None = None,
-    split: str = "data",
-    model_name: str = "",
-) -> list[tuple[Tensor, Tensor, Tensor]]:
-    """One chunk per document: tokenize, truncate to max_seq_len, pad shorter docs.
-
-    Returns a list of (input_ids, labels, attention_mask) triples.
-      - labels[t] = token id if position t is part of an assistant reply, else -100.
-      - attention_mask[t] = 1 for real tokens, 0 for padding.
-    Stops once target_tokens // world_size tokens have been collected for this rank.
-    """
-    if cache_dir is not None:
-        cache_file = _chunk_cache_path(
-            cache_dir, model_name, split, target_tokens, max_seq_len, rank, world_size, seed
-        )
-        if cache_file.exists():
-            if rank == 0:
-                print(f"Loading cached chunks from {cache_file}", flush=True)
-            return torch.load(cache_file, weights_only=False)
-
-    shard = raw_dataset.select(range(rank, len(raw_dataset), world_size))
-    pad_id = tokenizer.pad_token_id or tokenizer.eos_token_id
-
-    chunks: list[tuple[Tensor, Tensor, Tensor]] = []
-    total_tokens = 0
-    per_rank_target = target_tokens // world_size
-    pbar = tqdm(shard, desc=f"tokenize rank{rank}", unit="ex", disable=rank != 0)
-    for example in pbar:
-        try:
-            ids, lbls = _tokenize_with_labels(tokenizer, example["messages"])
-        except Exception:
-            continue
-
-        # Truncate
-        ids = ids[:max_seq_len]
-        lbls = lbls[:max_seq_len]
-
-        # Skip documents whose assistant reply was entirely cut off by truncation —
-        # they produce all-(-100) labels, causing CE(mean of empty set) = NaN.
-        if all(l == -100 for l in lbls):
-            continue
-
-        real_len = len(ids)
-
-        # Pad to max_seq_len
-        pad_len = max_seq_len - real_len
-        ids_t = torch.tensor(ids + [pad_id] * pad_len, dtype=torch.long)
-        lbl_t = torch.tensor(lbls + [-100] * pad_len, dtype=torch.long)
-        msk_t = torch.tensor([1] * real_len + [0] * pad_len, dtype=torch.long)
-        chunks.append((ids_t, lbl_t, msk_t))
-
-        total_tokens += real_len
-        pbar.set_postfix(tokens=f"{total_tokens/1e3:.0f}k/{per_rank_target/1e3:.0f}k")
-        if total_tokens >= per_rank_target:
-            break
-
-    g = torch.Generator()
-    g.manual_seed(seed + rank)
-    perm = torch.randperm(len(chunks), generator=g).tolist()
-    chunks = [chunks[i] for i in perm]
-
-    if cache_dir is not None:
-        cache_file.parent.mkdir(parents=True, exist_ok=True)
-        torch.save(chunks, cache_file)
-
-    return chunks
+from export import compressed_tensors as ct_export
+from export import hf as hf_export
+from quantizers import (REGISTRY, build_quantizer_params, calibrate_nvfp4,
+                        uses_compressed_tensors)
+from training.checkpoint import (find_latest, load_training_state,
+                                 save_training_state)
+from training.data import build_chunks, get_tulu_train_val
+from training.dist_adamw import DistAdamW
 
 
 # ---------------------------------------------------------------------------
 # LR schedule
 # ---------------------------------------------------------------------------
-def cosine_lr(step: int, total_steps: int, lr_max: float, warmup_steps: int) -> float:
+def lr_at(step: int, total_steps: int, lr_max: float, warmup_steps: int,
+          schedule: str = "cosine") -> float:
+    """Linear warmup, then either a cosine decay to 0 or a constant plateau.
+
+    `constant` (warmup then flat, no cooldown) keeps every checkpoint along the run
+    directly comparable, since none of them sit at a different point of a decay.
+    """
     if step < warmup_steps:
         return lr_max * (step + 1) / max(1, warmup_steps)
+    if schedule == "constant":
+        return lr_max
     t = (step - warmup_steps) / max(1, total_steps - warmup_steps)
     return lr_max * 0.5 * (1.0 + math.cos(math.pi * t))
 
@@ -294,93 +74,43 @@ def cosine_lr(step: int, total_steps: int, lr_max: float, warmup_steps: int) -> 
 # ---------------------------------------------------------------------------
 # Checkpointing
 # ---------------------------------------------------------------------------
-def save_checkpoint(
-    student: nn.Module,
-    optimizer: DistAdamW,
-    step: int,
-    args: argparse.Namespace,
-) -> None:
-    if dist.get_rank() != 0:
-        return
-    path = Path(args.ckpt_dir) / args.ckpt_tag / f"step_{step:07d}" / "ckpt.pt"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(
-        {
-            "step": step,
-            "model": student.state_dict(),
-            "optimizer": optimizer.state_dict(),
-            "args": vars(args),
-        },
-        path,
-    )
-
-
-def build_hf_state_dict(student: nn.Module) -> dict[str, torch.Tensor]:
-    """Remap the quantized student into a vanilla HF state dict.
-
-    Each QuantizedLinear's hard-quantized weight (_wq) is written to the standard
-    `<module>.weight` slot, so the result is bit-identical in structure to a plain
-    Qwen3ForCausalLM. All quant-internal tensors (master weight, _mask, scales,
-    quant_logits, schedule buffers, _values, _idx) are dropped. Everything else
-    (embeddings, norms, lm_head, rotary buffers) is kept at its native dtype.
-    """
-    quant_paths: set[str] = {
-        name for name, mod in student.named_modules()
-        if isinstance(mod, QuantizedLinear)
-    }
-    out: dict[str, torch.Tensor] = {}
-    for key, tensor in student.state_dict().items():
-        parent, _, leaf = key.rpartition(".")
-        if parent in quant_paths:
-            if leaf == "_wq":
-                out[f"{parent}.weight"] = tensor.detach().to(torch.bfloat16).cpu()
-            elif leaf == "bias":
-                out[key] = tensor.detach().to(torch.bfloat16).cpu()
-            # drop all other quant-internal tensors
-        else:
-            out[key] = tensor.detach().cpu()
-    return out
+# Resumable training state (FP32 weights + un-sharded optimizer moments + RNG) is
+# handled by training/checkpoint.py — see save_training_state / load_training_state.
 
 
 def save_weights(student: nn.Module, step: int, args: argparse.Namespace,
                  val_chunks=None, device=None) -> None:
-    """Save an eval-ready HuggingFace checkpoint (dequantized weights in `weight`).
+    """Save an eval-ready checkpoint for the current quantizer.
 
-    Written as a standard HF model directory so evaluation is a single, fast
-    from_pretrained() — no quantizer wrapping, no base-model read, no manual
-    load_state_dict.
-
-    For the NVFP4 quantizers a real compressed-tensors checkpoint is written instead:
-    packed FP4 weights + FP8 block scales (+ a static per-layer input_global_scale for
-    W4A4, calibrated here on a few val batches) so vLLM serves true W4A4 / W4A16.
+    Two export paths, selected by the registry's "export" field:
+      * compressed_tensors – a real quantized checkpoint (packed FP4 weights, FP8
+        block scales, and for W4A4 a static input_global_scale calibrated here on a
+        few val batches) that vLLM serves with true 4-bit kernels.
+      * dequantized        – pseudo-quantization: a plain HF bf16 model whose
+        weights carry the quantization error, served as an ordinary model.
+    Either way evaluation is a single fast from_pretrained().
     """
-    if args.quantizer.startswith("nvfp4"):
-        # Calibrate the static activation scale on every rank's model, but only
-        # rank 0 writes (rank 0's calibration is what gets exported).
-        # No-op for nvfp4a16 (weight-only): activations aren't quantized.
-        if val_chunks is not None and dist.get_rank() == 0 and args.quantizer == "nvfp4":
-            calibrate_nvfp4(student, val_chunks, device)
-        if dist.get_rank() != 0:
-            return
-        out_dir = Path(args.ckpt_dir) / args.ckpt_tag / "weights" / f"step_{step:07d}"
-        n = save_nvfp4_checkpoint(student, out_dir)
-        print(f"[rank0] NVFP4 checkpoint → {out_dir}  ({n} tensors)", flush=True)
-        return
-
-    if dist.get_rank() != 0:
-        return
-    from safetensors.torch import save_file
     out_dir = Path(args.ckpt_dir) / args.ckpt_tag / "weights" / f"step_{step:07d}"
-    out_dir.mkdir(parents=True, exist_ok=True)
 
-    state = build_hf_state_dict(student)
-    save_file(state, str(out_dir / "model.safetensors"), metadata={"format": "pt", "step": str(step)})
-    # Write config (+ generation_config) so from_pretrained rebuilds the architecture.
-    student.config.save_pretrained(out_dir)
-    if getattr(student, "generation_config", None) is not None:
-        student.generation_config.save_pretrained(out_dir)
+    if uses_compressed_tensors(args.quantizer):
+        # Calibrate the static activation scale before rank 0 writes (W4A4 only;
+        # a no-op for the weight-only variants, which quantize no activations).
+        if val_chunks is not None and dist.get_rank() == 0:
+            calibrate_nvfp4(student, val_chunks, device)
+        if dist.get_rank() == 0:
+            n = ct_export.save_checkpoint(student, out_dir)
+            print(f"[rank0] compressed-tensors checkpoint → {out_dir}  ({n} tensors)", flush=True)
+        # Rank 0 alone does the calibration + export (seconds to minutes on a busy
+        # filesystem). Without this barrier the other ranks run ahead and queue
+        # collectives that rank 0 cannot service, and once the lag exceeds the NCCL
+        # watchdog the whole job dies with a reduce_scatter timeout.
+        dist.barrier()
+        return
 
-    print(f"[rank0] HF checkpoint → {out_dir}  ({len(state)} tensors)", flush=True)
+    if dist.get_rank() == 0:
+        n = hf_export.save_checkpoint(student, out_dir, step)
+        print(f"[rank0] HF checkpoint → {out_dir}  ({n} tensors)", flush=True)
+    dist.barrier()
 
 
 # ---------------------------------------------------------------------------
@@ -460,7 +190,7 @@ def main() -> None:
     parser.add_argument("--lr-scale-ratio", type=float, default=0.5,
                         help="scale LR multiplier for quantizers that use separate scale LR")
     parser.add_argument("--quantizer", type=str, default="gsq2bit",
-                        choices=list(_QUANTIZER_REGISTRY),
+                        choices=list(REGISTRY),
                         help="quantization scheme to apply to the student")
     parser.add_argument("--quantizer-params", type=str, default="",
                         help="JSON string of quantizer hyperparameter overrides, "
@@ -471,19 +201,29 @@ def main() -> None:
     parser.add_argument("--run-name", type=str, default="qad")
     parser.add_argument("--ckpt-dir", type=str, default="checkpoints")
     parser.add_argument("--chunk-cache-dir", type=str, default=None, help="directory to cache tokenized chunks")
-    parser.add_argument("--save-every", type=int, default=500)
+    parser.add_argument("--lr-schedule", type=str, default="cosine",
+                        choices=["cosine", "constant"],
+                        help="constant = linear warmup then a flat plateau (no cooldown)")
+    parser.add_argument("--save-every", type=int, default=100,
+                        help="steps between resumable training-state saves")
+    parser.add_argument("--keep-last", type=int, default=1,
+                        help="how many training states to retain (they are ~12 bytes/param)")
+    parser.add_argument("--resume", type=str, default="auto", choices=["auto", "never"],
+                        help="auto: continue from the newest training state for this tag")
     parser.add_argument("--val-every", type=int, default=25)
     args = parser.parse_args()
 
-    quant_params, quant_hash = _build_quantizer_params(args.quantizer, args.quantizer_params)
-    quant_entry = _QUANTIZER_REGISTRY[args.quantizer]
+    quant_params, quant_hash = build_quantizer_params(args.quantizer, args.quantizer_params)
+    quant_entry = REGISTRY[args.quantizer]
     # Embed quantizer name + param hash into identifiers for traceability
     run_tag = f"{args.run_name}-{args.quantizer}"
     ckpt_tag = f"{run_tag}-{quant_hash}"
     args.run_tag  = run_tag   # used for wandb run name
     args.ckpt_tag = ckpt_tag  # used for checkpoint path
 
-    dist.init_process_group("nccl")
+    # 10-minute default is too tight: rank 0 writes multi-GB checkpoints while the
+    # other ranks wait at a barrier, and lustre is slow when many jobs write at once.
+    dist.init_process_group("nccl", timeout=timedelta(minutes=60))
     rank = dist.get_rank()
     world_size = dist.get_world_size()
     local_rank = int(os.environ["LOCAL_RANK"])
@@ -491,9 +231,13 @@ def main() -> None:
     torch.cuda.set_device(device)
 
     if rank == 0:
+        # id + resume="allow": a restarted job continues logging into the same run
+        # instead of creating a duplicate.
         wandb.init(
             project="prefill-decode-distill",
             name=run_tag,
+            id=hashlib.md5(ckpt_tag.encode()).hexdigest(),
+            resume="allow",
             config={**vars(args), "quantizer_params": quant_params, "quantizer_hash": quant_hash},
         )
 
@@ -607,9 +351,28 @@ def main() -> None:
             flush=True,
         )
 
-    pbar = tqdm(range(total_steps), desc="train", unit="step", disable=rank != 0)
+    # Resume: restore weights + optimizer moments + RNG from the newest training
+    # state for this tag. The data position needs no bookkeeping — chunks are
+    # indexed as step*chunks_per_step + acc*mbs, so starting the loop at start_step
+    # fast-forwards the dataset to exactly where it left off.
+    start_step = 0
+    if args.resume == "auto":
+        latest = find_latest(args.ckpt_dir, args.ckpt_tag)
+        if latest is not None:
+            start_step = load_training_state(latest[0], student, optimizer, device)
+            if start_step >= total_steps:
+                if rank == 0:
+                    print(f"Nothing to do: state at step {latest[1]} >= total {total_steps}",
+                          flush=True)
+                dist.barrier()
+                return
+        elif rank == 0:
+            print("No training state found — starting from scratch.", flush=True)
+
+    pbar = tqdm(range(start_step, total_steps), desc="train", unit="step",
+                initial=start_step, total=total_steps, disable=rank != 0)
     for step in pbar:
-        lr = cosine_lr(step, total_steps, args.lr, args.warmup_steps)
+        lr = lr_at(step, total_steps, args.lr, args.warmup_steps, args.lr_schedule)
         for g in optimizer.param_groups:
             g["lr"] = lr
 
@@ -722,17 +485,17 @@ def main() -> None:
                     "val/ntp_delta":    delta,
                 }, step=step)
 
-        if step % args.save_every == 0:
-            save_checkpoint(student, optimizer, step, args)
+        if step > 0 and step % args.save_every == 0:
+            save_training_state(student, optimizer, step, args, args.keep_last)
 
     ntp = eval_ntp(student, val_chunks, device, args.eval_batch_size)
     save_weights(student, total_steps, args, val_chunks, device)
+    save_training_state(student, optimizer, total_steps, args, args.keep_last)
     if rank == 0:
         delta = ntp - teacher_val_ntp
         print(f"Final    | val_ntp={ntp:.4f}  Δ={delta:+.4f}", flush=True)
         wandb.log({"val/ntp_loss": ntp, "val/ntp_delta": delta}, step=total_steps)
         wandb.finish()
-    save_checkpoint(student, optimizer, total_steps, args)
 
     dist.destroy_process_group()
 

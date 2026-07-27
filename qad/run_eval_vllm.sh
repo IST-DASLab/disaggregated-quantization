@@ -43,11 +43,16 @@ if [ -z "$SLURM_JOB_ID" ]; then
     SELF="$(realpath "$0")"
     ROOT="$(dirname "$SELF")/.."
     STAMP="$(date +%Y%m%d_%H%M%S)"
-    SB_ARRAY=""; TAG="run"; PASS=()
+    SB_ARRAY=""; SB_DEP=""; TAG="run"; PASS=()
     while [ $# -gt 0 ]; do
         case "$1" in
             --array=*)     SB_ARRAY="$1";              shift ;;
             --array)       SB_ARRAY="--array=$2";      shift 2 ;;
+            # Queue behind a training job: --dependency=afterany:<jobid>. Use afterany,
+            # NOT afterok — the trainer exits non-zero on a benign NCCL teardown SIGABRT
+            # after everything is written, so afterok would never fire.
+            --dependency=*) SB_DEP="$1";               shift ;;
+            --dependency)  SB_DEP="--dependency=$2";   shift 2 ;;
             --quantizer=*) TAG="${1#--quantizer=}"; PASS+=("$1");      shift ;;
             --quantizer)   TAG="$2";                PASS+=("$1" "$2"); shift 2 ;;
             --unquantized) TAG="baseline";          PASS+=("$1");      shift ;;
@@ -57,7 +62,7 @@ if [ -z "$SLURM_JOB_ID" ]; then
     LOGDIR="$ROOT/logs/${LOG_KIND}/${STAMP}_${TAG}"
     mkdir -p "$LOGDIR"
     echo "logs → $LOGDIR"
-    exec sbatch $SB_ARRAY \
+    exec sbatch $SB_ARRAY $SB_DEP \
         --output="$LOGDIR/%A_%a.out" --error="$LOGDIR/%A_%a.err" \
         "$SELF" "${PASS[@]}"
 fi
@@ -79,6 +84,7 @@ if command -v scontrol &>/dev/null; then
     # Export everything the container mode needs
     export SCRIPT_DIR HF_CACHE LM_EVAL_OVERLAY
     export MODEL=${MODEL:-Qwen/Qwen3-4B}
+    export RUN_PREFIX=${RUN_PREFIX:-qad}   # must match the training RUN_PREFIX
     export CKPT_DIR=${CKPT_DIR:-$SCRIPT_DIR/checkpoints}
     export HF_HUB_OFFLINE HF_DATASETS_OFFLINE
 
@@ -120,7 +126,7 @@ MODEL=${MODEL:-Qwen/Qwen3-4B}
 CKPT_DIR=${CKPT_DIR:-$SCRIPT_DIR/checkpoints}
 QUANTIZER=${QUANTIZER:-ste3bit}
 TASKS=${TASKS:-"gsm8k math_500 aime_2025"}
-RUN_NAME=""
+RUN_NAME="${RUN_PREFIX:-qad}-$(echo ${MODEL:-Qwen/Qwen3-4B} | tr '/' '-')"
 BATCH_SIZE=16
 ITER=${SLURM_ARRAY_TASK_ID:-""}
 UNQUANTIZED=0
