@@ -53,6 +53,11 @@ if [ -z "$SLURM_JOB_ID" ]; then
             # after everything is written, so afterok would never fire.
             --dependency=*) SB_DEP="$1";               shift ;;
             --dependency)  SB_DEP="--dependency=$2";   shift 2 ;;
+            # --steps 250,750,1000,...  submits an array indexed 0..n-1 and maps each
+            # index to a step below. Needed because SLURM caps array indices at
+            # MaxArraySize (1001 here), so step numbers >1000 cannot be array IDs.
+            --steps)       SB_ARRAY="--array=0-$(( $(echo "$2" | tr ',' ' ' | wc -w) - 1 ))"
+                           PASS+=("--steps" "$2");     shift 2 ;;
             --quantizer=*) TAG="${1#--quantizer=}"; PASS+=("$1");      shift ;;
             --quantizer)   TAG="$2";                PASS+=("$1" "$2"); shift 2 ;;
             --unquantized) TAG="baseline";          PASS+=("$1");      shift ;;
@@ -129,6 +134,7 @@ TASKS=${TASKS:-"gsm8k math_500 aime_2025"}
 RUN_NAME="${RUN_PREFIX:-qad}-$(echo ${MODEL:-Qwen/Qwen3-4B} | tr '/' '-')"
 BATCH_SIZE=16
 ITER=${SLURM_ARRAY_TASK_ID:-""}
+STEPS=""
 UNQUANTIZED=0
 NO_THINK=0
 LOG_SAMPLES=0
@@ -149,10 +155,17 @@ while [[ $# -gt 0 ]]; do
         --model)         MODEL="$2";                       shift 2 ;;
         --unquantized)   UNQUANTIZED=1;                    shift ;;
         --no-think)      NO_THINK=1;                       shift ;;
+        --steps)         STEPS="$2";                       shift 2 ;;
         --log-samples)   LOG_SAMPLES=1;                    shift ;;
         *)               shift ;;
     esac
 done
+
+# Map the array index onto the requested step list (see --steps above).
+if [ -n "$STEPS" ] && [ -n "$SLURM_ARRAY_TASK_ID" ]; then
+    ITER=$(echo "$STEPS" | cut -d, -f$((SLURM_ARRAY_TASK_ID + 1)))
+    echo "array index $SLURM_ARRAY_TASK_ID -> step $ITER"
+fi
 
 if [ "$UNQUANTIZED" = "0" ] && [ -z "$ITER" ]; then
     echo "ERROR: pass --iter N, submit as a job array, or use --unquantized" >&2
