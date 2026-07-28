@@ -18,7 +18,7 @@ Notes:
     - DistAdamW requires shape[0] of large params (numel >= 1024) to be divisible
       by world_size. Holds for all standard Llama-family vocab/hidden sizes.
     - Quantization: fp8.py — fake_fp8 (STE), FP8Linear, apply_fp8_linear.
-    - Optimizer:    dist_adamw.py — DistAdamW (ZeRO-2, from karpathy/nanochat).
+    - Optimizer:    dist_optim.py — DistOptimizer (ZeRO-2, per-group AdamW or Lion).
 """
 
 import argparse
@@ -50,7 +50,7 @@ from quantizers import (REGISTRY, build_quantizer_params, calibrate_nvfp4,
 from training.checkpoint import (find_latest, load_training_state,
                                  save_training_state)
 from training.data import build_chunks, get_tulu_train_val
-from training.dist_adamw import DistAdamW
+from training.dist_optim import DistOptimizer
 
 
 # ---------------------------------------------------------------------------
@@ -236,7 +236,7 @@ def main() -> None:
         wandb.init(
             project="prefill-decode-distill",
             name=run_tag,
-            id=hashlib.md5(ckpt_tag.encode()).hexdigest(),
+            # id=hashlib.md5(ckpt_tag.encode()).hexdigest(),
             resume="allow",
             config={**vars(args), "quantizer_params": quant_params, "quantizer_hash": quant_hash},
         )
@@ -302,7 +302,7 @@ def main() -> None:
         param_groups = _pg_fn(student, lr=args.lr, lr_scale_ratio=args.lr_scale_ratio)
     else:
         param_groups = [{"params": list(student.parameters())}]
-    optimizer = DistAdamW(
+    optimizer = DistOptimizer(
         param_groups,
         lr=args.lr,
         betas=(0.9, 0.95),
@@ -369,12 +369,22 @@ def main() -> None:
         elif rank == 0:
             print("No training state found — starting from scratch.", flush=True)
 
+    # Remember each group's configured LR. The schedule is applied below as a
+    # MULTIPLIER on these, not as an absolute value: quantizers whose parameters do
+    # not live in weight units set their own per-group LRs (GSQ's assignment logits
+    # and block-scale deltas), and overwriting every group with the weight LR
+    # silently discarded them — a --quantizer-params logit_lr sweep then trained
+    # every arm at args.lr and produced three identical runs.
+    for g in optimizer.param_groups:
+        g.setdefault("initial_lr", g["lr"])
+
     pbar = tqdm(range(start_step, total_steps), desc="train", unit="step",
                 initial=start_step, total=total_steps, disable=rank != 0)
     for step in pbar:
-        lr = lr_at(step, total_steps, args.lr, args.warmup_steps, args.lr_schedule)
+        lr_frac = lr_at(step, total_steps, 1.0, args.warmup_steps, args.lr_schedule)
         for g in optimizer.param_groups:
-            g["lr"] = lr
+            g["lr"] = g["initial_lr"] * lr_frac
+        lr = args.lr * lr_frac          # weight LR, for logging
 
         optimizer.zero_grad()
         accum_kl          = 0.0
@@ -480,9 +490,11 @@ def main() -> None:
             if rank == 0:
                 delta = ntp - teacher_val_ntp
                 pbar.write(f"step {step:5d} | val_ntp={ntp:.4f}  teacher={teacher_val_ntp:.4f}  Δ={delta:+.4f}")
+                stats_fn = quant_entry.get("stats")
                 wandb.log({
                     "val/ntp_loss":     ntp,
                     "val/ntp_delta":    delta,
+                    **(stats_fn(student) if stats_fn else {}),
                 }, step=step)
 
         if step > 0 and step % args.save_every == 0:

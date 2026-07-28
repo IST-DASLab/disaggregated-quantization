@@ -23,7 +23,7 @@ from torch import Tensor
 from .blocked import BlockScaledLinear, grid_rounder, replace_linears
 from .grids import FP4_DOWNCAST_SIGNED_3BIT, LLOYD_SIGNED_3BIT
 
-_GRIDS = {
+GRIDS = {
     "lloyd": LLOYD_SIGNED_3BIT,               # MSE-optimal (default)
     "downcast": FP4_DOWNCAST_SIGNED_3BIT,     # FP4-pair centers of mass
 }
@@ -36,7 +36,7 @@ class SignedLloydLinear(BlockScaledLinear):
 
     def __init__(self, weight: Tensor, bias, block_size: int = 16, grid: str = "lloyd"):
         self.grid_name = grid
-        self._grid = _GRIDS[grid].to(weight.device)
+        self._grid = GRIDS[grid].to(weight.device)
         self._round = grid_rounder(self._grid)
         super().__init__(weight, bias, block_size=block_size)
 

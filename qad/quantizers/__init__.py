@@ -7,6 +7,7 @@ Each entry maps a CLI name to:
   defaults                          – hyperparameters merged with --quantizer-params
   export                            – "compressed_tensors" (real quantized checkpoint)
                                       or "dequantized" (pseudo-quant: plain bf16 HF model)
+  stats                             – optional callable(model) -> dict of scalars to log
 
 NOTE: `defaults` is hashed into the checkpoint tag (see build_quantizer_params), so
 changing a defaults dict renames every checkpoint/eval directory for that method.
@@ -19,6 +20,7 @@ import json
 from .base import QuantizedLinear, post_update_all
 from .fp8 import apply_fp8_linear
 from .gsq import apply_gsq2bit, apply_gsq3bit, gsq_param_groups
+from .gsq_lloyd import apply_gsqlloyd3bit, assignment_stats
 from .lloyd import apply_lloyd3bit
 from .nvfp4 import apply_nvfp4, apply_nvfp4a16, calibrate_nvfp4
 from .quest import apply_quest2bit, apply_quest3bit, apply_quest4bit
@@ -123,6 +125,37 @@ REGISTRY: dict = {
         "post_update":  post_update_all,
         "defaults":     {"block_size": 16, "grid": "lloyd"},
         "export":       "dequantized",
+    },
+    "gsqlloyd3bit": {
+        # Same deployable format as lloyd3bit, optimized with GSQ (learned per-element
+        # level assignment) instead of STE. Block scales stay continuous: FP32 log2
+        # master, straight-through E4M3 in the forward.
+        "apply":        apply_gsqlloyd3bit,
+        "param_groups": gsq_param_groups,
+        "post_update":  post_update_all,
+        "defaults":     {
+            "block_size":  16,
+            "grid":        "lloyd",
+            "std":         0.01,
+            "strength":    6.0,
+            "noise":       0.0,   # 0 => init is exactly lloyd3bit's round-to-nearest
+            # absolute LRs — logits and log2 scale deltas are not in weight units
+            "logit_lr":    1e-4,
+            "scale_lr":    3e-6,
+            # Lion: sign-based, so it cannot stall on the vanishing gradients the
+            # saturating Gumbel relaxation produces. AdamW froze the logits outright.
+            "optim":       "lion",
+            "betas":       [0.9, 0.99],
+            # trainable master params are fp32, as everywhere else in this codebase
+            "logits_dtype": "fp32",
+            "adam_eps":    1e-16,   # only used when optim="adamw"
+            "temp_start":  2.0,
+            "temp_end":    0.05,
+            "scale_start": 100.0,
+            "scale_end":   500.0,
+        },
+        "export":       "dequantized",
+        "stats":        assignment_stats,
     },
 }
 

@@ -130,6 +130,11 @@ fi
 MODEL=${MODEL:-Qwen/Qwen3-4B}
 CKPT_DIR=${CKPT_DIR:-$SCRIPT_DIR/checkpoints}
 QUANTIZER=${QUANTIZER:-ste3bit}
+# Must be forwarded: the checkpoint tag ends in a hash of the quantizer params, so an
+# arm trained with non-default hyperparameters (e.g. gsqlloyd3bit logit_lr) lives in a
+# different directory. Dropping this silently resolves to the DEFAULTS hash, and the
+# eval dies with "No HF checkpoint" — or worse, evaluates the wrong run.
+QUANT_PARAMS=${QUANT_PARAMS:-""}
 TASKS=${TASKS:-"gsm8k math_500 aime_2025"}
 RUN_NAME="${RUN_PREFIX:-qad}-$(echo ${MODEL:-Qwen/Qwen3-4B} | tr '/' '-')"
 BATCH_SIZE=16
@@ -145,6 +150,8 @@ while [[ $# -gt 0 ]]; do
         --iter)          ITER="$2";                        shift 2 ;;
         --quantizer=*)   QUANTIZER="${1#--quantizer=}";    shift ;;
         --quantizer)     QUANTIZER="$2";                   shift 2 ;;
+        --quantizer-params=*) QUANT_PARAMS="${1#--quantizer-params=}"; shift ;;
+        --quantizer-params)   QUANT_PARAMS="$2";           shift 2 ;;
         --tasks=*)       TASKS="${1#--tasks=}";            shift ;;
         --tasks)         TASKS="$2";                       shift 2 ;;
         --run-name=*)    RUN_NAME="${1#--run-name=}";      shift ;;
@@ -179,6 +186,7 @@ ARGS=(
     --quantizer "$QUANTIZER"
     --tasks $TASKS
 )
+[ -n "$QUANT_PARAMS" ] && ARGS+=(--quantizer-params "$QUANT_PARAMS")
 [ -n "$ITER" ]         && ARGS+=(--iter "$ITER")
 [ "$UNQUANTIZED" = 1 ] && ARGS+=(--unquantized)
 [ "$NO_THINK" = 1 ]    && ARGS+=(--no-think)

@@ -68,7 +68,14 @@ srun \
         export TOKENIZERS_PARALLELISM=false
         export PYTHONPATH=$SCRIPT_DIR:\$PYTHONPATH
         export WANDB_MODE=${WANDB_MODE:-online}
+        # wandb creates its run directory under \$WANDB_DIR, which defaults to the
+        # CWD — and inside the container that is not a writable path, so wandb.init()
+        # blocks until it times out. This hits offline mode too (it needs the same
+        # local dir), which is how three jobs ended up training with logging disabled
+        # after burning 6 minutes each on two 180s timeouts. Point it somewhere real.
+        export WANDB_DIR=$SCRIPT_DIR
         export RUN_PREFIX=$RUN_PREFIX
+        cd $SCRIPT_DIR
         export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
         python -m torch.distributed.run \

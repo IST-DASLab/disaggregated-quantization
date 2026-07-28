@@ -46,6 +46,18 @@ LLOYD_SIGNED_3BIT = torch.tensor(
 )
 
 
+def grid_spacing(grid: torch.Tensor) -> float:
+    """Mean gap between adjacent levels of a sorted grid.
+
+    Used to make grid-proximity logit initialisation scale-free: distances are
+    measured in units of the grid's own spacing, so the same (std, strength)
+    hyperparameters give the same softness on a ±4 integer grid as on the ±6
+    Lloyd grid. Returns 1.0 for a unit-spaced integer grid, so the symmetric
+    uniform GSQ grids behave exactly as before.
+    """
+    return float(grid.float().diff().mean())
+
+
 def lloyd_grid(x: torch.Tensor, n_levels: int = 8, n_iters: int = 200) -> torch.Tensor:
     """Fit an MSE-optimal scalar grid with Lloyd's algorithm (1-D k-means).
 

@@ -38,10 +38,15 @@ def _params(optimizer) -> list:
 
 @torch.no_grad()
 def gather_optimizer_state(optimizer) -> list | None:
-    """All-gather the sharded AdamW moments; returns a CPU list on rank 0, else None.
+    """All-gather the sharded optimizer moments; CPU list on rank 0, else None.
 
     Every rank must call this (all_gather is collective). Peak extra GPU memory is
     one full-size parameter, since each gathered moment is moved to CPU immediately.
+
+    Which moments exist depends on the group's algorithm — AdamW keeps exp_avg and
+    exp_avg_sq, Lion only exp_avg — so the tensor keys are discovered rather than
+    hardcoded. Every rank walks the same parameters in the same order and each
+    parameter has the same keys on every rank, so the collectives stay in lockstep.
     """
     rank, world_size = dist.get_rank(), dist.get_world_size()
     out: list = []
@@ -52,7 +57,7 @@ def gather_optimizer_state(optimizer) -> list | None:
             continue
         small = p.numel() < 1024         # not sharded -> replicated on every rank
         entry = {"step": int(st["step"])}
-        for key in ("exp_avg", "exp_avg_sq"):
+        for key in sorted(k for k, v in st.items() if torch.is_tensor(v)):
             shard = st[key].contiguous()
             if small:
                 entry[key] = shard.to("cpu", copy=True) if rank == 0 else None
@@ -76,7 +81,7 @@ def load_optimizer_state(optimizer, saved: list) -> None:
         st["step"] = entry["step"]
         small = p.numel() < 1024
         rsize = p.shape[0] // world_size
-        for key in ("exp_avg", "exp_avg_sq"):
+        for key in sorted(k for k in entry if k != "step"):
             full = entry[key]
             shard = full if small else full[rank * rsize : (rank + 1) * rsize]
             st[key] = shard.to(device=p.device, dtype=p.dtype).contiguous()

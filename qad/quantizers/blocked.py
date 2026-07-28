@@ -122,8 +122,39 @@ def blocked_quantize(x: Tensor, rounder, block: int = BLOCK, signed: bool = Fals
 FUSED_GROUPS = [("q_proj", "k_proj", "v_proj"), ("gate_proj", "up_proj")]
 
 
+class GroupScaled:
+    """Mixin: owns the per-tensor global scale and its sharing across a fused group.
+
+    Kept separate from BlockScaledLinear so that formats which do NOT keep a master
+    weight (e.g. the GSQ-style learned-assignment layers) can take part in the same
+    fused-group contract. A participant must provide `amax()`; everything else —
+    who its siblings are, and what to do once they are known — is handled here.
+    """
+
+    _group: list | None = None      # fused-group siblings (set by link_fused_groups)
+
+    def amax(self) -> Tensor:
+        """Magnitude the global scale is derived from. Overridden by layers whose
+        `weight` is a quantized view rather than the original master weight."""
+        return self.weight.detach().float().abs().amax()
+
+    def group_global_scale(self) -> Tensor:
+        """Global scale shared across the fused group (group-max amax / 2688).
+        Identical for every member, so an engine's global_scale.max() is a no-op.
+        A magnitude, hence the same for signed and unsigned variants."""
+        members = self._group if (self._group and len(self._group) > 1) else [self]
+        amax = max(m.amax() for m in members)
+        return (amax / GLOBAL_DEN).clamp(min=1e-8)
+
+    @torch.no_grad()
+    def on_group_linked(self) -> None:
+        """Called once the fused group is known, i.e. once group_global_scale() is
+        final. Default: refresh the cached hard-quantized weight."""
+        self._wq.copy_(self._compute_wq())
+
+
 def link_fused_groups(model: nn.Module) -> None:
-    """Give every BlockScaledLinear that an engine fuses a shared global scale.
+    """Give every GroupScaled layer that an engine fuses a shared global scale.
 
     vLLM (and TensorRT) fuse q/k/v into qkv_proj and gate/up into gate_up_proj, then
     collapse the per-shard global scales with .max(). Sharing the group-max-derived
@@ -135,19 +166,18 @@ def link_fused_groups(model: nn.Module) -> None:
         children = dict(parent.named_children())
         for group in FUSED_GROUPS:
             members = [children[g] for g in group
-                       if isinstance(children.get(g), BlockScaledLinear)]
+                       if isinstance(children.get(g), GroupScaled)]
             if len(members) >= 2:
                 for m in members:
                     m._group = members
     for m in model.modules():
-        if isinstance(m, BlockScaledLinear):
+        if isinstance(m, GroupScaled):
             if m._group is None:
                 m._group = [m]
-            with torch.no_grad():          # refresh _wq with the (now shared) scale
-                m._wq.copy_(m._compute_wq())
+            m.on_group_linked()
 
 
-class BlockScaledLinear(QuantizedLinear):
+class BlockScaledLinear(GroupScaled, QuantizedLinear):
     """nn.Linear with block-scaled, grid-quantized weights (STE) — base for NVFP4,
     signed-Lloyd, and any other two-level-scaled format.
 
@@ -164,22 +194,12 @@ class BlockScaledLinear(QuantizedLinear):
         super().__init__(out, in_, bias, dtype=weight.dtype, device=weight.device)
         self.weight = nn.Parameter(weight.clone())
         self.block_size = block_size
-        self._group = None      # fused-group siblings (set by link_fused_groups)
         with torch.no_grad():
             self._wq.copy_(self._compute_wq())
 
     # --- subclass contract -------------------------------------------------
     def rounder(self, x: Tensor) -> Tensor:
         raise NotImplementedError
-
-    # --- two-level scaling -------------------------------------------------
-    def group_global_scale(self) -> Tensor:
-        """Global scale shared across the fused group (group-max amax / 2688).
-        Identical for every member, so an engine's global_scale.max() is a no-op.
-        A magnitude, hence the same for signed and unsigned variants."""
-        members = self._group if (self._group and len(self._group) > 1) else [self]
-        amax = max(m.weight.detach().float().abs().amax() for m in members)
-        return (amax / GLOBAL_DEN).clamp(min=1e-8)
 
     def quantize_weight(self) -> tuple[Tensor, Tensor, Tensor]:
         """(dequantized, block_scale, global_scale) for the current master weight."""

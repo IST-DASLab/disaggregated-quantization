@@ -220,3 +220,7 @@ __marimo__/
 # Logs
 logs/
 qad/checkpoints/
+
+# wandb local run state (synced to the server; nothing here needs versioning)
+wandb/
+qad/wandb/
