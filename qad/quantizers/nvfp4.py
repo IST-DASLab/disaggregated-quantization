@@ -15,7 +15,8 @@ observer, matching what vLLM does at inference: it calls
 checkpoint and computes the per-block scales dynamically. Training therefore sees
 exactly the inference-time scaling.
 
-Export lives in export/compressed_tensors.py.
+Export lives on the layer itself (NVFP4Linear.export_tensors / export_config /
+load_tensors); export/save.py only assembles the files.
 """
 
 import torch
@@ -25,7 +26,7 @@ from torch import Tensor
 
 from .blocked import (BLOCK, GLOBAL_DEN, BlockScaledLinear, blocked_quantize,
                       replace_linears, ste)
-from .grids import E2M1_BOUNDS, E2M1_LEVELS
+from .grids import E2M1_BOUNDS, E2M1_DECODE, E2M1_LEVELS
 
 
 def e2m1_round(x: Tensor) -> Tensor:
@@ -81,6 +82,30 @@ def pack_nvfp4_weight(w: Tensor, block: int = BLOCK, global_scale: Tensor | None
             global_scale.reshape(1).float())
 
 
+def unpack_nvfp4_weight(packed: Tensor, weight_scale: Tensor,
+                        weight_global_scale: Tensor, block: int = BLOCK) -> Tensor:
+    """Inverse of pack_nvfp4_weight: rebuild the dequantized FP32 weight.
+
+    `weight_global_scale` is stored RECIPROCAL in the checkpoint (2688/amax), which
+    is what vLLM expects, so it divides rather than multiplies here:
+        dequant = e2m1(code) * weight_scale / weight_global_scale
+
+    Round-trips exactly with pack_nvfp4_weight — the packed codes are the same ones
+    the model trained with, so this recovers `_wq` bit for bit.
+    """
+    low = (packed & 0x0F).long()
+    high = (packed >> 4).long()
+    O, half = packed.shape
+    codes = torch.empty(O, half * 2, dtype=torch.long, device=packed.device)
+    codes[:, 0::2] = low            # low nibble holds the EVEN column
+    codes[:, 1::2] = high
+    vals = E2M1_DECODE.to(packed.device)[codes]                    # [O, K]
+    bs = weight_scale.float().to(packed.device).reshape(O, -1, 1)
+    wgs = weight_global_scale.float().to(packed.device).reshape(())
+    K = codes.shape[1]
+    return (vals.reshape(O, K // block, block) * bs / wgs).reshape(O, K)
+
+
 class NVFP4Linear(BlockScaledLinear):
     """NVFP4 linear. W4A4 by default; `quantize_act=False` gives weight-only W4A16
     (activations stay bf16 and no input_global_scale is exported, which is what
@@ -99,6 +124,91 @@ class NVFP4Linear(BlockScaledLinear):
 
     def rounder(self, x: Tensor) -> Tensor:
         return e2m1_round(x)
+
+    # ------------------------------------------------------------------
+    # compressed-tensors `nvfp4-pack-quantized` format
+    # ------------------------------------------------------------------
+    # Which weight/scale/activation setting a variant serves. Subclasses that hold
+    # more than one master (the prefill/decode formats) override just these three.
+    def _variant_weight(self, variant) -> Tensor:
+        return self.weight
+
+    def _variant_global_scale(self, variant) -> Tensor:
+        return self.group_global_scale()
+
+    def _variant_quantize_act(self, variant) -> bool:
+        return self.quantize_act
+
+    def export_config(self, variant=None) -> dict:
+        """`quantization_config` for the compressed-tensors nvfp4-pack-quantized
+        format. Two hard requirements, both learned the hard way:
+
+          * `quant_method` must be present, and no `weight_shape` tensor may be
+            emitted — vLLM does a bare params_dict[name] lookup and any extra tensor
+            is a KeyError.
+          * W4A16 must set input_activations=None AND omit input_global_scale:
+            vLLM's _is_fp4a16_nvfp4() keys on `input_quant is None` to select the
+            weight-only scheme, which registers no such parameter.
+        """
+        quantize_act = self._variant_quantize_act(variant)
+        grp = {
+            "actorder": None, "block_structure": None, "group_size": self.block_size,
+            "num_bits": 4, "observer": "minmax", "observer_kwargs": {},
+            "strategy": "tensor_group", "symmetric": True, "type": "float",
+        }
+        return {
+            "config_groups": {
+                "group_0": {
+                    "input_activations": {**grp, "dynamic": "local"} if quantize_act else None,
+                    "output_activations": None,
+                    "targets": ["Linear"],
+                    "weights": {**grp, "dynamic": False},
+                }
+            },
+            "format": "nvfp4-pack-quantized",
+            "ignore": ["lm_head"],
+            "kv_cache_scheme": None,
+            "quant_method": "compressed-tensors",
+            "quantization_status": "compressed",
+        }
+
+    def export_tensors(self, variant=None) -> dict[str, Tensor]:
+        # weight_global_scale is a FUSED-GROUP quantity, so this reads the layer's
+        # siblings: vLLM collapses the per-shard scales with .max() when it loads
+        # qkv_proj / gate_up_proj, and a per-layer scale would be silently rescaled.
+        gscale = self._variant_global_scale(variant)
+        packed, wscale, wscale2 = pack_nvfp4_weight(
+            self._variant_weight(variant).data, self.block_size, global_scale=gscale)
+        out = {
+            "weight_packed": packed.cpu(),
+            "weight_scale": wscale.cpu(),
+            "weight_global_scale": (1.0 / wscale2).reshape(1).cpu(),
+        }
+        if self._variant_quantize_act(variant):
+            # W4A4 only — the W4A16 scheme registers no such parameter, and emitting
+            # one makes vLLM raise KeyError on a bare params_dict lookup.
+            act = self.act_amax.float().clamp(min=1e-8)
+            out["input_global_scale"] = (GLOBAL_DEN / act).reshape(1).cpu()
+        if self.bias is not None:
+            out["bias"] = self.bias.detach().to(torch.bfloat16).cpu()
+        return out
+
+    @torch.no_grad()
+    def load_tensors(self, tensors: dict[str, Tensor], variant=None) -> None:
+        """Dequantize a packed checkpoint back into `_wq` (and act_amax for W4A4).
+
+        dequant = e2m1(code) * weight_scale / weight_global_scale — note the global
+        scale is stored RECIPROCAL, matching what vLLM reads.
+        """
+        w = unpack_nvfp4_weight(tensors["weight_packed"], tensors["weight_scale"],
+                                tensors["weight_global_scale"])
+        self._wq.copy_(w.to(device=self._wq.device, dtype=self._wq.dtype))
+        if "input_global_scale" in tensors:
+            igs = tensors["input_global_scale"].float().reshape(()).to(self.act_amax.device)
+            self.act_amax.copy_(GLOBAL_DEN / igs.clamp(min=1e-12))
+            self._observed = True
+        if self.bias is not None and "bias" in tensors:
+            self.bias.data.copy_(tensors["bias"].to(self.bias.device, self.bias.dtype))
 
     def forward(self, x: Tensor) -> Tensor:
         w = self._wq if not self.training else self._differentiable_weight()

@@ -43,9 +43,9 @@ sys.path.insert(
 )
 from liger_kernel.chunked_loss import LigerFusedLinearJSDLoss
 
-from export import compressed_tensors as ct_export
-from export import hf as hf_export
+from export.save import export_variants, save_checkpoint
 from quantizers import (REGISTRY, build_quantizer_params, calibrate_nvfp4,
+                        prefill_mask_from_labels, quant_phase,
                         uses_compressed_tensors)
 from training.checkpoint import (find_latest, load_training_state,
                                  save_training_state)
@@ -90,26 +90,30 @@ def save_weights(student: nn.Module, step: int, args: argparse.Namespace,
         weights carry the quantization error, served as an ordinary model.
     Either way evaluation is a single fast from_pretrained().
     """
-    out_dir = Path(args.ckpt_dir) / args.ckpt_tag / "weights" / f"step_{step:07d}"
+    base_dir = Path(args.ckpt_dir) / args.ckpt_tag / "weights" / f"step_{step:07d}"
 
-    if uses_compressed_tensors(args.quantizer):
-        # Calibrate the static activation scale before rank 0 writes (W4A4 only;
-        # a no-op for the weight-only variants, which quantize no activations).
-        if val_chunks is not None and dist.get_rank() == 0:
-            calibrate_nvfp4(student, val_chunks, device)
-        if dist.get_rank() == 0:
-            n = ct_export.save_checkpoint(student, out_dir)
-            print(f"[rank0] compressed-tensors checkpoint → {out_dir}  ({n} tensors)", flush=True)
-        # Rank 0 alone does the calibration + export (seconds to minutes on a busy
-        # filesystem). Without this barrier the other ranks run ahead and queue
-        # collectives that rank 0 cannot service, and once the lag exceeds the NCCL
-        # watchdog the whole job dies with a reduce_scatter timeout.
-        dist.barrier()
-        return
+    # Calibrate the static activation scale before rank 0 writes (W4A4 only; a no-op
+    # for weight-only formats, which quantize no activations). Done ONCE, outside the
+    # variant loop: the observer is a property of the trained model, not of whichever
+    # view is about to be serialized.
+    if uses_compressed_tensors(args.quantizer) and val_chunks is not None \
+            and dist.get_rank() == 0:
+        calibrate_nvfp4(student, val_chunks, device)
 
     if dist.get_rank() == 0:
-        n = hf_export.save_checkpoint(student, out_dir, step)
-        print(f"[rank0] HF checkpoint → {out_dir}  ({n} tensors)", flush=True)
+        # The layers own their format, so there is one code path here regardless of
+        # whether it ends up packed FP4 or a plain bf16 HF model. Most formats emit a
+        # single checkpoint straight to base_dir; the prefill/decode formats emit one
+        # per phase under base_dir/<variant>/, each standalone so a disaggregated
+        # deployment can load them on different workers.
+        for v in export_variants(student):
+            out_dir = base_dir / v if v else base_dir
+            n = save_checkpoint(student, out_dir, variant=v, step=step)
+            print(f"[rank0] checkpoint → {out_dir}  ({n} tensors)", flush=True)
+    # Rank 0 alone does the calibration + export (seconds to minutes on a busy
+    # filesystem). Without this barrier the other ranks run ahead and queue
+    # collectives that rank 0 cannot service, and once the lag exceeds the NCCL
+    # watchdog the whole job dies with a reduce_scatter timeout.
     dist.barrier()
 
 
@@ -398,34 +402,44 @@ def main() -> None:
             input_ids   = torch.stack(ids_list).to(device)  # [mbs, T]
             labels_data = torch.stack(lbl_list).to(device)  # [mbs, T]
 
-            with torch.amp.autocast("cuda", dtype=torch.bfloat16):
-                # Teacher: hidden states only, no gradients
-                with torch.no_grad():
-                    t_hidden = teacher.model(input_ids=input_ids).last_hidden_state
+            # Route every position to the format it will run under at inference:
+            # prompt/system tokens through the prefill format, assistant tokens
+            # through the decode format. A no-op for single-format quantizers.
+            #
+            # This context MUST also enclose backward() below — gradient
+            # checkpointing recomputes the forward during the backward pass, and if
+            # the mask were already cleared the recomputation would silently run
+            # every position as decode, so the gradients would belong to a model that
+            # was never evaluated.
+            with quant_phase(prefill_mask_from_labels(labels_data)):
+                with torch.amp.autocast("cuda", dtype=torch.bfloat16):
+                    # Teacher: hidden states only, no gradients
+                    with torch.no_grad():
+                        t_hidden = teacher.model(input_ids=input_ids).last_hidden_state
 
-                # Student: base transformer; lm_head handled by Liger below
-                s_hidden = student.model(input_ids=input_ids).last_hidden_state
+                    # Student: base transformer; lm_head handled by Liger below
+                    s_hidden = student.model(input_ids=input_ids).last_hidden_state
 
-            # Causal shift: hidden state at t predicts token at t+1.
-            # labels_data[t+1] is the target (assistant token or -100).
-            B, T, H = s_hidden.shape
-            N = B * (T - 1)
-            s_hidden_q = s_hidden[:, :-1].reshape(N, H).contiguous()
-            t_hidden_f = t_hidden[:, :-1].reshape(N, H).contiguous()
-            # With --include-prefill-loss: compute KL on all positions (paper behaviour).
-            # Default: assistant reply tokens only (labels_data has -100 elsewhere).
-            if args.include_prefill_loss:
-                labels = input_ids[:, 1:].reshape(N)
-            else:
-                labels = labels_data[:, 1:].reshape(N)
+                # Causal shift: hidden state at t predicts token at t+1.
+                # labels_data[t+1] is the target (assistant token or -100).
+                B, T, H = s_hidden.shape
+                N = B * (T - 1)
+                s_hidden_q = s_hidden[:, :-1].reshape(N, H).contiguous()
+                t_hidden_f = t_hidden[:, :-1].reshape(N, H).contiguous()
+                # With --include-prefill-loss: KL on all positions (paper behaviour).
+                # Default: assistant reply tokens only (labels_data has -100 elsewhere).
+                if args.include_prefill_loss:
+                    labels = input_ids[:, 1:].reshape(N)
+                else:
+                    labels = labels_data[:, 1:].reshape(N)
 
-            s_lm_w = student.lm_head.weight
-            t_lm_w = teacher.lm_head.weight
+                s_lm_w = student.lm_head.weight
+                t_lm_w = teacher.lm_head.weight
 
-            loss, kl_soft, ntp_hard = kl_loss_fn(
-                s_hidden_q, s_lm_w, t_hidden_f, t_lm_w, true_labels=labels
-            )
-            (loss / grad_accum).backward()
+                loss, kl_soft, ntp_hard = kl_loss_fn(
+                    s_hidden_q, s_lm_w, t_hidden_f, t_lm_w, true_labels=labels
+                )
+                (loss / grad_accum).backward()
 
             # Teacher NTP on this training batch: CE(teacher_logits, labels), no grad.
             with torch.no_grad():

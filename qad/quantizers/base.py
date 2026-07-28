@@ -68,6 +68,48 @@ class QuantizedLinear(nn.Linear):
         self._update_schedule(step, total_steps)
         self._wq.copy_(self._compute_wq())
 
+    # ------------------------------------------------------------------
+    # Checkpoint format — owned by the layer, not by an external exporter
+    # ------------------------------------------------------------------
+    # Each format decides what it serializes and how to read it back, so writer and
+    # reader sit next to each other and cannot drift. export/save.py only assembles:
+    # it walks the model, prefixes these keys with the module path, adds the
+    # non-quantized tensors, and writes config.json.
+    #
+    # The default is pseudo-quantization: hand back the hard-quantized weight in the
+    # standard `weight` slot, so the result is an ordinary HF model with the
+    # quantization error baked in. STE / QuEST / Lloyd / GSQ need nothing more.
+
+    @classmethod
+    def export_variants(cls) -> list:
+        """Checkpoints this format emits per step. [None] -> a single checkpoint
+        written directly to the step directory. Formats that serve different phases
+        (see quantizers/dual.py) return one name per phase."""
+        return [None]
+
+    def export_config(self, variant=None) -> dict | None:
+        """`quantization_config` for config.json, or None to write a plain HF model."""
+        return None
+
+    def export_tensors(self, variant=None) -> dict[str, Tensor]:
+        """Tensors this layer contributes, keyed RELATIVE to the layer."""
+        out = {"weight": self._wq.detach().to(torch.bfloat16).cpu()}
+        if self.bias is not None:
+            out["bias"] = self.bias.detach().to(torch.bfloat16).cpu()
+        return out
+
+    @torch.no_grad()
+    def load_tensors(self, tensors: dict[str, Tensor], variant=None) -> None:
+        """Inverse of export_tensors: restore this layer from a checkpoint.
+
+        Used to rebuild a quantized model for evaluation without re-running the
+        quantizer, and to reconstruct the prefill/decode formats side by side.
+        """
+        w = tensors["weight"].to(device=self._wq.device, dtype=self._wq.dtype)
+        self._wq.copy_(w)
+        if self.bias is not None and "bias" in tensors:
+            self.bias.data.copy_(tensors["bias"].to(self.bias.device, self.bias.dtype))
+
 
 def post_update_all(model: nn.Module, step: int, total_steps: int) -> None:
     """Call post_update on every QuantizedLinear in model after optimizer.step()."""

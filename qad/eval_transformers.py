@@ -17,7 +17,18 @@ import argparse
 import json
 import os
 import sys
+import time
 from pathlib import Path
+
+_T0 = time.time()
+
+
+def log(msg: str, since: float | None = None) -> None:
+    """Wall-clock stage log. These jobs spend most of their life before generating a
+    single token (container start, model load, checkpoint unpack, compile), and a
+    silent 20-minute gap is indistinguishable from a hang."""
+    el = f"  (+{time.time() - since:.1f}s)" if since is not None else ""
+    print(f"[{time.time() - _T0:7.1f}s] {msg}{el}", flush=True)
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -27,28 +38,94 @@ _QAD_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(_QAD_DIR))
 sys.path.insert(0, str(_QAD_DIR.parent / "third_party" / "Liger-Kernel" / "src"))
 
-from quantizers import REGISTRY, build_quantizer_params
+from export.save import load_into
+from quantizers import (REGISTRY, QuantizedLinear, build_quantizer_params,
+                        uses_compressed_tensors)
 
 
 def resolve_checkpoint(ckpt_dir: Path, ckpt_tag: str, step: int) -> Path:
-    """Return the HF checkpoint directory for this step.
+    """Return the checkpoint directory for this step.
 
-    New format is a self-contained HF model dir (config.json + model.safetensors)
-    that loads directly with from_pretrained.
+    Single-format quantizers write the step directory itself; the prefill/decode
+    formats write <step>/prefill and <step>/decode beneath it.
     """
     hf_dir = ckpt_dir / ckpt_tag / "weights" / f"step_{step:07d}"
     if (hf_dir / "model.safetensors").exists() and (hf_dir / "config.json").exists():
         return hf_dir
+    if (hf_dir / "prefill" / "model.safetensors").exists():
+        return hf_dir
     raise FileNotFoundError(
-        f"No HF checkpoint found for step {step} at {hf_dir}\n"
-        f"  (expected {hf_dir}/model.safetensors + config.json)"
+        f"No checkpoint found for step {step} at {hf_dir}\n"
+        f"  (expected {hf_dir}/model.safetensors or {hf_dir}/prefill/model.safetensors)"
     )
+
+
+def build_quantized_model(base_model: str, runtime_quant: str, ckpt: Path, device):
+    """Rebuild a quantized model from a checkpoint and load its weights.
+
+    Handles both shapes with one path:
+
+      homogeneous  one checkpoint, one format everywhere (nvfp4 = W4A4 throughout,
+                   nvfp4a16 = W4A16 throughout). This is the honest baseline: the
+                   model is evaluated in the format it was TRAINED for.
+      dual         prefill/ + decode/. The phase follows sequence length, which is
+                   exactly how HF generate() behaves — one multi-token pass over the
+                   prompt, then one token at a time — so the decode phase attends to
+                   a KV cache built by the prefill format, as it would across a
+                   disaggregated pair of workers.
+
+    Passing a single-format checkpoint with a dual `runtime_quant` gives the
+    dual-inference-on-a-homogeneously-trained-model control, which separates the
+    contribution of dual TRAINING from dual INFERENCE.
+    """
+    from safetensors.torch import load_file
+
+    t = time.time()
+    model = AutoModelForCausalLM.from_pretrained(
+        base_model, dtype=torch.bfloat16, attn_implementation="flash_attention_2")
+    log(f"base model loaded ({base_model})", t)
+    t = time.time()
+    params, _ = build_quantizer_params(runtime_quant, "")
+    REGISTRY[runtime_quant]["apply"](model, **params)
+    log(f"quantizer applied ({runtime_quant})", t)
+
+    split_ckpt = (ckpt / "prefill" / "model.safetensors").exists()
+    if split_ckpt:
+        sources = {"prefill": ckpt / "prefill", "decode": ckpt / "decode"}
+    elif runtime_quant.startswith("nvfp4pd"):
+        sources = {"prefill": ckpt, "decode": ckpt}   # one checkpoint drives both
+    else:
+        sources = {None: ckpt}                        # homogeneous
+
+    # Embeddings / norms / lm_head are trained too, so take them from the checkpoint
+    # rather than the base model. Either variant carries the same copy.
+    quant_paths = {n for n, m in model.named_modules() if isinstance(m, QuantizedLinear)}
+    first = load_file(str(next(iter(sources.values())) / "model.safetensors"))
+    non_quant = {k: v for k, v in first.items() if k.rpartition(".")[0] not in quant_paths}
+    _, unexpected = model.load_state_dict(non_quant, strict=False)
+    if unexpected:
+        raise RuntimeError(
+            f"checkpoint has tensors the model does not expect: {sorted(unexpected)[:5]}")
+
+    for variant, d in sources.items():
+        t = time.time()
+        n = load_into(model, load_file(str(d / "model.safetensors")), variant=variant)
+        log(f"  loaded {n} quantized layers for '{variant or 'homogeneous'}'", t)
+    note = "" if split_ckpt else ("  (one checkpoint drives both phases)"
+                                  if len(sources) > 1 else "  (single format throughout)")
+    log(f"  non-quantized tensors restored: {len(non_quant)}{note}")
+    t = time.time()
+    model = model.to(device).eval()
+    log("model moved to device", t)
+    return model
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="QAD checkpoint evaluator")
     parser.add_argument("--model",            required=True, help="HuggingFace model id")
-    parser.add_argument("--quantizer",        required=True, choices=list(REGISTRY))
+    parser.add_argument("--quantizer",        default=None, choices=list(REGISTRY),
+                        help="required unless --unquantized (the BF16 baseline has no "
+                             "quantizer and no checkpoint)")
     parser.add_argument("--quantizer-params", default="",   help="JSON overrides for quantizer")
     parser.add_argument("--iter",             type=int, default=None, help="checkpoint step (required unless --unquantized)")
     parser.add_argument("--run-name",         default=None,
@@ -56,11 +133,40 @@ def main() -> None:
     parser.add_argument("--ckpt-dir",         default=str(_QAD_DIR / "checkpoints"))
     parser.add_argument("--unquantized",      action="store_true",
                         help="evaluate the base BF16 model without any quantizer or checkpoint")
+    parser.add_argument("--dual",             action="store_true",
+                        help="run a SINGLE-format checkpoint through dual prefill/decode "
+                             "inference (prompt at W4A4, generated tokens at W4A16). Only "
+                             "needed for that control — a dual-trained checkpoint is "
+                             "detected automatically from its prefill/ + decode/ layout.")
+    parser.add_argument("--runtime-quantizer", default=None,
+                        help="layer class to run with (default: --quantizer; with --dual "
+                             "on a single-format checkpoint, nvfp4pdshared)")
+    parser.add_argument("--tag-suffix",       default="",
+                        help="appended to the results directory, to keep configurations "
+                             "that share a checkpoint (e.g. homo-a4 vs sim-dual) apart")
     parser.add_argument("--tasks",            nargs="+", default=["gsm8k", "math_500", "aime_2025"])
     parser.add_argument("--num-fewshot",      type=int, default=None)
     parser.add_argument("--no-think",         action="store_true",
                         help="disable Qwen3 thinking mode (sets generation_config.enable_thinking=False)")
-    parser.add_argument("--batch-size",       type=int, default=16)
+    parser.add_argument("--batch-size",       type=int, default=64,
+                        help="lm-eval generation batch size. The dual format is "
+                             "batch-size independent: the phase follows sequence "
+                             "length, and batching changes only the batch dim.")
+    parser.add_argument("--no-compile",       dest="compile", action="store_false",
+                        default=True,
+                        help="skip torch.compile (on by default, dynamic=True). Dynamic "
+                             "shapes matter here: generation alternates a long prompt "
+                             "pass with single-token steps, so static compilation would "
+                             "recompile per sequence length. The dual format branches on "
+                             "that same length, which compiles to two guarded graphs "
+                             "(prefill and decode) rather than graph-breaking.")
+    parser.add_argument("--max-gen-toks",     type=int, default=512,
+                        help="generation cap per sample. NOT comparable across values: "
+                             "a truncated answer scores 0, so runs with different caps "
+                             "are different measurements. The vLLM sweep uses 4096 (for "
+                             "AIME/MATH), so ITS numbers are not directly comparable to "
+                             "these. 512 is ample for GSM8K with --no-think and avoids "
+                             "one runaway sequence pinning a whole batch at the cap.")
     parser.add_argument("--log-samples",      action="store_true",
                         help="dump per-sample generations to JSONL for inspection")
     parser.add_argument("--limit",            type=int, default=None,
@@ -68,8 +174,11 @@ def main() -> None:
     parser.add_argument("--output-dir",       default=str(_QAD_DIR / "eval_results"))
     args = parser.parse_args()
 
-    if not args.unquantized and args.iter is None:
-        parser.error("--iter is required unless --unquantized is set")
+    if not args.unquantized:
+        if args.quantizer is None:
+            parser.error("--quantizer is required unless --unquantized is set")
+        if args.iter is None:
+            parser.error("--iter is required unless --unquantized is set")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     tokenizer = AutoTokenizer.from_pretrained(args.model)
@@ -82,7 +191,7 @@ def main() -> None:
         model.eval()
         ckpt_tag = f"{args.model.replace('/', '-')}-unquantized"
         step_key = 0
-        print(f"Model: {args.model}  [unquantized BF16 baseline]", flush=True)
+        log(f"Model: {args.model}  [unquantized BF16 baseline]")
     else:
         # Reconstruct ckpt_tag (matches qad.py) for path resolution / result naming.
         _, quant_hash = build_quantizer_params(args.quantizer, args.quantizer_params)
@@ -91,17 +200,38 @@ def main() -> None:
         ckpt_tag    = f"{run_name}-{args.quantizer}-{quant_hash}"
 
         ckpt_dir = resolve_checkpoint(Path(args.ckpt_dir), ckpt_tag, args.iter)
-        print(f"Loading HF checkpoint: {ckpt_dir}", flush=True)
+        print(f"Loading checkpoint: {ckpt_dir}", flush=True)
 
-        # Checkpoints are saved as standard HF models (dequantized weights in `weight`),
-        # so this is a single fast sharded load straight to GPU — no base-model read,
-        # no quantizer wrapping, no manual load_state_dict.
-        model = AutoModelForCausalLM.from_pretrained(
-            ckpt_dir, dtype=torch.bfloat16, attn_implementation="flash_attention_2",
-        ).to(device)
-        model.eval()
+        is_split = (ckpt_dir / "prefill" / "model.safetensors").exists()
+        packed = uses_compressed_tensors(args.quantizer)
+        if is_split or args.dual or packed:
+            # Rebuild the quantized model and load the checkpoint into it. Required
+            # for packed compressed-tensors checkpoints (transformers cannot read FP4
+            # nibbles) and for the dual layouts. A homogeneous format is evaluated in
+            # exactly the format it was trained for — no phase is imposed on it.
+            runtime = args.runtime_quantizer or (
+                args.quantizer if (args.quantizer.startswith("nvfp4pd") or not args.dual)
+                else "nvfp4pdshared")
+            model = build_quantized_model(args.model, runtime, ckpt_dir, device)
+            if runtime.startswith("nvfp4pd"):
+                print("  phase follows sequence length: prompt=prefill, "
+                      "generated tokens=decode", flush=True)
+            else:
+                print(f"  homogeneous {runtime}: one format at every position", flush=True)
+        else:
+            # Pseudo-quantized checkpoints are standard HF models (dequantized weights
+            # in `weight`), so this is one fast sharded load straight to GPU.
+            model = AutoModelForCausalLM.from_pretrained(
+                ckpt_dir, dtype=torch.bfloat16, attn_implementation="flash_attention_2",
+            ).to(device)
+            model.eval()
         step_key = args.iter
-        print(f"Model: {args.model}  quantizer={args.quantizer}  step={args.iter}", flush=True)
+        log(f"Model: {args.model}  quantizer={args.quantizer}  step={args.iter}")
+    # Applies on EVERY path, including --unquantized: without it two baseline runs
+    # differing only in a flag write to the same file and the second overwrites the
+    # first, which is exactly how the cap=1024 diagnostic lost its result.
+    ckpt_tag += args.tag_suffix
+
     if args.no_think:
         # Qwen3 suppresses thinking via the chat template kwarg, not generation_config.
         # The template checks: {%- if enable_thinking is defined and enable_thinking is false %}
@@ -113,7 +243,28 @@ def main() -> None:
         tokenizer.apply_chat_template = _no_think_act
         print("Thinking suppressed via tokenizer.apply_chat_template patch.", flush=True)
 
-    print(f"Tasks: {args.tasks}  batch_size={args.batch_size}", flush=True)
+    if args.compile:
+        # dynamic=True because generation runs two very different shapes: one
+        # multi-token prompt pass then single-token steps. Static compilation would
+        # recompile for every prompt length in the batch stream.
+        t = time.time()
+        model = torch.compile(model, dynamic=True)
+        log("torch.compile(dynamic=True) requested", t)
+        # compile() is lazy, so without a warmup a failure would only appear deep into
+        # generation. Drive one prompt-shaped and one token-shaped forward to build
+        # BOTH graphs now — which are also exactly the dual format's two phases.
+        t = time.time()
+        try:
+            with torch.no_grad():
+                ids = torch.ones(1, 8, dtype=torch.long, device=device)
+                out = model(ids, use_cache=True)
+                model(ids[:, :1], past_key_values=out.past_key_values, use_cache=True)
+            log("compile warmup OK (prefill + decode graphs built)", t)
+        except Exception as e:
+            log(f"compile warmup FAILED: {type(e).__name__}: {str(e)[:200]}")
+            raise
+
+    log(f"Tasks: {args.tasks}  batch_size={args.batch_size}")
 
     from lm_eval import evaluator
     from lm_eval.models.huggingface import HFLM
@@ -132,8 +283,16 @@ def main() -> None:
         tasks=args.tasks,
         num_fewshot=args.num_fewshot,
         # Cap generation so tasks with large defaults (e.g. aime25=32768) don't
-        # exceed max_length=8192.
-        gen_kwargs="max_gen_toks=4096",
+        # A batch runs until EVERY sequence stops or hits this cap, so one
+        # non-terminating sequence drags all of them to the limit. GSM8K answers with
+        # --no-think are a few hundred tokens, and 4096 (needed for AIME/MATH in the
+        # vLLM sweep) made each batch of 64 take ~5 minutes.
+        #
+        # THE CAP CHANGES THE SCORE: a truncated answer scores 0, so runs at different
+        # caps are different measurements. These results are internally consistent
+        # (every config here uses the same cap) but are NOT comparable to the vLLM
+        # sweep's numbers, which are produced at 4096.
+        gen_kwargs=f"max_gen_toks={args.max_gen_toks}",
         log_samples=args.log_samples,
         limit=args.limit,
     )

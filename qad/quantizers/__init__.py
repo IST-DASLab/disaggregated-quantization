@@ -19,6 +19,8 @@ import json
 
 from .base import QuantizedLinear, post_update_all
 from .fp8 import apply_fp8_linear
+from .dual import (apply_nvfp4pdshared, apply_nvfp4pdsplit, prefill_mask_from_labels,
+                   quant_phase)
 from .gsq import apply_gsq2bit, apply_gsq3bit, gsq_param_groups
 from .gsq_lloyd import apply_gsqlloyd3bit, assignment_stats
 from .lloyd import apply_lloyd3bit
@@ -116,6 +118,29 @@ REGISTRY: dict = {
         "defaults":     {},
         "export":       "compressed_tensors",
     },
+    "nvfp4pdshared": {
+        # W4A4 on prefill positions, W4A16 on decode positions, ONE master weight.
+        # Both exported checkpoints hold identical weights and differ only in the
+        # config / input_global_scale; what differs is that the weights were trained
+        # to serve both regimes.
+        "apply":        apply_nvfp4pdshared,
+        "param_groups": None,
+        "post_update":  post_update_all,
+        "defaults":     {"block_size": 16},
+        "export":       "compressed_tensors",
+        "variants":     ["prefill", "decode"],
+    },
+    "nvfp4pdsplit": {
+        # As above but with two master weights, both initialised from the BF16 base
+        # and trained separately, so the prefill and decode checkpoints diverge.
+        # Costs 2x linear FLOPs and 2x master/optimizer memory.
+        "apply":        apply_nvfp4pdsplit,
+        "param_groups": None,
+        "post_update":  post_update_all,
+        "defaults":     {"block_size": 16},
+        "export":       "compressed_tensors",
+        "variants":     ["prefill", "decode"],
+    },
     "lloyd3bit": {
         # Weight-only signed-Lloyd 3-bit; pseudo-quantized (no 3-bit LUT kernel),
         # so the checkpoint holds dequantized bf16 weights and vLLM serves it as
@@ -175,7 +200,18 @@ def uses_compressed_tensors(name: str) -> bool:
     return REGISTRY[name]["export"] == "compressed_tensors"
 
 
+def variants(name: str) -> list:
+    """Checkpoint variants this quantizer emits per step, WITHOUT building a model.
+
+    The layer class is the source of truth (QuantizedLinear.export_variants); this
+    is the lookup for callers that only have a quantizer name — eval scripts
+    resolving a --variant path before anything is loaded.
+    """
+    return REGISTRY[name].get("variants") or [None]
+
+
 __all__ = [
-    "REGISTRY", "build_quantizer_params", "uses_compressed_tensors",
+    "REGISTRY", "build_quantizer_params", "uses_compressed_tensors", "variants",
     "QuantizedLinear", "post_update_all", "calibrate_nvfp4",
+    "quant_phase", "prefill_mask_from_labels",
 ]
