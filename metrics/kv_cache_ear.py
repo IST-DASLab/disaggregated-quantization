@@ -13,7 +13,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 from transformers import AutoTokenizer
 
-from kv_cache_acceptance import (
+from metrics.kv_cache_acceptance import (
     PAPER_PROMPTS,
     GeneratedSequence,
     add_activation_quantization,

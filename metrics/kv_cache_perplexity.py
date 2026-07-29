@@ -14,7 +14,7 @@ from datasets import load_dataset
 from tqdm import tqdm
 from transformers import AutoTokenizer
 
-from kv_cache_acceptance import add_activation_quantization, load_model
+from metrics.kv_cache_acceptance import add_activation_quantization, load_model
 
 
 TULU_DATASET = "allenai/tulu-3-sft-mixture"
