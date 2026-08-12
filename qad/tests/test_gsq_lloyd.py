@@ -249,7 +249,7 @@ def test_schedule_preserves_per_group_lrs():
     then trained all three arms at args.lr and produced identical runs — the logits
     drifted by exactly args.lr * steps in every case.
     """
-    from qad import lr_at
+    from training.qad import lr_at
 
     params, _ = build_quantizer_params("gsqlloyd3bit", "")
     m = _model()

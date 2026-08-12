@@ -23,8 +23,8 @@ import torch
 from safetensors.torch import load_file
 from transformers import AutoConfig, AutoModelForCausalLM
 
-from export.save import export_variants, load_into, save_checkpoint
-from quantizers import (REGISTRY, build_quantizer_params, post_update_all,
+from export.save import load_into, save_checkpoint
+from quantizers import (REGISTRY, build_quantizer_params, post_update_all, variants,
                         prefill_mask_from_labels, quant_phase)
 from quantizers.dual import DualSharedNVFP4Linear, DualSplitNVFP4Linear
 
@@ -77,8 +77,8 @@ def test_checkpoints_are_plain_nvfp4():
         diverge(m)
         out = TMP / name
         shutil.rmtree(out, ignore_errors=True)
-        check(f"{name}: two variants", export_variants(m) == ["prefill", "decode"])
-        for v in export_variants(m):
+        check(f"{name}: two variants", variants(name) == ["prefill", "decode"])
+        for v in variants(name):
             save_checkpoint(m, out / v, variant=v)
         for v, ref in [("prefill", "nvfp4"), ("decode", "nvfp4a16")]:
             cfg = json.loads((out / v / "config.json").read_text())
@@ -109,7 +109,7 @@ def test_reload_is_order_independent():
         diverge(m)
         out = TMP / f"{name}_rl"
         shutil.rmtree(out, ignore_errors=True)
-        for v in export_variants(m):
+        for v in variants(name):
             save_checkpoint(m, out / v, variant=v)
         m2 = build(name)
         for v in ["decode", "prefill"]:          # reversed on purpose

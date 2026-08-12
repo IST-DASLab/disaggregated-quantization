@@ -45,6 +45,53 @@ LLOYD_SIGNED_3BIT = torch.tensor(
     [-4.795, -3.062, -1.631, -0.339, +0.927, +2.265, +3.797, +5.788]
 )
 
+# MSE-optimal under the constraint that 0.0 and +6.0 are grid points. Both pins buy
+# something the unconstrained Lloyd grid cannot express:
+#
+#   +6.0  the SIGNED normalisation maps each block's max-abs element to exactly +6, so
+#         that element is the block's outlier BY CONSTRUCTION. LLOYD_SIGNED_3BIT tops
+#         out at 5.788, so every block's extreme carries a fixed 0.212 error; pinning
+#         6.0 makes it exact.
+#    0.0  a true flush-to-zero. LLOYD_SIGNED_3BIT straddles zero (-0.339, +0.927) and
+#         so cannot represent a zero weight at all -- the nearest level is 0.339 away,
+#         and near-zero weights are the bulk of the distribution.
+#
+# Measured on N(0,1) in blocks of 16 under that normalisation, against the other two
+# re-measured in the same run for comparability:
+#
+#                                rel MSE   |err| at block extreme   exact 0
+#   LLOYD_SIGNED_3BIT             0.0205             0.2120            no
+#   FP4_DOWNCAST_SIGNED_3BIT      0.0296             0.8800            no
+#   LLOYD43_SIGNED_3BIT           0.0211             0.0000           yes
+#
+# So it trades ~3% relative MSE for an exact outlier and an exact zero. Whether that is
+# a good trade is an empirical question about weights, not about Gaussians -- which is
+# what the `lloyd43` sweep is for.
+LLOYD43_SIGNED_3BIT = torch.tensor(
+    [-4.7038, -2.8698, -1.3696, 0.0000, +1.2204, +2.5285, +4.0473, +6.0000]
+)
+
+# The same construction at 2 BITS: MSE-optimal subject to 0.0 and +6.0 being grid points.
+# Four levels instead of eight, so the naming stays consistent -- LLOYD<P><N> has P
+# positive and N negative levels, plus the pinned zero:
+#   lloyd43   4 positive (1.2204, 2.5285, 4.0473, 6.0)  3 negative      = 8 = 3 bits
+#   lloyd21   2 positive (2.5227, 6.0)                  1 negative      = 4 = 2 bits
+#
+# The asymmetry is not a mistake and is the same one lloyd43 has: under the SIGNED block
+# normalisation every block's max-abs element maps to exactly +6, so the positive tail is
+# where the mass that must be represented exactly lives, and the negative side can afford
+# a single level. That is also why this grid MUST keep signed=True -- see
+# SignedLloydLinear. Rounding an unsigned-normalised block onto it would clip every
+# block whose extreme is negative from 6.0 to 3.6517, a 39% error on the largest weight
+# in the block.
+#
+# At 2 bits there is no kernel to serve this either, so it ships pseudo-quantized (bf16)
+# exactly as lloyd3bit and lloyd43 do. tests/test_lloyd21.py measures its relative MSE
+# against the 3-bit grids rather than asserting a number here.
+LLOYD21_SIGNED_2BIT = torch.tensor(
+    [-3.6517, 0.0000, +2.5227, +6.0000]
+)
+
 
 def grid_spacing(grid: torch.Tensor) -> float:
     """Mean gap between adjacent levels of a sorted grid.

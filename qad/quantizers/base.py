@@ -39,6 +39,26 @@ class QuantizedLinear(nn.Linear):
         # Hard-quantized weight cache.  Refreshed by post_update() after each
         # optimizer step; used directly in eval forward and as an STE offset in
         # subclasses that want to avoid recomputing quantization every microbatch.
+        #
+        # TODO(memory): this should be BF16, not fp32. It is fp32 only because `dtype`
+        # is inherited from the master weight, which is fp32 because qad.py loads the
+        # student with dtype=torch.float32 -- nothing here asks for the extra mantissa.
+        # It carries no gradient (refreshed under no_grad), and every consumer discards
+        # the low bits anyway: ste() is `x + (wq - x).detach()`, whose forward value is
+        # exactly wq, and both the train and eval forwards run under
+        # torch.amp.autocast(bfloat16), so the F.linear operand is rounded to BF16
+        # regardless. Storing BF16 would make the GEMM input bit-identical.
+        #
+        # Worth ~12.9 GiB/GPU at 8B for a homogeneous format (25.9 -> 12.9), and ~25.9
+        # GiB for a split-master format, which holds two of these. NOT on its own enough
+        # to make split-master 8B fit: that is ~215 GiB against 179, and the dominant
+        # term is master+grads at 122 GiB replicated on every rank (ZeRO-2 shards only
+        # the optimizer moments), so it needs a BF16 master or FSDP.
+        #
+        # Before changing: several tests compare _wq against a freshly computed fp32
+        # quantization at atol=1e-5 (test_nvfp4lloyd43upcast asserts max|diff| 0.00e+00);
+        # those tolerances have to move to ~1e-2. Gate on the golden-export regression
+        # still reporting max|Δ|=0.000e+00, since this touches every format.
         self.register_buffer("_wq", torch.empty(out_features, in_features, dtype=dtype,
                                                  device=device))
 

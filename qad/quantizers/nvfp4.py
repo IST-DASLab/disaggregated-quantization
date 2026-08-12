@@ -25,7 +25,7 @@ import torch.nn.functional as F
 from torch import Tensor
 
 from .blocked import (BLOCK, GLOBAL_DEN, BlockScaledLinear, blocked_quantize,
-                      replace_linears, ste)
+                      replace_linears, ste, to_e4m3)
 from .grids import E2M1_BOUNDS, E2M1_DECODE, E2M1_LEVELS
 
 
@@ -49,19 +49,27 @@ def e2m1_codes(x: Tensor) -> Tensor:
     return torch.where(mag == 0, torch.zeros_like(code), code)
 
 
-def nvfp4_quantize(x: Tensor, block: int = BLOCK, global_scale: Tensor | None = None
-                   ) -> tuple[Tensor, Tensor, Tensor]:
+def nvfp4_quantize(x: Tensor, block: int = BLOCK, global_scale: Tensor | None = None,
+                   signed: bool = False) -> tuple[Tensor, Tensor, Tensor]:
     """Two-level NVFP4 fake-quant along the last dim.
-    Returns (dequantized, block_scale_e4m3, global_scale)."""
-    return blocked_quantize(x, e2m1_round, block, signed=False, global_scale=global_scale)
+    Returns (dequantized, block_scale_e4m3, global_scale).
+
+    `signed` lets the per-block scale absorb the sign of the block's max-abs element.
+    E2M1 is SYMMETRIC about zero, so this changes nothing about the representable set
+    or the packed codes -- negating a block is the same as flipping every code's sign
+    bit, and E4M3 block scales are signed, so the checkpoint holds it natively. It is
+    off by default: flipping it would rename nothing but would change the bytes every
+    existing nvfp4* checkpoint exports."""
+    return blocked_quantize(x, e2m1_round, block, signed=signed, global_scale=global_scale)
 
 
 def fake_quant_ste(x: Tensor, block: int, global_scale: Tensor | None) -> Tensor:
     return ste(x, nvfp4_quantize(x, block, global_scale)[0])
 
 
-def pack_nvfp4_weight(w: Tensor, block: int = BLOCK, global_scale: Tensor | None = None
-                      ) -> tuple[Tensor, Tensor, Tensor]:
+def pack_nvfp4_weight(w: Tensor, block: int = BLOCK, global_scale: Tensor | None = None,
+                      signed: bool = False,
+                      block_eff: Tensor | None = None) -> tuple[Tensor, Tensor, Tensor]:
     """Encode a weight matrix into the real NVFP4 checkpoint tensors, using the
     SAME scales as nvfp4_quantize so the packed weight is bit-identical to the
     fake-quantized `_wq` the model trained with.  `global_scale` should be the
@@ -72,8 +80,24 @@ def pack_nvfp4_weight(w: Tensor, block: int = BLOCK, global_scale: Tensor | None
     """
     O, K = w.shape
     assert K % block == 0, f"in_features {K} not divisible by block {block}"
-    _, block_scale, global_scale = nvfp4_quantize(w, block, global_scale=global_scale)
-    eff = (block_scale.unsqueeze(-1).float() * global_scale).clamp(min=1e-8)  # [O, nB, 1]
+    if block_eff is not None:
+        # Caller supplies the EFFECTIVE per-block scale. Needed when the weight was
+        # produced by something other than max-based block scaling: nvr2bit's vector
+        # quantizer does not always put code 6.0 on a block's peak (2.66% of blocks peak
+        # at 4), so recomputing block_amax/6 here re-rounds 1.08% of elements and turns
+        # an exact re-encode into a lossy one.
+        if global_scale is None:
+            global_scale = (w.abs().amax() / GLOBAL_DEN).clamp(min=1e-8)
+        block_scale = to_e4m3(block_eff.reshape(O, K // block).float() / global_scale)
+    else:
+        _, block_scale, global_scale = nvfp4_quantize(w, block, global_scale=global_scale,
+                                                      signed=signed)
+    # Guard the MAGNITUDE, not the value. `.clamp(min=1e-8)` floors negatives to +1e-8,
+    # which is invisible while scales are all positive and catastrophic once `signed`
+    # lets them go negative -- it discards exactly the sign the signed normalisation
+    # just absorbed. Mirrors the same guard in blocked.blocked_quantize.
+    eff = block_scale.unsqueeze(-1).float() * global_scale                   # [O, nB, 1]
+    eff = torch.where(eff.abs() < 1e-8, torch.ones_like(eff), eff)
     wb = w.float().reshape(O, K // block, block)
     codes = e2m1_codes(wb / eff).reshape(O, K)                    # [O, K] uint8 0..15
     packed = (codes[:, 1::2] << 4) | codes[:, 0::2]               # low=even, high=odd
@@ -178,7 +202,8 @@ class NVFP4Linear(BlockScaledLinear):
         # qkv_proj / gate_up_proj, and a per-layer scale would be silently rescaled.
         gscale = self._variant_global_scale(variant)
         packed, wscale, wscale2 = pack_nvfp4_weight(
-            self._variant_weight(variant).data, self.block_size, global_scale=gscale)
+            self._variant_weight(variant).data, self.block_size, global_scale=gscale,
+            signed=self.signed)
         out = {
             "weight_packed": packed.cpu(),
             "weight_scale": wscale.cpu(),
@@ -265,7 +290,17 @@ def calibrate_nvfp4(model: nn.Module, chunks, device, n_batches: int = 8,
         if not batch:
             break
         ids = torch.stack([b[0] for b in batch]).to(device)
-        with torch.amp.autocast("cuda", dtype=torch.bfloat16):
+        # Calibrate UNDER THE PHASE MASK. Without it _phase_for() sees a multi-token
+        # forward and calls every position prefill, so a format whose activation
+        # quantization lives on DECODE would observe nothing from its own phase and
+        # instead fold prefill activations into the running max -- inflating the
+        # static scale baked into its checkpoint, on exactly the tensors that scale
+        # governs. Chunks carry labels, and labels == -100 is the prefill mask.
+        from .dual import prefill_mask_from_labels, quant_phase
+        labels = (torch.stack([b[1] for b in batch]).to(device)
+                  if len(batch[0]) > 1 else None)
+        mask = prefill_mask_from_labels(labels) if labels is not None else None
+        with torch.amp.autocast("cuda", dtype=torch.bfloat16), quant_phase(mask):
             model(input_ids=ids)
     for m in mods:
         m.calibrating = False

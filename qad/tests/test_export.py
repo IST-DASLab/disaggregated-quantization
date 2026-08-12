@@ -18,7 +18,8 @@ import torch
 from safetensors.torch import load_file
 from transformers import AutoConfig, AutoModelForCausalLM
 
-from export.save import build_state_dict, export_variants, load_into, save_checkpoint
+from export.save import build_state_dict, load_into, save_checkpoint
+from quantizers import variants as _variants
 from quantizers import REGISTRY, build_quantizer_params
 
 GOLD = Path(__file__).parent / "_export_golden"
@@ -97,10 +98,10 @@ def test_roundtrip():
 
 
 def test_variants():
-    check("single-format model reports [None]", export_variants(build("nvfp4")) == [None])
+    check("single-format model reports [None]", _variants("nvfp4") == [None])
     for name in ["nvfp4pdshared", "nvfp4pdsplit"]:
         check(f"{name} reports two variants",
-              export_variants(build(name)) == ["prefill", "decode"])
+              _variants(name) == ["prefill", "decode"])
 
 
 if __name__ == "__main__":

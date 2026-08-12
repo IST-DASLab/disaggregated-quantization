@@ -1,0 +1,27 @@
+{
+  "nvfp4": {
+    "safetensors_md5": "f5ec8221e11ee910d98e76ae28d58139",
+    "n_bytes": 700688,
+    "quant_config_md5": "9c5602d7c30d8e5938e4bdedb067c492"
+  },
+  "nvfp4a16": {
+    "safetensors_md5": "2ba4c3e76bbd4f98049520e73706b7df",
+    "n_bytes": 699088,
+    "quant_config_md5": "0e63cf23c55b806b1950455e246da624"
+  },
+  "lloyd3bit": {
+    "safetensors_md5": "f7963f015c460263eaa4a375441b4e58",
+    "n_bytes": 1119800,
+    "quant_config_md5": "37a6259cc0c1dae299a7866489dff0bd"
+  },
+  "ste3bit": {
+    "safetensors_md5": "058132e1d7f351beda0dc9a8efe38c78",
+    "n_bytes": 1119800,
+    "quant_config_md5": "37a6259cc0c1dae299a7866489dff0bd"
+  },
+  "fp8": {
+    "safetensors_md5": "caccbe31552a80c05cf55bbd4208f8fe",
+    "n_bytes": 1709632,
+    "quant_config_md5": "37a6259cc0c1dae299a7866489dff0bd"
+  }
+}

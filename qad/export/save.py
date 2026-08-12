@@ -64,6 +64,22 @@ def load_into(model: nn.Module, tensors: dict[str, Tensor], variant=None) -> int
     return n
 
 
+
+def export_variants(model: nn.Module) -> list:
+    """Variants this model's quantizer emits ([None] for single-checkpoint formats).
+
+    Asks the LAYER CLASS, so a format that emits prefill/ + decode/ is discovered from
+    the model itself rather than from its name. quantizers.variants(name) is the
+    equivalent lookup for callers that only have the CLI name and no built model.
+    """
+    quant = _quant_layers(model)
+    if not quant:
+        return [None]
+    return type(next(iter(quant.values()))).export_variants()
+
+from export.config_fix import fix_serving_fields
+
+
 def save_checkpoint(model: nn.Module, out_dir: Path, variant=None, step: int = 0) -> int:
     """Write one checkpoint directory. Returns the tensor count."""
     from safetensors.torch import save_file
@@ -80,17 +96,10 @@ def save_checkpoint(model: nn.Module, out_dir: Path, variant=None, step: int = 0
 
     quant = _quant_layers(model)
     qcfg = next(iter(quant.values())).export_config(variant) if quant else None
+    cfg_path = out_dir / "config.json"
+    cfg = json.loads(cfg_path.read_text())
     if qcfg is not None:
-        cfg_path = out_dir / "config.json"
-        cfg = json.loads(cfg_path.read_text())
         cfg["quantization_config"] = qcfg
-        cfg_path.write_text(json.dumps(cfg, indent=2))
+    fix_serving_fields(cfg)
+    cfg_path.write_text(json.dumps(cfg, indent=2))
     return len(state)
-
-
-def export_variants(model: nn.Module) -> list:
-    """Variants this model's quantizer emits ([None] for single-checkpoint formats)."""
-    quant = _quant_layers(model)
-    if not quant:
-        return [None]
-    return type(next(iter(quant.values()))).export_variants()

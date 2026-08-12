@@ -218,9 +218,31 @@ __marimo__/
 .streamlit/secrets.toml
 
 # Logs
-logs/
+# Job logs are huge and disposable -- EXCEPT the result payloads written under any
+# */results/ directory, which are real measurements and must be versioned like every
+# other eval result. Re-including them needs all three lines: git will not look inside
+# an excluded directory, so the directories have to be un-ignored before the files in
+# them can be.
+logs/**
+!logs/**/
+!logs/**/results/**
 qad/checkpoints/
 
 # wandb local run state (synced to the server; nothing here needs versioning)
 wandb/
 qad/wandb/
+
+# Eval results are versioned -- ALL of them, every tree. There was an ignore rule here
+# for qad/eval_results_disagg_think/ meant to keep a live sweep out of accidental
+# commits; it outlived its purpose and became a trap, because it hides new result
+# directories rather than new files in existing ones. The 0.6B results were force-added
+# and so stayed visible, but the whole 1.7B think sweep would have landed untracked and
+# silently absent from the plots.
+attic_invalid_kvd/
+qad/cluster_scripts/.eval_submissions.jsonl
+
+# luts backend -- not for version control
+qad/quantizers/luts_backend.py
+qad/data/
+qad/cluster_scripts/bench_*.py
+qad/tests/test_*nvr*.py
