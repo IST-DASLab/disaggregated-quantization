@@ -105,13 +105,20 @@ fi
 MODEL=${MODEL:-Qwen/Qwen3-4B}
 CKPT_DIR=${CKPT_DIR:-$QAD_DIR/checkpoints}
 QUANTIZER=${QUANTIZER:-ste3bit}
-TASKS=${TASKS:-"gsm8k math_500 aime_2025"}
+# See run_eval_vllm.sh: "math_500"/"aime_2025" are not registered in the lm_eval overlay
+# (it calls them minerva_math500/aime25), so this default hard-failed at task load.
+TASKS=${TASKS:-"gsm8k minerva_math500"}
 RUN_NAME=""
 BATCH_SIZE=16
 ITER=${SLURM_ARRAY_TASK_ID:-""}
 UNQUANTIZED=0
 THINK=1        # thinking ON by default, matching run_eval_disagg.sh
-LOG_SAMPLES=0
+# Generations are logged BY DEFAULT: the scores alone cannot answer questions that
+# come up later (length, refusals, format failures, repetition loops), and re-running
+# a sweep to recover them costs far more than the disk. They land beside the results
+# as step_<N>_samples_<task>.jsonl and are gitignored -- ~1 MB per file, which would
+# add gigabytes to the repo. Pass --no-log-samples to opt out.
+LOG_SAMPLES=${LOG_SAMPLES:-1}
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -132,6 +139,7 @@ while [[ $# -gt 0 ]]; do
         --no-think)      THINK=0;                          shift ;;
         --think)         THINK=1;                          shift ;;
         --log-samples)   LOG_SAMPLES=1;                    shift ;;
+        --no-log-samples) LOG_SAMPLES=0;                   shift ;;
         *)               shift ;;
     esac
 done

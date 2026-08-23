@@ -20,20 +20,50 @@ load_tensors); export/save.py only assembles the files.
 """
 
 import torch
+import torch.distributed as dist
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 
-from .blocked import (BLOCK, GLOBAL_DEN, BlockScaledLinear, blocked_quantize,
-                      replace_linears, ste, to_e4m3)
+from .blocked import (qlinear, BLOCK, GLOBAL_DEN, SCALE_REF, BlockScaledLinear,
+                      blocked_quantize, replace_linears, ste, to_e4m3)
+# torch.compile keys its cache on a guard signature, and e2m1_round is reached from
+# several: fp32 weights under no_grad in post_update, activations in the forward, and
+# the export packer. The default limit of 8 is below that count, and exceeding it makes
+# dynamo fall back to EAGER PERMANENTLY -- paying compilation and losing the fusion.
+# 32 is still bounded, which is what turns "compiles forever" into "falls back and keeps
+# training" if the guards ever churn on something unexpected.
+import torch._dynamo
+for _limit in ("recompile_limit", "cache_size_limit"):
+    if hasattr(torch._dynamo.config, _limit):
+        setattr(torch._dynamo.config, _limit, 32)
+
 from .grids import E2M1_BOUNDS, E2M1_DECODE, E2M1_LEVELS
 
 
+@torch.compile(dynamic=True)
 def e2m1_round(x: Tensor) -> Tensor:
     """Round to the nearest signed E2M1 magnitude (values >=5 clamp to 6).
 
     Kept as an explicit magnitude/midpoint table rather than a generic grid snap:
     this exact rounding is verified bit-identical to vLLM's kernels.
+
+    COMPILED, and the boundary is chosen precisely. torch.bucketize returns int64, so
+    eager this writes a temporary at TWICE the input's fp32 size, plus the gathered
+    levels and the sign -- on gemma-3-12b's MLP down_proj activation (4 x 2048 x 15360 =
+    125.8M elements) that is a 1007 MB int64 buffer and two 503 MB ones. Both 12b PP
+    OOMs died right here. Fused, the indices never reach memory: measured peak on that
+    tensor 3.81 -> 2.40 GiB.
+
+    WHY THE DIVISION MUST STAY OUTSIDE. blocked_quantize calls rounder(xf / eff), so
+    this function never sees a division -- and that is load-bearing, not incidental.
+    Compiling an expression that contains `xf / eff` lets inductor rewrite it as
+    `xf * eff.reciprocal()`, which shifts 12.3M elements by an ulp; 2 of them land on
+    the far side of a bucketize boundary and quantize to a DIFFERENT E2M1 level.
+    Measured, not feared: compiling nvfp4_quantize (which includes the division) changed
+    exactly 2 elements per tensor by a full grid step, while compiling this
+    division-free form is bit-identical at every shape tested. If a future change moves
+    a division in here, the format changes silently.
     """
     levels = torch.tensor(E2M1_LEVELS, device=x.device, dtype=x.dtype)
     bounds = torch.tensor(E2M1_BOUNDS, device=x.device, dtype=x.dtype)
@@ -64,7 +94,25 @@ def nvfp4_quantize(x: Tensor, block: int = BLOCK, global_scale: Tensor | None = 
 
 
 def fake_quant_ste(x: Tensor, block: int, global_scale: Tensor | None) -> Tensor:
-    return ste(x, nvfp4_quantize(x, block, global_scale)[0])
+    """STE fake-quant for ACTIVATIONS, with the quantize itself under no_grad.
+
+    ste(x, q) is `x + (q - x).detach()`: the forward value is q and the gradient goes
+    straight to x, so q's autograd graph is DEAD -- nothing backward ever needs it.
+    Building it anyway is what made this the peak-memory site of the whole forward.
+    blocked_quantize materialises about six full-size temporaries (x.float(), xf/eff,
+    the int64 bucketize output at TWICE fp32 size, the gathered levels, the sign, the
+    result), and with requires_grad set every one of them is retained as a saved tensor
+    until the graph is dropped. Under no_grad they are freed as the expression walks.
+
+    Not an approximation: identical arithmetic, identical values, identical gradient
+    (d/dx of the whole thing is 1 either way). Both 12b PP OOMs landed inside this call
+    -- one on the 480 MiB fp32 copy, one on the 960 MiB int64 copy -- on the MLP
+    down_proj input, 4 x 2048 x 15360 = 125.8M elements. Gradient checkpointing runs it
+    twice per step, so the saving lands twice.
+    """
+    with torch.no_grad():
+        q = nvfp4_quantize(x.detach(), block, global_scale)[0]
+    return ste(x, q)
 
 
 def pack_nvfp4_weight(w: Tensor, block: int = BLOCK, global_scale: Tensor | None = None,
@@ -236,9 +284,9 @@ class NVFP4Linear(BlockScaledLinear):
             self.bias.data.copy_(tensors["bias"].to(self.bias.device, self.bias.dtype))
 
     def forward(self, x: Tensor) -> Tensor:
-        w = self._wq if not self.training else self._differentiable_weight()
+        w = self.wq if not self.training else self._differentiable_weight()
         if not self.quantize_act:
-            return F.linear(x, w, self.bias)      # W4A16: activations stay bf16
+            return qlinear(x, w, self.bias)      # W4A16: activations stay bf16
         if self.training or self.calibrating:
             with torch.no_grad():
                 self.act_amax = torch.maximum(
@@ -248,7 +296,7 @@ class NVFP4Linear(BlockScaledLinear):
         # max is >= this batch's amax, so activations never saturate; falls back to
         # a dynamic per-forward scale only until the observer has seen data.
         gscale = (self.act_amax / GLOBAL_DEN) if self._observed else None
-        return F.linear(fake_quant_ste(x, self.block_size, gscale), w, self.bias)
+        return qlinear(fake_quant_ste(x, self.block_size, gscale), w, self.bias)
 
 
 def apply_nvfp4(model: nn.Module, block_size: int = BLOCK, quantize_act: bool = True) -> None:
@@ -272,7 +320,11 @@ def apply_nvfp4a16(model: nn.Module, **kwargs) -> None:
 def calibrate_nvfp4(model: nn.Module, chunks, device, n_batches: int = 8,
                     batch_size: int = 4) -> None:
     """Record per-layer activation absmax over a few batches so the exporter can
-    write a static input_global_scale. Safe to call on a single rank (no DDP sync)."""
+    write a static input_global_scale.
+
+    Runs on RANK 0 ALONE. Nothing here or in the forward is collective, so do not add a
+    collective to this function without making every rank call it.
+    """
     mods = [m for m in model.modules()
             if isinstance(m, NVFP4Linear) and m.quantize_act]
     if not mods:

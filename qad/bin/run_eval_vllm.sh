@@ -109,6 +109,18 @@ fi
 # ---------------------------------------------------------------------------
 export HF_HOME=$HF_CACHE
 export TOKENIZERS_PARALLELISM=false
+# Attention backend: FLASH_ATTN, matching serving/run_nixl_server.sh. Two reasons.
+# (1) REQUIRED for Gemma-3: head_dim=256 with vLLM's default block_size=16 trips a
+#     FlashInfer assertion ("There is a bug in FlashInfer block_size 16 head size 256
+#     support") and the engine never starts. The disaggregated path never hit this
+#     because it already pins FLASH_ATTN.
+# (2) It makes single-engine and disaggregated numbers COMPARABLE. With vLLM free to pick
+#     per path, a monolithic-vs-disaggregated difference could be a backend difference
+#     rather than a KV-transfer one -- which is exactly the comparison we rely on.
+# Note this changes the backend for runs that previously let vLLM choose (Qwen3, where
+# head_dim=128 made FlashInfer viable); small numeric drift against older single-engine
+# results is possible. Override with EVAL_ATTENTION_BACKEND if ever needed.
+export VLLM_ATTENTION_BACKEND="${EVAL_ATTENTION_BACKEND:-FLASH_ATTN}"
 export PYTHONPATH=$LM_EVAL_OVERLAY:$QAD_DIR:${PYTHONPATH:-}
 # The eval datasets (gsm8k, math500, aime25, mmlu[57 subjects], mmlu_pro) are cached.
 # Read them from cache with NO hub API calls — otherwise many parallel array tasks
@@ -136,14 +148,25 @@ QUANTIZER=${QUANTIZER:-ste3bit}
 # different directory. Dropping this silently resolves to the DEFAULTS hash, and the
 # eval dies with "No HF checkpoint" — or worse, evaluates the wrong run.
 QUANT_PARAMS=${QUANT_PARAMS:-""}
-TASKS=${TASKS:-"gsm8k math_500 aime_2025"}
+# Registered task names, verified against the lm_eval overlay. "math_500"/"aime_2025"
+# were NOT registered -- the overlay calls them minerva_math500/aime25 -- so this default
+# hard-failed with KeyError: "Spec 'math_500' is not a registered task/group/tag name"
+# before a single token was generated. It survived unnoticed because every caller passed
+# --tasks explicitly. Matches run_eval_disagg.sh so monolithic and disaggregated runs
+# score the identical task set; mmlu_pro is run separately (much slower).
+TASKS=${TASKS:-"gsm8k minerva_math500"}
 RUN_NAME="${RUN_PREFIX:-qad}-$(echo ${MODEL:-Qwen/Qwen3-4B} | tr '/' '-')"
 BATCH_SIZE=16
 ITER=${SLURM_ARRAY_TASK_ID:-""}
 STEPS=""
 UNQUANTIZED=0
 THINK=1        # thinking ON by default (matches results/vllm/think/); --no-think disables
-LOG_SAMPLES=0
+# Generations are logged BY DEFAULT: the scores alone cannot answer questions that
+# come up later (length, refusals, format failures, repetition loops), and re-running
+# a sweep to recover them costs far more than the disk. They land beside the results
+# as step_<N>_samples_<task>.jsonl and are gitignored -- ~1 MB per file, which would
+# add gigabytes to the repo. Pass --no-log-samples to opt out.
+LOG_SAMPLES=${LOG_SAMPLES:-1}
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -169,6 +192,7 @@ while [[ $# -gt 0 ]]; do
         --limit)         LIMIT="$2";                       shift 2 ;;
         --steps)         STEPS="$2";                       shift 2 ;;
         --log-samples)   LOG_SAMPLES=1;                    shift ;;
+        --no-log-samples) LOG_SAMPLES=0;                   shift ;;
         *)               shift ;;
     esac
 done

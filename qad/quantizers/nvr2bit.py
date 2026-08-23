@@ -33,7 +33,7 @@ class NVR2BitLinear(GroupScaled, QuantizedLinear):
                                 self.num_probes)
 
     def _differentiable_weight(self) -> Tensor:
-        return ste(self.weight, self._wq)
+        return ste(self.weight, self.wq)
 
     @torch.no_grad()
     def refresh_buffers(self) -> None:

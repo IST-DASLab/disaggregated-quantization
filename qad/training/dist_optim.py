@@ -82,10 +82,17 @@ class DistOptimizer(torch.optim.Optimizer):
         eps: float = 1e-8,
         weight_decay: float = 0.01,
         algo: str = "adamw",
+        process_group=None,
     ):
         defaults = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay, algo=algo)
-        world_size = dist.get_world_size()
-        if dist.get_rank() == 0:
+        # `process_group` scopes EVERY collective below. Default (None) is the whole
+        # world, which is the data-parallel group when there is no pipeline. Under
+        # pipeline parallelism the stages hold DIFFERENT parameters, so reducing over
+        # the world would mix two disjoint models: the caller passes the DP group (the
+        # ranks holding the SAME half) and the shard arithmetic follows it.
+        self._pg = process_group
+        world_size = dist.get_world_size(group=process_group)
+        if dist.get_rank(group=process_group) == 0:
             for group in param_groups:
                 if group.get("algo", algo) not in STATE_KEYS:
                     raise ValueError(f"unknown algo {group.get('algo')!r}")
@@ -105,8 +112,8 @@ class DistOptimizer(torch.optim.Optimizer):
 
     @torch.no_grad()
     def step(self):
-        rank = dist.get_rank()
-        world_size = dist.get_world_size()
+        rank = dist.get_rank(group=self._pg)
+        world_size = dist.get_world_size(group=self._pg)
         reduce_futs: list = []
         grad_slices: list[Tensor] = []
         is_small: list[bool] = []
@@ -117,7 +124,8 @@ class DistOptimizer(torch.optim.Optimizer):
                 if p.numel() < 1024:
                     is_small.append(True)
                     reduce_futs.append(
-                        dist.all_reduce(g, op=dist.ReduceOp.AVG, async_op=True).get_future()
+                        dist.all_reduce(g, op=dist.ReduceOp.AVG, group=self._pg,
+                                        async_op=True).get_future()
                     )
                     grad_slices.append(g)
                 else:
@@ -126,7 +134,8 @@ class DistOptimizer(torch.optim.Optimizer):
                     g_slice = torch.empty_like(g[:rsize])
                     reduce_futs.append(
                         dist.reduce_scatter_tensor(
-                            g_slice, g, op=dist.ReduceOp.AVG, async_op=True
+                            g_slice, g, op=dist.ReduceOp.AVG, group=self._pg,
+                            async_op=True
                         ).get_future()
                     )
                     grad_slices.append(g_slice)
@@ -163,7 +172,8 @@ class DistOptimizer(torch.optim.Optimizer):
                                 self._eps_t, self._wd_t)
                 if not small:
                     gather_futs.append(
-                        dist.all_gather_into_tensor(p, p_slice, async_op=True).get_future()
+                        dist.all_gather_into_tensor(p, p_slice, group=self._pg,
+                                                    async_op=True).get_future()
                     )
                 idx += 1
 

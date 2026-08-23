@@ -11,6 +11,7 @@
 #        --run-name qad3x-Qwen-Qwen3-0.6B --iter 2450
 #   ./bin/run_eval_disagg.sh ... --steps 250,750,1250,2450        # job array over steps
 #   ./bin/run_eval_disagg.sh ... --no-think                       # thinking suppressed
+#   ./bin/run_eval_disagg.sh ... --full-disag                     # a --full-disag run
 #
 # A dual checkpoint exports weights/step_N/{prefill,decode}; every other method exports
 # weights/step_N and both engines serve it. Both are handled -- a homogeneous model is
@@ -55,7 +56,12 @@ STEPS=${STEPS:-}
 TASKS=${TASKS:-"gsm8k minerva_math500"}
 THINK=${THINK:-1}        # thinking ON by default, matching results/vllm/think/
 LIMIT=${LIMIT:-}
-LOG_SAMPLES=${LOG_SAMPLES:-0}
+# Generations are logged BY DEFAULT: the scores alone cannot answer questions that
+# come up later (length, refusals, format failures, repetition loops), and re-running
+# a sweep to recover them costs far more than the disk. They land beside the results
+# as step_<N>_samples_<task>.jsonl and are gitignored -- ~1 MB per file, which would
+# add gigabytes to the repo. Pass --no-log-samples to opt out.
+LOG_SAMPLES=${LOG_SAMPLES:-1}
 CKPT_DIR=${CKPT_DIR:-}
 MAX_GEN_TOKS=${MAX_GEN_TOKS:-4096}
 MAX_MODEL_LEN=${MAX_MODEL_LEN:-8192}
@@ -68,6 +74,7 @@ MAX_MODEL_LEN=${MAX_MODEL_LEN:-8192}
 # cache peaked at 48.7% with the client at 128.
 CONCURRENCY=${CONCURRENCY:-512}
 UNQUANT=${UNQUANT:-0}   # --unquantized: BF16 base model on both engines
+FULL_DISAG=${FULL_DISAG:-0}   # --full-disag: select the full-disag run's checkpoint tag
 # Results subdirectory override. A kv-noise sweep reuses ONE checkpoint at several
 # rates, so without this every rate would overwrite the same step_0000000.json.
 TAG=${TAG:-}
@@ -89,7 +96,9 @@ while (($# > 0)); do
         --think)             THINK=1;           shift ;;
         --no-think)          THINK=0;           shift ;;
         --log-samples)       LOG_SAMPLES=1;     shift ;;
+        --no-log-samples)    LOG_SAMPLES=0;     shift ;;
         --unquantized)       UNQUANT=1;         shift ;;
+        --full-disag)        FULL_DISAG=1;      shift ;;
         --tag)               TAG="$2";          shift 2 ;;
         # Unknown flags are an ERROR, never silently dropped: run_eval_vllm.sh used to
         # swallow --limit, which quietly turned a 100-doc smoke test into a full sweep.
@@ -130,6 +139,7 @@ if [ -z "${SLURM_JOB_ID:-}" ]; then
     # canary overwrite the real 0.6B BF16 gsm8k baseline (0.664 -> 0.10).
     export MODEL QUANTIZER QUANT_PARAMS RUN_NAME ITER STEPS TASKS THINK LIMIT \
            LOG_SAMPLES CKPT_DIR MAX_GEN_TOKS MAX_MODEL_LEN CONCURRENCY UNQUANT \
+           FULL_DISAG \
            CONTAINER HF_CACHE LM_EVAL_OVERLAY TAG
     echo "logs → $LOGS"
     exec sbatch --export=ALL "${ARRAY[@]}" \
@@ -196,6 +206,7 @@ fi
 [ -n "$RUN_NAME" ] && [ "$UNQUANT" = 0 ] && ARGS+=(--run-name "$RUN_NAME")
 [ -n "$CKPT_DIR" ]     && ARGS+=(--ckpt-dir "$CKPT_DIR")
 [ -n "$TAG" ]          && ARGS+=(--tag "$TAG")
+[ "$FULL_DISAG" = 1 ]  && ARGS+=(--full-disag)
 [ -n "$LIMIT" ]        && ARGS+=(--limit "$LIMIT")
 [ "$LOG_SAMPLES" = 1 ] && ARGS+=(--log-samples)
 [ "$THINK" = 0 ]       && ARGS+=(--no-think)

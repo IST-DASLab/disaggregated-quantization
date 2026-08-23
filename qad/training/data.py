@@ -11,7 +11,10 @@ import torch
 from torch import Tensor
 from tqdm import tqdm
 
-from .datasets import get_tulu_train_val   # noqa: F401  (re-exported for callers)
+from .tulu import get_tulu_train_val   # noqa: F401  (re-exported for callers)
+# NOT .datasets: qad.py lives in this directory, so Python puts it first on sys.path
+# and a module named datasets.py here shadows HuggingFace's `datasets` for the whole
+# process -- which made it import itself and die on a circular import.
 
 
 def _tokenize_with_labels(tokenizer, messages: list[dict]) -> tuple[list[int], list[int]]:

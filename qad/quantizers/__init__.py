@@ -22,27 +22,17 @@ from .fp8 import apply_fp8_linear
 from .dual import (apply_nvfp4prefill, apply_nvfp4decode,
                    apply_nvfp4lloyd43shared, apply_nvfp4lloyd43split,
                    apply_nvfp4lloyd43upcast, apply_nvfp4lloyd21upcast,
+                   apply_nvfp4lloyd43upcastboth, apply_nvfp4lloyd21upcastboth,
                    apply_nvfp4lloyd21split,
                    apply_nvfp4nvr2bitupcast, apply_nvfp4nvr2bitsplit,
                    apply_nvfp4pdshared, apply_nvfp4pdsplit,
                    prefill_mask_from_labels, quant_phase)
-from .gsq import apply_gsq2bit, apply_gsq3bit, gsq_param_groups
-from .gsq_lloyd import apply_gsqlloyd3bit, assignment_stats
 from .lloyd import apply_lloyd21, apply_lloyd3bit, apply_lloyd43
 from .nvfp4 import apply_nvfp4, apply_nvfp4a16, calibrate_nvfp4
 from .nvr2bit import apply_nvr2bit, post_update_nvr2bit
 from .quest import apply_quest2bit, apply_quest3bit, apply_quest4bit
 from .ste import apply_ste2bit, apply_ste3bit, apply_ste4bit
 
-_GSQ_DEFAULTS = {
-    "groupsize":   128,
-    "std":         0.01,
-    "strength":    6.0,
-    "temp_start":  2.0,
-    "temp_end":    0.05,
-    "scale_start": 100.0,
-    "scale_end":   500.0,
-}
 
 REGISTRY: dict = {
     "fp8": {
@@ -50,20 +40,6 @@ REGISTRY: dict = {
         "param_groups": None,          # all params equally
         "post_update":  None,          # FP8 recomputes each forward via STE
         "defaults":     {},
-        "export":       "dequantized",
-    },
-    "gsq2bit": {
-        "apply":        apply_gsq2bit,
-        "param_groups": gsq_param_groups,
-        "post_update":  post_update_all,
-        "defaults":     dict(_GSQ_DEFAULTS),
-        "export":       "dequantized",
-    },
-    "gsq3bit": {
-        "apply":        apply_gsq3bit,
-        "param_groups": gsq_param_groups,
-        "post_update":  post_update_all,
-        "defaults":     dict(_GSQ_DEFAULTS),
         "export":       "dequantized",
     },
     "ste2bit": {
@@ -213,6 +189,26 @@ REGISTRY: dict = {
         "export":       "compressed_tensors",
         "variants":     ["prefill", "decode"],
     },
+    "nvfp4lloyd43upcastboth": {
+        # The upcast WITHOUT disaggregation: master -> Lloyd43 -> NVFP4, and BOTH phases
+        # serve that NVFP4 weight. One checkpoint, one kernel, fast prefill and fast
+        # decode -- the baseline the disaggregated upcast formats have to beat.
+        # Against nvfp4lloyd43upcast it isolates what serving the 3-bit half on decode is
+        # worth; against plain nvfp4, what the 3-bit bottleneck costs.
+        "apply":        apply_nvfp4lloyd43upcastboth,
+        "param_groups": None,
+        "post_update":  post_update_all,
+        "defaults":     {"block_size": 16},
+        "export":       "compressed_tensors",
+    },
+    "nvfp4lloyd21upcastboth": {
+        # Same control at 2 bits.
+        "apply":        apply_nvfp4lloyd21upcastboth,
+        "param_groups": None,
+        "post_update":  post_update_all,
+        "defaults":     {"block_size": 16},
+        "export":       "compressed_tensors",
+    },
     "lloyd3bit": {
         # Weight-only signed-Lloyd 3-bit; pseudo-quantized (no 3-bit LUT kernel),
         # so the checkpoint holds dequantized bf16 weights and vLLM serves it as
@@ -305,37 +301,6 @@ REGISTRY: dict = {
         "post_update":  post_update_all,
         "defaults":     {"block_size": 16, "grid": "lloyd21"},
         "export":       "dequantized",
-    },
-    "gsqlloyd3bit": {
-        # Same deployable format as lloyd3bit, optimized with GSQ (learned per-element
-        # level assignment) instead of STE. Block scales stay continuous: FP32 log2
-        # master, straight-through E4M3 in the forward.
-        "apply":        apply_gsqlloyd3bit,
-        "param_groups": gsq_param_groups,
-        "post_update":  post_update_all,
-        "defaults":     {
-            "block_size":  16,
-            "grid":        "lloyd",
-            "std":         0.01,
-            "strength":    6.0,
-            "noise":       0.0,   # 0 => init is exactly lloyd3bit's round-to-nearest
-            # absolute LRs — logits and log2 scale deltas are not in weight units
-            "logit_lr":    1e-4,
-            "scale_lr":    3e-6,
-            # Lion: sign-based, so it cannot stall on the vanishing gradients the
-            # saturating Gumbel relaxation produces. AdamW froze the logits outright.
-            "optim":       "lion",
-            "betas":       [0.9, 0.99],
-            # trainable master params are fp32, as everywhere else in this codebase
-            "logits_dtype": "fp32",
-            "adam_eps":    1e-16,   # only used when optim="adamw"
-            "temp_start":  2.0,
-            "temp_end":    0.05,
-            "scale_start": 100.0,
-            "scale_end":   500.0,
-        },
-        "export":       "dequantized",
-        "stats":        assignment_stats,
     },
 }
 

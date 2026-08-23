@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+# setuptools, not hatchling/poetry: the training container ships setuptools and has no
+# network, so anything else would have to be vendored before `pip install` could run.
+
+[project]
+name = "lloyd43"
+version = "0.1.0"
+description = "Packed 3-bit lloyd43 weight format and fused-dequantization GEMV kernels"
+requires-python = ">=3.10"
+dependencies = ["torch>=2.4"]
+
+[project.optional-dependencies]
+# triton ships with the container's torch; listed so a standalone install still gets it.
+kernels = ["triton>=3.0"]
+dev = ["pytest>=7"]
+
+
+# vLLM loads this in EVERY process it spawns, including the EngineCore subprocess that
+# actually builds the model. Importing the plugin only in the caller is not enough -- the
+# engine core would not know what "lloyd43" is. Registration is the import side effect.
+[project.entry-points."vllm.general_plugins"]
+lloyd43 = "lloyd43.vllm_plugin:register"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# -q keeps SLURM logs readable; the tests print their own PASS lines.
+addopts = "-q --tb=short"
+markers = ["gpu: needs a CUDA device", "qad: cross-checks against the QAD training code"]

@@ -47,6 +47,13 @@ while (($# > 0)); do
   esac
 done
 
+# NOTE this script only ever reaps EVAL jobs by its default rule: the completion marker it
+# keys on ("results -> <path>") is printed by eval_disagg.py alone, so a training job never
+# satisfies condition 1 no matter how long it hangs. Reaping finished TRAINING runs is a
+# different question with a different answer -- see reap_past_grid.sh, which stops them on
+# step count rather than on silence, because a training run that has produced every plotted
+# checkpoint is worth stopping whether or not it has gone quiet.
+
 # THE RULE: kill only a job whose RESULTS FILE IS ON DISK.
 #
 # Log text is not evidence. Two earlier versions of this script were wrong:
@@ -86,6 +93,11 @@ while read -r id name elapsed; do
   if [ -z "$f" ]; then
     # non-array jobs are written as <jobid>_4294967294.out by the %A_%a pattern
     f=$(ls -t "$ROOT"/logs/*/*/"${id}"_4294967294.out 2>/dev/null | head -1)
+  fi
+  if [ -z "$f" ]; then
+    # training jobs land in logs/train/<stamp>_<tag>/<name>_<jobid>.out -- the job id is a
+    # SUFFIX there, not the whole basename, so the two patterns above never match one.
+    f=$(ls -t "$ROOT"/logs/train/*/*_"${id}".out 2>/dev/null | head -1)
   fi
   [ -z "$f" ] && continue
 

@@ -43,11 +43,35 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LEDGER = os.path.join(ROOT, "cluster_scripts", ".eval_submissions.jsonl")
 SWEEP = os.path.join(ROOT, "bin", "run_eval_disagg_sweep.sh")
-RUN = "qad3x"
-MODELS = ["0.6B", "1.7B", "4B", "8B"]
+# One entry per model family. `hf` is the repo-id template and `models` the sizes; the
+# checkpoint/result tag is always "<run>-<hf id with / -> ->-<quant>-<hash>", which is what
+# run_qad.sh builds, so Qwen and Gemma tags can never collide and share one directory tree.
+# `modes` is per family and NOT cosmetic. Qwen3 has a real thinking switch, so both modes
+# are meaningful. Gemma-3 has none: `enable_thinking` is accepted and completely inert (the
+# rendered prompt is byte-identical with it True, False or absent), and `--no-think` HARD
+# FAILS on the probe guard in eval_disagg.py. Submitting "nothink" for Gemma would queue a
+# full sweep of jobs that all die on startup.
+FAMILIES = {
+    "qad3x":  {"hf": "Qwen/Qwen3-{}",        "models": ["0.6B", "1.7B", "4B", "8B"],
+               "modes": ["think", "nothink"]},
+    "gemma3": {"hf": "google/gemma-3-{}-it", "models": ["270m", "1b", "4b", "12b"],
+               "modes": ["think"]},
+}
+FAMILY = "qad3x"                     # overridden by --family
+RUN = FAMILY
+MODELS = FAMILIES[FAMILY]["models"]
+MODES = FAMILIES[FAMILY]["modes"]
+
+
+def hf_id(model: str) -> str:
+    return FAMILIES[RUN]["hf"].format(model)
+
+
+def tag_prefix(model: str, quant: str) -> str:
+    """The glob every checkpoint/result directory for this (family, model, quant) matches."""
+    return f"{RUN}-{hf_id(model).replace('/', '-')}-{quant}-*"
 GRID = [0] + list(range(250, 2251, 250))
 TASK_GROUPS = ["gsm8k minerva_math500", "mmlu_pro"]
-MODES = ["think", "nothink"]
 
 # quantizer -> sweep label. Only formats the plots draw; adding one here is all that is
 # needed for this script to start covering it.
@@ -62,6 +86,9 @@ LABELS = {
     "nvfp4lloyd43upcast": "NVFP4-Lloyd43-upcast",
     "nvfp4lloyd21upcast": "NVFP4-Lloyd21-upcast",
     "nvfp4lloyd21split": "NVFP4-Lloyd21-split",
+    # Non-disaggregated controls: the upcast weight served on BOTH phases.
+    "nvfp4lloyd43upcastboth": "NVFP4-Lloyd43-upcastboth",
+    "nvfp4lloyd21upcastboth": "NVFP4-Lloyd21-upcastboth",
     "nvfp4nvr2bitupcast": "NVFP4-NVR2BIT-upcast",
     "nvfp4nvr2bitsplit": "NVFP4-NVR2BIT-split",
 }
@@ -69,8 +96,7 @@ LABELS = {
 
 def exported_steps(model: str, quant: str) -> set:
     """Grid steps with a checkpoint on disk."""
-    dirs = glob.glob(os.path.join(ROOT, "checkpoints",
-                                  f"{RUN}-Qwen-Qwen3-{model}-{quant}-*", "weights"))
+    dirs = glob.glob(os.path.join(ROOT, "checkpoints", tag_prefix(model, quant), "weights"))
     out = set()
     for d in dirs:
         for x in os.listdir(d):
@@ -90,7 +116,7 @@ def landed_steps(model: str, quant: str, mode: str, tasks: str) -> set:
     want = tasks.split()
     tree = os.path.join(ROOT, "results", "disagg", mode)
     out = set()
-    for d in glob.glob(os.path.join(tree, f"{RUN}-Qwen-Qwen3-{model}-{quant}-*")):
+    for d in glob.glob(os.path.join(tree, tag_prefix(model, quant))):
         for f in glob.glob(os.path.join(d, "step_*.json")):
             try:
                 res = json.load(open(f)).get("results", {})
@@ -139,11 +165,29 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--apply", action="store_true", help="submit (default: report only)")
-    ap.add_argument("--models", nargs="*", default=MODELS)
+    ap.add_argument("--family", default=FAMILY, choices=sorted(FAMILIES),
+                    help="model family; also the RUN_PREFIX the tags were built with")
+    ap.add_argument("--models", nargs="*", default=None,
+                    help="sizes to cover (default: every size in --family)")
     ap.add_argument("--formats", nargs="*", default=sorted(LABELS))
     ap.add_argument("--force", action="store_true",
                     help="bypass the empty-ledger bootstrap guard")
+    # So autoeval_watch.sh can iterate every family without hardcoding a second copy of
+    # the list that would drift the moment a family is added here.
+    ap.add_argument("--list-families", action="store_true",
+                    help="print the family names, one per line, and exit")
     args = ap.parse_args()
+    if args.list_families:
+        print("\n".join(sorted(FAMILIES)))
+        return
+    # --family selects the tag namespace, so it has to land before anything globs a
+    # checkpoint or result directory.
+    global RUN, MODELS, MODES
+    RUN = args.family
+    MODELS = FAMILIES[RUN]["models"]
+    MODES = FAMILIES[RUN]["modes"]
+    if args.models is None:
+        args.models = MODELS
 
     flying = inflight()
     # BOOTSTRAP GUARD. The ledger only knows about jobs THIS script submitted, so on a
@@ -186,7 +230,15 @@ def main() -> None:
                     if not args.apply:
                         print(f"  GAP  {tag} {steps}")
                         continue
-                    cmd = [SWEEP, "--model", f"Qwen/Qwen3-{model}", "--tasks", tasks,
+                    # --run is NOT optional. This script globs checkpoints with the
+                    # family-aware tag prefix, but the sweep it shells out to defaults to
+                    # RUN=qad3x on its own -- so without this a --family gemma3 scan finds
+                    # the Gemma checkpoints correctly and then submits jobs that look for
+                    # qad3x-google-gemma-3-270m-it-<quant>-* and find nothing. Same class
+                    # of bug as the --full-disag eval-tag incident: the gap scan and the
+                    # submitted job must resolve the SAME tag.
+                    cmd = [SWEEP, "--run", RUN,
+                           "--model", hf_id(model), "--tasks", tasks,
                            "--formats", f"{LABELS[quant]}:{quant}", "--steps", steps,
                            "--modes", mode]
                     r = subprocess.run(cmd, capture_output=True, text=True)

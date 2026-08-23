@@ -109,7 +109,12 @@ def test_upcast_source_lies_on_the_lloyd21_grid():
     norm = (blk / peak) * 6.0
     g = LLOYD21_SIGNED_2BIT.to("cuda")
     off = float((norm.unsqueeze(-1) - g).abs().min(-1).values.max())
-    check("upcast source lies on the Lloyd21 grid (3-bit storable)", off < 1e-3,
+    # BF16 round-off, same reasoning as tests/test_lloyd21.py: the value is exact on
+    # the grid in fp32 and lands within one bf16 ulp of it once stored. Normalised
+    # values reach ~6.0 and bf16 has 8 mantissa bits, so the bound is ~6*2^-8 =
+    # 2.3e-2. The fp32-era bound was 1e-3.
+    check("upcast source lies on the Lloyd21 grid (within bf16 round-off)",
+          off < 2.5e-2,
           f"max off-grid {off:.2e}")
 
 

@@ -8,6 +8,13 @@
 #
 #   INTERVAL=600 ./cluster_scripts/autoeval_watch.sh        # poll every 10 min
 #   ./cluster_scripts/autoeval_watch.sh --formats nvr2bit   # narrow to one format
+#   ./cluster_scripts/autoeval_watch.sh --family gemma3     # Gemma-3 instead of Qwen3
+#
+# Every argument is forwarded verbatim to submit_missing_evals.py, so --family/--models/
+# --formats all work here. NOTE the training/eval job counts below are family-agnostic but
+# the SUBMISSION side is not: one watcher covers one --family. Run a second watcher (in its
+# own tmux window) to cover the other family concurrently -- they share the ledger, which
+# is keyed per (model, quant, mode, task-group), so they will not collide.
 #
 # WHY A LOOP RATHER THAN "WAIT FOR STEP 2250"
 # -------------------------------------------
@@ -29,15 +36,46 @@ INTERVAL=${INTERVAL:-120}
 GRACE=${GRACE:-2}            # consecutive empty scans required after training ends
 say() { printf '%s  %s\n' "$(date +%H:%M:%S)" "$*"; }
 
+# Training vs eval jobs are told apart by EXCLUDING the four eval job names rather than by
+# matching a model prefix. The old test was `grep '^qad-Qwen3'`, which is wrong the moment a
+# second family exists: run_qad.sh names training jobs `qad-<model>-<quant>` from
+# `cut -d/ -f2`, so Gemma runs are `qad-gemma-3-4b-it-<quant>` and would count as ZERO
+# training jobs -- the loop would then see "training finished" and exit in the middle of a
+# live sweep, while simultaneously counting those same jobs as eval jobs in the `-vc`.
+# Keep this list in sync with the #SBATCH --job-name lines in bin/run_eval*.sh.
+EVAL_JOBS='^qad-(eval|dual-eval|disagg|vllm)$'
+
+# EVERY family is scanned unless the caller names one. The job counts above are
+# family-agnostic while submit_missing_evals.py takes a single --family defaulting to
+# qad3x, so a plain invocation used to see Gemma training jobs (and therefore never exit)
+# while scanning Qwen only (and therefore never submit) -- a watcher that looks perfectly
+# healthy and does nothing. Sweeping all families by default removes the footgun; pass
+# --family <name> to narrow deliberately.
+case " $* " in
+    *" --family "*|*" --family="*) FAMILIES="" ;;   # caller chose; forward args verbatim
+    *) FAMILIES=$(python3 cluster_scripts/submit_missing_evals.py --list-families) ;;
+esac
+[ -n "$FAMILIES" ] && say "families: $(echo "$FAMILIES" | tr '\n' ' ')"
+
 say "watching; polling every ${INTERVAL}s. detach with ctrl-b d"
 empty=0
 while :; do
-    train=$(squeue -u "$(whoami)" -h -o "%j" 2>/dev/null | grep -c '^qad-Qwen3' || true)
-    out=$(python3 cluster_scripts/submit_missing_evals.py --apply "$@" 2>&1)
-    sent=$(printf '%s' "$out" | grep -c '^  SENT' || true)
-    covering=$(printf '%s' "$out" | grep -oE 'covering [0-9]+' | head -1 | awk '{print $2}')
-    [ -n "$sent" ] && [ "$sent" -gt 0 ] && printf '%s' "$out" | grep '^  SENT'
-    evals=$(squeue -u "$(whoami)" -h -r -o "%j" 2>/dev/null | grep -vc '^qad-Qwen3' || true)
+    train=$(squeue -u "$(whoami)" -h -o "%j" 2>/dev/null \
+            | grep '^qad-' | grep -cvE "$EVAL_JOBS" || true)
+    sent=0; covering=0
+    for fam in ${FAMILIES:-__caller__}; do
+        if [ "$fam" = "__caller__" ]; then
+            out=$(python3 cluster_scripts/submit_missing_evals.py --apply "$@" 2>&1)
+        else
+            out=$(python3 cluster_scripts/submit_missing_evals.py --apply --family "$fam" "$@" 2>&1)
+        fi
+        s=$(printf '%s' "$out" | grep -c '^  SENT' || true)
+        c=$(printf '%s' "$out" | grep -oE 'covering [0-9]+' | head -1 | awk '{print $2}')
+        [ "${s:-0}" -gt 0 ] && printf '%s' "$out" | grep '^  SENT' | sed "s/^/  [$fam]/"
+        sent=$((sent + ${s:-0}))
+        covering=$((covering + ${c:-0}))
+    done
+    evals=$(squeue -u "$(whoami)" -h -r -o "%j" 2>/dev/null | grep -cE "$EVAL_JOBS" || true)
     say "training=$train  eval_jobs=$evals  submitted=${sent:-0} (${covering:-0} points)"
 
     if [ "$train" -eq 0 ] && [ "${sent:-0}" -eq 0 ]; then

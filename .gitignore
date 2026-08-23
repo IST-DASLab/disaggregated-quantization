@@ -246,3 +246,15 @@ qad/quantizers/luts_backend.py
 qad/data/
 qad/cluster_scripts/bench_*.py
 qad/tests/test_*nvr*.py
+
+# Eval generations. Logged by default (see bin/run_eval*.sh) because the scores alone
+# cannot answer later questions -- length, refusals, format failures, repetition loops --
+# and re-running a sweep to recover them costs far more than the disk. They are NOT
+# versioned: ~1 MB per (step, task, mode, format, model) would add gigabytes. The scores
+# in step_<N>.json are the committed artifact; these sit beside them on lustre.
+qad/results/**/*_samples_*.jsonl
+
+# lloyd43 kernel package: build + test artifacts
+qad/kernels/lloyd43/.pytest_cache/
+qad/kernels/lloyd43/src/*.egg-info/
+qad/kernels/lloyd43/build/

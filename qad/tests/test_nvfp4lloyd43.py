@@ -176,7 +176,12 @@ def test_decode_half_uses_the_lloyd43_grid():
         norm = (blk / peak) * 6.0
         g = LLOYD43_SIGNED_3BIT.to("cuda")
         off = float((norm.unsqueeze(-1) - g).abs().min(-1).values.max())
-        check(f"{name}: decode cache lies on the Lloyd43 grid", off < 1e-3,
+        # BF16 round-off, not slack: _wq is stored bf16 (quantizers/base.py), so a value
+        # exactly on the grid in fp32 lands within one bf16 ulp of it. Normalised values
+        # reach ~6.0 and bf16 carries 8 mantissa bits -> ~6*2^-8 = 2.3e-2. The fp32-era
+        # bound was 1e-3. Same bound as tests/test_lloyd21.py.
+        check(f"{name}: decode cache lies on the Lloyd43 grid (within bf16 round-off)",
+              off < 2.5e-2,
               f"max off-grid {off:.2e}")
 
 

@@ -33,7 +33,6 @@ def test_tag_hashes_unchanged():
     every checkpoint and eval directory for that method."""
     expected = {
         "fp8": "99914b93", "nvfp4": "99914b93", "nvfp4a16": "99914b93",
-        "gsq2bit": "6115cd98", "gsq3bit": "6115cd98",
         "ste2bit": "1a17550c", "ste3bit": "1a17550c", "ste4bit": "1a17550c",
         "quest2bit": "1a17550c", "quest3bit": "1a17550c", "quest4bit": "1a17550c",
     }
@@ -126,8 +125,13 @@ def test_weight_only_leaves_activations():
         apply(m)
         lin = m.blk.q_proj
         lin.eval()
-        plain = F.linear(x, lin._wq, lin.bias)
-        got = lin(x)
+        # BF16 activations, because that is what production feeds these layers: every
+        # forward runs under torch.amp.autocast(bfloat16), and _wq is stored bf16. An
+        # fp32 x here would be testing a dtype combination the model never sees, and
+        # would fail with "expected m1 and m2 to have the same dtype".
+        xb = x.to(torch.bfloat16)
+        plain = F.linear(xb, lin.wq, lin.bias)
+        got = lin(xb)
         same = torch.equal(plain, got)
         assert same == (not expect_act_quant), f"{name}: activation quant mismatch"
         print(f"  {name:9} activations {'quantized' if expect_act_quant else 'untouched'}  OK")

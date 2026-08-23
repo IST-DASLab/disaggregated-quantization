@@ -26,10 +26,15 @@ if [ -z "$SLURM_JOB_ID" ]; then
     # This script lives in qad/bin/, so the repo root is two levels up.
     ROOT="$(dirname "$SELF")/../.."
     STAMP="$(date +%Y%m%d_%H%M%S)"
-    TAG="run"; QOS_ARGS=(); PASS=(); CHAIN=1
+    TAG="run"; QOS_ARGS=(); NODE_ARGS=(); PASS=(); CHAIN=1
     while [ $# -gt 0 ]; do
         case "$1" in
             --debug)       QOS_ARGS=(--qos=interactive --time=1:00:00);   shift ;;
+            # --short: qos=short is capped at 2h wall and 4 nodes, but runs at priority
+            # 200 against normal's 100, so it starts sooner. Fits the small models --
+            # 270m is ~1h51m and 1b ~1h40m measured -- but NOT 4b (>4h) or 12b, and a
+            # 2h cap leaves 1b only ~20 min of margin, so a slow node can still time out.
+            --short)       QOS_ARGS=(--qos=short --time=2:00:00);         shift ;;
             # --time is capped at 04:00:00 by the cluster, and that is NOT enough past
             # ~4B: a 4B run measures 5.81 s/step, i.e. 4.01h for 2485 steps, so it
             # TIMEOUTs a few steps from the end. 8B is roughly double. --chain N submits
@@ -41,7 +46,11 @@ if [ -z "$SLURM_JOB_ID" ]; then
             # step N >= total" rather than retraining anything.
             --chain)       CHAIN="$2";                                    shift 2 ;;
             --chain=*)     CHAIN="${1#--chain=}";                         shift ;;
-            --nodes)       QOS_ARGS+=(--nodes="$2");                      shift 2 ;;
+            # NODE_ARGS, not QOS_ARGS: --debug and --short ASSIGN QOS_ARGS, so a
+            # --nodes appended before either of them was silently discarded and the
+            # job ran on ONE node. Invisible at submit time -- it showed up only as
+            # a smaller world_size in the training log.
+            --nodes)       NODE_ARGS=(--nodes="$2");                      shift 2 ;;
             --quantizer=*) TAG="${1#--quantizer=}"; PASS+=("$1");      shift ;;
             --quantizer)   TAG="$2";                PASS+=("$1" "$2"); shift 2 ;;
             *)             PASS+=("$1");                                 shift ;;
@@ -52,14 +61,18 @@ if [ -z "$SLURM_JOB_ID" ]; then
     # would have serialised the entire cluster's worth of runs against each other.
     # Naming it per (model, quantizer) also stops two jobs from ever writing one state/
     # directory concurrently, which would corrupt the resume point.
-    MODEL_TAG=$(echo "${MODEL:-Qwen/Qwen3-4B}" | tr '/' '-' | sed 's/^Qwen-//')
+    # The repo name without the vendor: Qwen/Qwen3-4B -> Qwen3-4B, and
+    # google/gemma-3-4b-it -> gemma-3-4b-it. The old form stripped a literal "Qwen-"
+    # prefix, which left Gemma job names as "google-gemma-3-4b-it".
+    MODEL_TAG=$(echo "${MODEL:-Qwen/Qwen3-4B}" | cut -d/ -f2)
     JOB_NAME="qad-${MODEL_TAG}-${TAG}"
     LOGDIR="$ROOT/logs/train/${STAMP}_${TAG}"
     mkdir -p "$LOGDIR"
     echo "logs → $LOGDIR"
     echo "job  → $JOB_NAME   (chain of $CHAIN, --dependency=singleton)"
     for _i in $(seq 1 "$CHAIN"); do
-        sbatch --job-name="$JOB_NAME" --dependency=singleton "${QOS_ARGS[@]}" \
+        sbatch --job-name="$JOB_NAME" --dependency=singleton \
+            "${QOS_ARGS[@]}" "${NODE_ARGS[@]}" \
             --output="$LOGDIR/%x_%j.out" --error="$LOGDIR/%x_%j.err" \
             "$SELF" "${PASS[@]}"
     done
@@ -93,6 +106,17 @@ srun \
     bash -c "
         export HF_HOME=$HF_CACHE
         export TOKENIZERS_PARALLELISM=false
+        # SHARDED checkpoints + 8 ranks = a cache race that kills the run in 90 seconds.
+        # 4b/12b ship as model-0000N-of-00002.safetensors, so from_pretrained goes through
+        # get_checkpoint_shard_files(); all 8 ranks then hit the hub concurrently and one
+        # loses, with
+        #   OSError: google/gemma-3-4b-it does not appear to have a file named
+        #            model-00001-of-00002.safetensors
+        # even though the cache is complete and every shard is present. 270m/1b/Qwen never
+        # showed it because they are single-file and skip that code path entirely.
+        # Offline mode removes the fetch, so every rank reads the warm snapshot directly.
+        # Same setting bin/run_eval_disagg.sh already uses. Override only to warm a cache.
+        export HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-1}
         # psx-luts carries the luts extension nvr2bit imports lazily. NO BACKTICKS:
         # this whole block is a double-quoted bash -c string, so backticks are
         # command substitution and even a COMMENT gets executed.

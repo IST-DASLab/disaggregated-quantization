@@ -51,6 +51,7 @@ sys.path.insert(0, str(_QAD))
 # Same registry/hash helpers eval_vllm.py uses, so a checkpoint tag means exactly the
 # same thing on both backends and results line up tag-for-tag.
 from quantizers import REGISTRY as _REGISTRY, build_quantizer_params as _build_quant_params
+from quantizers.full_disag import full_disag_hash as _full_disag_hash
 
 _T0 = time.time()
 
@@ -377,6 +378,9 @@ def main() -> None:
     p.add_argument("--probe-limit", type=int, default=None,
                    help="use only the first N probe prompts; 1 keeps DISAGG_DEBUG "
                         "traces small enough to read")
+    p.add_argument("--full-disag", action="store_true",
+                   help="the run was trained with --full-disag; selects that "
+                        "run's checkpoint tag rather than the plain one")
     p.add_argument("--tag", default=None, help="results subdirectory name")
     p.add_argument("--output-dir", default=None,
                    help="default: results/disagg/think/ or results/disagg/nothink/ per --think")
@@ -397,6 +401,11 @@ def main() -> None:
             p.error("--iter is required with --quantizer")
         base = args.model or args.tokenizer
         _, quant_hash = _build_quant_params(args.quantizer, args.quantizer_params)
+        if args.full_disag:
+            # Must match training exactly, hence the shared helper: without it this
+            # resolves to the PLAIN run's checkpoints, silently evaluates those, and
+            # writes them over the plain baseline's results at exit 0.
+            quant_hash = _full_disag_hash(quant_hash)
         run_name = args.run_name or f"qad-{base.replace('/', '-')}"
         tag_name = f"{run_name}-{args.quantizer}-{quant_hash}"
         prefill, decode = resolve_pair(Path(args.ckpt_dir), tag_name, args.iter)

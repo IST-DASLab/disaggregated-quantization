@@ -34,7 +34,18 @@ fi
 # Only the distributed test needs the full node.
 GPUS=1
 for t in "${TESTS[@]}"; do
-    case "$t" in *checkpoint*) GPUS=8 ;; esac
+    case "$t" in
+        *checkpoint*) GPUS=8 ;;
+        # test_pipeline needs the FULL node, not merely an even world. At world=2 there
+        # is a single pipeline pair, and three real bugs were invisible there because
+        # they only appear with SEVERAL pairs or a wider mesh:
+        #   * the export handoff filename raced between pairs (FileNotFoundError);
+        #   * the "not the cross-node block layout" assertion is vacuous at world=2,
+        #     where the adjacent peer and the block peer are the same rank;
+        #   * dp_size is 1, so nothing exercises the DP/PP group interaction.
+        # 8 gives 4 pairs and dp_size=4, which is what the real runs use.
+        *pipeline*) GPUS=8 ;;
+    esac
 done
 
 # Build the in-container command: each test is a line, so one failure does not hide
@@ -48,8 +59,8 @@ CMD='cd "$PWD"; export PYTHONPATH="$PWD"; set -o pipefail; failed=""'
 for t in "${TESTS[@]}"; do
     f="tests/${t#test_}"; f="tests/test_${t#test_}.py"
     case "$t" in
-        *checkpoint*) run="torchrun --nproc_per_node=$GPUS $f" ;;
-        *)            run="python $f" ;;
+        *checkpoint*|*pipeline*) run="torchrun --nproc_per_node=$GPUS $f" ;;
+        *)                   run="python $f" ;;
     esac
     CMD="$CMD; echo; echo \"=== $f ===\"; $run 2>&1 | grep -viE 'futurewarning|pynvml|^  import' || failed=\"\$failed $f\""
 done

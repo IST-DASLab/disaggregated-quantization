@@ -9,8 +9,10 @@ directories captured BEFORE the refactor; this compares key sets and tensor VALU
 
     python tests/test_export.py
 """
-import json, os, sys
+import json, os, sys, tempfile
 from pathlib import Path
+
+os.environ.setdefault("HF_HOME", "/lustre/fsw/portfolios/adlr/users/apanferov/hf_cache")
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -104,8 +106,162 @@ def test_variants():
               _variants(name) == ["prefill", "decode"])
 
 
+# ---------------------------------------------------------------------------
+# Text-only export of a multimodal wrapper (docs/GEMMA3_PLAN.md 2.2b)
+# ---------------------------------------------------------------------------
+def tiny_wrapper():
+    """A 2-layer Gemma3ForConditionalGeneration, built from the 4b config.
+
+    Down-scaled rather than loaded: the point is the module TREE and the config, and an
+    8 GB load proves nothing extra about either. The vision tower is kept (shrunk), so
+    the export really does have wrapper tensors to drop.
+    """
+    from transformers import Gemma3ForConditionalGeneration
+    cfg = AutoConfig.from_pretrained("google/gemma-3-4b-it")
+    t = cfg.text_config
+    t.num_hidden_layers, t.hidden_size, t.intermediate_size = 2, 64, 128
+    t.num_attention_heads, t.num_key_value_heads, t.head_dim = 4, 2, 16
+    t.vocab_size = 512
+    # layer_types is derived from the FULL layer count and is validated against it on
+    # every re-read, so it has to shrink with num_hidden_layers.
+    t.layer_types = ["sliding_attention", "full_attention"]
+    v = cfg.vision_config
+    v.num_hidden_layers, v.hidden_size, v.intermediate_size = 2, 64, 128
+    v.num_attention_heads, v.image_size, v.patch_size = 4, 32, 16
+    torch.manual_seed(0)
+    return Gemma3ForConditionalGeneration(cfg).float()
+
+
+def test_text_only_export():
+    from export.save import text_only_arch, to_model_keys
+    from training.models import text_stack
+
+    m = tiny_wrapper()
+    check("wrapper is exported as Gemma3ForCausalLM",
+          text_only_arch(m) == "Gemma3ForCausalLM", str(text_only_arch(m)))
+    check("a plain CausalLM is exported unchanged", text_only_arch(tiny_model()) is None)
+
+    params, _ = build_quantizer_params("nvfp4", "")
+    REGISTRY["nvfp4"]["apply"](text_stack(m).base, **params)
+    for mod in m.modules():
+        if hasattr(mod, "act_amax"):
+            mod.act_amax.fill_(3.5); mod._observed = True
+
+    out = Path(tempfile.mkdtemp()) / "step"
+    n = save_checkpoint(m, out, step=7)
+    state = load_file(str(out / "model.safetensors"))
+    cfg = json.loads((out / "config.json").read_text())
+
+    check("no vision / projector / language_model tensor survives",
+          not [k for k in state if "vision" in k or "multi_modal" in k
+               or "language_model" in k],
+          str([k for k in state if "vision" in k][:2]))
+    check("text weights are renamed to the plain layout",
+          "model.embed_tokens.weight" in state and
+          all(k.startswith(("model.layers.", "model.embed_tokens", "model.norm",
+                            "model.rotary", "lm_head.")) for k in state),
+          str(sorted(k for k in state if not k.startswith("model.layers."))[:6]))
+    check("every quantized layer is under model.layers.N",
+          sum(k.endswith(".weight_packed") for k in state) == 2 * 7,
+          str(sum(k.endswith(".weight_packed") for k in state)))
+    check("model.safetensors written with all tensors", n == len(state), f"{n}")
+    files = sorted(p.name for p in out.iterdir())
+    check("tokenizer + chat template land in the export",
+          "tokenizer.json" in files and "tokenizer_config.json" in files
+          and any(f.startswith("chat_template") for f in files), str(files))
+
+    check("architectures rewritten", cfg["architectures"] == ["Gemma3ForCausalLM"],
+          str(cfg["architectures"]))
+    check("model_type is gemma3_text", cfg["model_type"] == "gemma3_text",
+          cfg["model_type"])
+    check("no vision_config / text_config in the export",
+          "vision_config" not in cfg and "text_config" not in cfg)
+    check("quantization_config survives", "quantization_config" in cfg)
+    check("tie_word_embeddings preserved", cfg.get("tie_word_embeddings") is True,
+          str(cfg.get("tie_word_embeddings")))
+    check("rope is written in the stock (flat) form",
+          cfg.get("rope_scaling") == {"rope_type": "linear", "factor": 8.0}
+          and cfg.get("rope_theta") == 1000000.0
+          and cfg.get("rope_local_base_freq") == 10000.0
+          and "rope_parameters" not in cfg,
+          str({k: cfg.get(k) for k in ("rope_theta", "rope_scaling",
+                                       "rope_local_base_freq", "rope_parameters")}))
+    check("token ids present", all(k in cfg for k in
+                                   ("bos_token_id", "eos_token_id", "pad_token_id")),
+          str({k: cfg.get(k) for k in ("bos_token_id", "eos_token_id", "pad_token_id")}))
+
+    # the export must be readable as the class it claims to be
+    from transformers import AutoConfig
+    back = AutoConfig.from_pretrained(out)
+    check("re-reads as a gemma3_text config",
+          type(back).__name__ == "Gemma3TextConfig", type(back).__name__)
+    check("layer count survives", back.num_hidden_layers == 2, str(back.num_hidden_layers))
+    # the rope the SERVER will see must be the rope the wrapper had -- this is what the
+    # flat/nested round-trip is for, and vLLM reads exactly this attribute
+    check("rope_parameters round-trip unchanged",
+          back.rope_parameters == m.config.text_config.rope_parameters,
+          f"{back.rope_parameters} vs {m.config.text_config.rope_parameters}")
+    check("sliding window survives", back.sliding_window == 1024, str(back.sliding_window))
+    check("layer_types survives", back.layer_types == ["sliding_attention",
+                                                       "full_attention"],
+          str(back.layer_types))
+
+    # the checkpoint must load back into the wrapper it came from
+    rt = to_model_keys(m, state)
+    check("to_model_keys is the inverse of the export rename",
+          all(k.startswith(("model.language_model.", "lm_head.")) for k in rt),
+          str([k for k in rt if not k.startswith("model.language_model.")][:3]))
+    dst = tiny_wrapper()
+    REGISTRY["nvfp4"]["apply"](text_stack(dst).base, **params)
+    for mod in dst.modules():
+        if hasattr(mod, "_wq"):
+            mod._wq.zero_()
+    loaded = load_into(dst, state)
+    worst = max((a._wq - b._wq).abs().max().item()
+                for a, b in zip([x for x in m.modules() if hasattr(x, "_wq")],
+                                [x for x in dst.modules() if hasattr(x, "_wq")]))
+    check(f"{loaded} layers round-trip into the wrapper", loaded == 14 and worst < 1e-6,
+          f"max|Δ|={worst:.2e}")
+
+
+def test_text_only_config_of_the_real_wrappers():
+    """The config transform, on the REAL 4b/12b configs (cheap: no weights)."""
+    from transformers import AutoConfig
+    from export.save import text_only_arch, text_only_config
+
+    ref = AutoConfig.from_pretrained("google/gemma-3-1b-it")     # the shape we target
+    for repo in ("google/gemma-3-4b-it", "google/gemma-3-12b-it"):
+        src = AutoConfig.from_pretrained(repo)
+        got = text_only_config(src, text_only_arch(src))
+        check(f"{repo}: model_type", got.model_type == ref.model_type, got.model_type)
+        check(f"{repo}: architectures", got.architectures == ref.architectures,
+              str(got.architectures))
+        check(f"{repo}: no vision_config", not hasattr(got, "vision_config"))
+        check(f"{repo}: text dims preserved",
+              (got.num_hidden_layers, got.hidden_size, got.vocab_size)
+              == (src.text_config.num_hidden_layers, src.text_config.hidden_size,
+                  src.text_config.vocab_size))
+        check(f"{repo}: tie_word_embeddings", got.tie_word_embeddings is True)
+        check(f"{repo}: eos_token_id taken from the wrapper",
+              got.eos_token_id == src.eos_token_id, str(got.eos_token_id))
+        # Diffed against the stock 1b repo (the shape we are matching). Exactly two of
+        # its keys are absent, both information-preserving:
+        #   sliding_window_pattern (a stride) -> layer_types, the explicit per-layer list
+        #     transformers derives from it and the one vLLM indexes (gemma3.py:163);
+        #   cache_implementation -> generation_config.json, which the export also writes.
+        missing = {k for k in ref.to_diff_dict() if not hasattr(got, k)}
+        check(f"{repo}: only the two superseded keys are absent",
+              missing == {"cache_implementation", "sliding_window_pattern"},
+              str(sorted(missing)))
+        check(f"{repo}: layer_types carries the pattern explicitly",
+              len(got.layer_types) == got.num_hidden_layers
+              and set(got.layer_types) == {"sliding_attention", "full_attention"},
+              f"{len(got.layer_types)} entries")
+
+
 if __name__ == "__main__":
-    for fn in (test_matches_golden, test_roundtrip, test_variants):
+    for fn in (test_matches_golden, test_roundtrip, test_variants,
+               test_text_only_export, test_text_only_config_of_the_real_wrappers):
         print(f"\n{fn.__name__}:")
         fn()
     print("\nPASS: export")

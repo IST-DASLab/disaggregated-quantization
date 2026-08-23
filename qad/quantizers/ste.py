@@ -59,7 +59,7 @@ class STEIntLinear(QuantizedLinear):
 
     def _differentiable_weight(self) -> Tensor:
         # STE: cached _wq in forward, gradient flows through to self.weight
-        return self.weight + (self._wq - self.weight).detach()
+        return self.weight + (self.wq - self.weight).detach()
 
     @classmethod
     def from_linear(cls, linear: nn.Linear, **kwargs) -> "STEIntLinear":

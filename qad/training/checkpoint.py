@@ -47,8 +47,18 @@ def gather_optimizer_state(optimizer) -> list | None:
     exp_avg_sq, Lion only exp_avg — so the tensor keys are discovered rather than
     hardcoded. Every rank walks the same parameters in the same order and each
     parameter has the same keys on every rank, so the collectives stay in lockstep.
+
+    SCOPED TO THE OPTIMIZER'S OWN GROUP. DistOptimizer shards the moments across the
+    group it reduces on, which under pipeline parallelism is the DP group, not the
+    world. Gathering on the default group then asks for world_size x a 1/dp_size shard
+    and torch rejects it outright:
+        ValueError: output tensor size must be equal to world_size times input size
+    -- which is the good outcome; a group that happened to divide evenly would have
+    reassembled garbage silently. The group is read off the optimizer so the two can
+    never disagree.
     """
-    rank, world_size = dist.get_rank(), dist.get_world_size()
+    pg = getattr(optimizer, "_pg", None)
+    rank, world_size = dist.get_rank(group=pg), dist.get_world_size(group=pg)
     out: list = []
     for p in _params(optimizer):
         st = optimizer.state.get(p, None)
@@ -63,7 +73,7 @@ def gather_optimizer_state(optimizer) -> list | None:
                 entry[key] = shard.to("cpu", copy=True) if rank == 0 else None
             else:
                 full = torch.empty(p.shape, dtype=shard.dtype, device=shard.device)
-                dist.all_gather_into_tensor(full, shard)
+                dist.all_gather_into_tensor(full, shard, group=pg)
                 entry[key] = full.to("cpu") if rank == 0 else None
                 del full                 # free the GPU buffer before the next moment
         out.append(entry if rank == 0 else None)
@@ -72,8 +82,13 @@ def gather_optimizer_state(optimizer) -> list | None:
 
 @torch.no_grad()
 def load_optimizer_state(optimizer, saved: list) -> None:
-    """Restore moments, slicing each rank's shard out of the full saved tensors."""
-    rank, world_size = dist.get_rank(), dist.get_world_size()
+    """Restore moments, slicing each rank's shard out of the full saved tensors.
+
+    Same group as gather_optimizer_state: the slice index must be this rank's position
+    within the group the moments were sharded across, which under PP is the DP group.
+    """
+    pg = getattr(optimizer, "_pg", None)
+    rank, world_size = dist.get_rank(group=pg), dist.get_world_size(group=pg)
     for p, entry in zip(_params(optimizer), saved):
         if entry is None:
             continue
@@ -92,13 +107,26 @@ def state_root(ckpt_dir: str, ckpt_tag: str) -> Path:
 
 
 def find_latest(ckpt_dir: str, ckpt_tag: str) -> tuple[Path, int] | None:
-    """Newest complete training state, or None. Incomplete (*.tmp) dirs are ignored."""
+    """Newest complete training state, or None. Incomplete (*.tmp) dirs are ignored.
+
+    A PIPELINE state is complete when EVERY stage has landed: the meta sits at
+    step_N/stage<k>/meta.json, not step_N/meta.json. Requiring only the top-level file
+    made find_latest skip every PP state and return None -- so a chained follow-up would
+    not resume, it would silently restart the run from step 0 and overwrite the
+    checkpoints as it went. Both stages are required, so a state written by a job that
+    died between the two renames is correctly treated as incomplete.
+    """
     root = state_root(ckpt_dir, ckpt_tag)
     if not root.is_dir():
         return None
     best = None
     for d in root.glob("step_*"):
-        if d.name.endswith(".tmp") or not (d / "meta.json").exists():
+        if d.name.endswith(".tmp"):
+            continue
+        stages = sorted(d.glob("stage*/meta.json"))
+        if not (d / "meta.json").exists() and not stages:
+            continue
+        if stages and len(stages) < 2:          # a half-written pipeline state
             continue
         try:
             step = int(d.name.split("_")[1])
@@ -117,10 +145,23 @@ def save_training_state(student, optimizer, step: int, args, keep_last: int = 1)
     mistaken for a complete one. Older states are pruned to `keep_last` (these are
     large: FP32 weights + two FP32 moments ~ 12 bytes/param).
     """
+    groups = getattr(args, "_pp_groups", None)
+    # UNDER PIPELINE PARALLELISM each stage owns a DIFFERENT half of the model, so one
+    # writer cannot produce a complete state. Each stage writes its OWN half into
+    # stage<k>/, and the writer for a stage is its dp_rank 0 -- the rank that
+    # gather_optimizer_state() collects the ZeRO-2 shards onto within that stage's DP
+    # group. Resume therefore requires the SAME pp and dp, which load_training_state
+    # enforces; that is a deliberate trade for not having to merge halves here.
     opt_state = gather_optimizer_state(optimizer)      # collective — all ranks
+    if groups is not None:
+        writer = groups.dp_rank == 0
+        subdir = f"stage{groups.pp_rank}"
+    else:
+        writer = dist.get_rank() == 0
+        subdir = None
     model_state = {k: v.detach().cpu() for k, v in student.state_dict().items()} \
-        if dist.get_rank() == 0 else None
-    if dist.get_rank() != 0:
+        if writer else None
+    if not writer:
         dist.barrier()
         return None
 
@@ -128,6 +169,8 @@ def save_training_state(student, optimizer, step: int, args, keep_last: int = 1)
     root.mkdir(parents=True, exist_ok=True)
     final = root / f"step_{step:07d}"
     tmp = root / f"step_{step:07d}.tmp"
+    if subdir is not None:
+        final, tmp = final / subdir, tmp / subdir
     if tmp.exists():
         shutil.rmtree(tmp)
     tmp.mkdir(parents=True)
@@ -137,17 +180,32 @@ def save_training_state(student, optimizer, step: int, args, keep_last: int = 1)
     (tmp / "meta.json").write_text(json.dumps({
         "step": step,
         "world_size": dist.get_world_size(),
+        "pp_size": (2 if groups is not None else 1),
+        "dp_size": (groups.dp_size if groups is not None else dist.get_world_size()),
         "args": {k: v for k, v in vars(args).items() if isinstance(v, (int, float, str, bool, type(None)))},
         "torch_rng": None,   # RNG lives in rng.pt (tensors are not JSON-serializable)
     }, indent=2))
     torch.save({"cpu": torch.get_rng_state(), "cuda": torch.cuda.get_rng_state()},
                tmp / "rng.pt")
 
+    final.parent.mkdir(parents=True, exist_ok=True)
     if final.exists():
         shutil.rmtree(final)
     os.replace(tmp, final)
+    if subdir is not None:
+        # os.replace moved the stage subdir OUT of step_N.tmp/, leaving that parent
+        # behind empty. Left alone it accumulates one dead directory per save.
+        try:
+            tmp.parent.rmdir()
+        except OSError:
+            pass                                # the other stage still has its subdir
 
-    # prune old states (they are huge)
+
+    # prune old states (they are huge). Only one writer prunes, or two stages would
+    # race to rmtree the same directory.
+    if subdir is not None and dist.get_rank() != 0:
+        dist.barrier()
+        return final
     states = sorted(root.glob("step_*"), key=lambda d: d.name)
     states = [d for d in states if not d.name.endswith(".tmp")]
     for old in states[:-keep_last] if keep_last > 0 else []:
@@ -158,19 +216,38 @@ def save_training_state(student, optimizer, step: int, args, keep_last: int = 1)
     return final
 
 
-def load_training_state(path: Path, student, optimizer, device) -> int:
+def load_training_state(path: Path, student, optimizer, device, groups=None) -> int:
     """Restore weights + optimizer + RNG from `path`. Every rank reads the same files
     (shared filesystem) and keeps only its own optimizer shard. Returns the step to
     resume AT (i.e. the next step to run)."""
+    # Under PP each stage restores its OWN half from stage<k>/. The layout is only
+    # meaningful for the exact (pp, dp) it was written with -- the model half is stage-
+    # specific and the optimizer payload is ZeRO-2-sharded across that stage's DP group
+    # -- so both are checked below rather than being silently reinterpreted.
+    if groups is not None:
+        path = path / f"stage{groups.pp_rank}"
     meta = json.loads((path / "meta.json").read_text())
     step = int(meta["step"])
     ws = dist.get_world_size()
-    if meta.get("world_size") not in (None, ws):
+    want_pp = 2 if groups is not None else 1
+    want_dp = groups.dp_size if groups is not None else ws
+    if meta.get("pp_size", 1) != want_pp:
+        raise RuntimeError(
+            f"state was saved with pp_size={meta.get('pp_size', 1)}, now {want_pp}; the "
+            "halves of the model do not correspond — resume with the same --pp")
+    if meta.get("dp_size", meta.get("world_size")) not in (None, want_dp):
+        raise RuntimeError(
+            f"state was saved with dp_size={meta.get('dp_size')}, now {want_dp}; the "
+            "ZeRO-2 optimizer shards would not line up — rerun with the same data-"
+            "parallel width (nodes x gpus / pp)")
+    if groups is None and meta.get("world_size") not in (None, ws):
         raise RuntimeError(
             f"checkpoint was saved with world_size={meta['world_size']}, now {ws}; "
             "optimizer shards would not line up — rerun with the same world size"
         )
 
+    # EVERY rank reads the same file off the shared filesystem, as this module has
+    # always done.
     model_state = torch.load(path / "model.pt", map_location="cpu", weights_only=False)
     student.load_state_dict(model_state)
     student.to(device)

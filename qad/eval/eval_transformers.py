@@ -31,16 +31,20 @@ def log(msg: str, since: float | None = None) -> None:
     print(f"[{time.time() - _T0:7.1f}s] {msg}{el}", flush=True)
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoTokenizer
 
 # Locate the qad/ directory so we can reuse its quantization primitives
 _QAD_DIR = Path(__file__).resolve().parent.parent   # eval/ -> qad
 sys.path.insert(0, str(_QAD_DIR))
 sys.path.insert(0, str(_QAD_DIR.parent / "third_party" / "Liger-Kernel" / "src"))
 
-from export.save import load_into
+from export.save import _quant_layers, load_into, to_model_keys
 from quantizers import (REGISTRY, QuantizedLinear, build_quantizer_params,
                         uses_compressed_tensors, is_dual, DEFAULT_DUAL_RUNTIME)
+# Same loader as training: the class the checkpoint DECLARES, and the text stack
+# resolved through a table rather than assumed to be `.model`. AutoModelForCausalLM
+# silently mis-loads the multimodal Gemma-3 repos — see training/models.py.
+from training.models import load_model, text_stack
 
 
 def resolve_checkpoint(ckpt_dir: Path, ckpt_tag: str, step: int) -> Path:
@@ -81,12 +85,17 @@ def build_quantized_model(base_model: str, runtime_quant: str, ckpt: Path, devic
     from safetensors.torch import load_file
 
     t = time.time()
-    model = AutoModelForCausalLM.from_pretrained(
-        base_model, dtype=torch.bfloat16, attn_implementation="flash_attention_2")
+    model = load_model(base_model, torch.bfloat16,
+                       attn_implementation="flash_attention_2")
     log(f"base model loaded ({base_model})", t)
     t = time.time()
     params, _ = build_quantizer_params(runtime_quant, "")
-    REGISTRY[runtime_quant]["apply"](model, **params)
+    # Scoped to the text stack, exactly as training/qad.py does — otherwise the module
+    # tree rebuilt here would not be the tree the checkpoint was written from (on a
+    # multimodal wrapper this eval would additionally quantize the vision tower and then
+    # find no weights for it in the checkpoint). Identical set of linears on a plain
+    # CausalLM.
+    REGISTRY[runtime_quant]["apply"](text_stack(model).base, **params)
     log(f"quantizer applied ({runtime_quant})", t)
 
     split_ckpt = (ckpt / "prefill" / "model.safetensors").exists()
@@ -100,16 +109,32 @@ def build_quantized_model(base_model: str, runtime_quant: str, ckpt: Path, devic
     # Embeddings / norms / lm_head are trained too, so take them from the checkpoint
     # rather than the base model. Either variant carries the same copy.
     quant_paths = {n for n, m in model.named_modules() if isinstance(m, QuantizedLinear)}
-    first = load_file(str(next(iter(sources.values())) / "model.safetensors"))
+    # A multimodal wrapper exports under text-only names (model.* rather than
+    # model.language_model.*), so put them back on the live tree before matching them
+    # against module paths. Identity for every plain CausalLM.
+    first = to_model_keys(model,
+                          load_file(str(next(iter(sources.values())) / "model.safetensors")))
     non_quant = {k: v for k, v in first.items() if k.rpartition(".")[0] not in quant_paths}
     _, unexpected = model.load_state_dict(non_quant, strict=False)
     if unexpected:
         raise RuntimeError(
             f"checkpoint has tensors the model does not expect: {sorted(unexpected)[:5]}")
 
+    n_quant = len(_quant_layers(model))
     for variant, d in sources.items():
         t = time.time()
         n = load_into(model, load_file(str(d / "model.safetensors")), variant=variant)
+        # ASSERT, do not merely log. `load_into` returning 0 means the checkpoint's
+        # quantized weights were silently not applied and the eval would score the
+        # PTQ-of-base-weights model while reporting success -- this project has already
+        # shipped that exact failure twice (the dropped quantization_config, and the
+        # --full-disag tag collision that re-scored and overwrote the plain baselines).
+        # It is currently saved only by the unexpected-keys check above happening to share
+        # `_text_prefixes` with the renamer; nothing enforces that coupling.
+        if n != n_quant:
+            raise RuntimeError(
+                f"{d}: load_into applied {n} of {n_quant} quantized layers for variant "
+                f"{variant or 'homogeneous'!r} — the checkpoint did not reach the model")
         log(f"  loaded {n} quantized layers for '{variant or 'homogeneous'}'", t)
     note = "" if split_ckpt else ("  (one checkpoint drives both phases)"
                                   if len(sources) > 1 else "  (single format throughout)")
@@ -192,9 +217,8 @@ def main() -> None:
 
     if args.unquantized:
         # Baseline: full-precision teacher model, no checkpoint
-        model = AutoModelForCausalLM.from_pretrained(
-            args.model, device_map=device, dtype=torch.bfloat16, attn_implementation="flash_attention_2"
-        )
+        model = load_model(args.model, torch.bfloat16,
+                           attn_implementation="flash_attention_2").to(device)
         model.eval()
         ckpt_tag = f"{args.model.replace('/', '-')}-unquantized"
         step_key = 0
@@ -228,9 +252,8 @@ def main() -> None:
         else:
             # Pseudo-quantized checkpoints are standard HF models (dequantized weights
             # in `weight`), so this is one fast sharded load straight to GPU.
-            model = AutoModelForCausalLM.from_pretrained(
-                ckpt_dir, dtype=torch.bfloat16, attn_implementation="flash_attention_2",
-            ).to(device)
+            model = load_model(str(ckpt_dir), torch.bfloat16,
+                               attn_implementation="flash_attention_2").to(device)
             model.eval()
         step_key = args.iter
         log(f"Model: {args.model}  quantizer={args.quantizer}  step={args.iter}")

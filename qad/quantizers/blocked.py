@@ -37,7 +37,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 
-from .base import QuantizedLinear
+from .base import QuantizedLinear, qlinear
 
 E4M3_MAX = 448.0
 SCALE_REF = 6.0                      # reference grid max (E2M1's max; also the
@@ -62,9 +62,40 @@ def index_nearest(x: Tensor, grid: Tensor) -> Tensor:
     return torch.where((grid[hi] - x) <= (x - grid[lo]), hi, lo)
 
 
+# Rows per chunk are derived from this element budget, so the bound holds regardless of
+# a layer's shape. 2^23 elements is ~64 MB of int64 per temporary -- small enough that the
+# handful of them index_nearest allocates is negligible, large enough that the chunk loop
+# stays short (a 15360x3840 weight is 7 chunks).
+_LUT_CHUNK_ELEMS = 1 << 23
+
+
 def round_to_grid(x: Tensor, grid: Tensor) -> Tensor:
-    """Round-to-nearest onto a sorted 1-D grid (values, not indices)."""
-    return grid[index_nearest(x, grid.to(x.device))]
+    """Round-to-nearest onto a sorted 1-D grid (values, not indices).
+
+    CHUNKED over the leading dim, for PEAK MEMORY rather than speed. index_nearest
+    materialises about six tensors the size of its input -- the int64 bucketize output,
+    lo, hi, two gathered grid values and a bool mask -- so on a full weight those
+    temporaries dwarf the weight itself. At gemma-3-12b the largest quantized matrix is
+    15360x3840, i.e. ~59M elements, so the int64 ones are ~470 MB EACH.
+
+    That transient is what OOMs the LUT formats at 12b. It fires during quantizer
+    construction and inside post_update, and at both points the weight is full-size on
+    every rank -- it scales with the WEIGHT, not the batch, so a smaller micro-batch does
+    not help either (12b split still OOMed here at mbs=2).
+
+    Chunking is exact, not an approximation: the operation is elementwise, so each chunk
+    is computed from the same inputs it would have been as part of the whole. Verified
+    bit-identical in tests/test_lut_chunking.py.
+    """
+    g = grid.to(x.device)
+    if x.numel() <= _LUT_CHUNK_ELEMS or x.shape[0] < 2:
+        return g[index_nearest(x, g)]
+    rows = max(1, _LUT_CHUNK_ELEMS // max(1, x[0].numel()))
+    # torch.cat rather than writing into a preallocated buffer: an in-place scatter would
+    # break autograd if this is ever reached with grad enabled, and the peak is the same
+    # (one full output plus one chunk's temporaries).
+    return torch.cat([g[index_nearest(x[i:i + rows], g)]
+                      for i in range(0, x.shape[0], rows)], dim=0)
 
 
 def grid_rounder(grid: Tensor):
@@ -150,7 +181,8 @@ class GroupScaled:
     def on_group_linked(self) -> None:
         """Called once the fused group is known, i.e. once group_global_scale() is
         final. Default: refresh the cached hard-quantized weight."""
-        self._wq.copy_(self._compute_wq())
+        if self._wq.numel():
+            self._wq.copy_(self._compute_wq())
 
 
 def link_fused_groups(model: nn.Module) -> None:
@@ -195,7 +227,8 @@ class BlockScaledLinear(GroupScaled, QuantizedLinear):
         self.weight = nn.Parameter(weight.clone())
         self.block_size = block_size
         with torch.no_grad():
-            self._wq.copy_(self._compute_wq())
+            if self._wq.numel():             # --recompute-wq: nothing to prime
+                self._wq.copy_(self._compute_wq())
 
     # --- subclass contract -------------------------------------------------
     def rounder(self, x: Tensor) -> Tensor:
@@ -213,11 +246,11 @@ class BlockScaledLinear(GroupScaled, QuantizedLinear):
 
     def _differentiable_weight(self) -> Tensor:
         # STE: forward uses the cached hard-quant weight, grad flows to master.
-        return ste(self.weight, self._wq)
+        return ste(self.weight, self.wq)
 
     def forward(self, x: Tensor) -> Tensor:
-        w = self._wq if not self.training else self._differentiable_weight()
-        return F.linear(x, w, self.bias)
+        w = self.wq if not self.training else self._differentiable_weight()
+        return qlinear(x, w, self.bias)
 
     @classmethod
     def from_linear(cls, linear: nn.Linear, **kwargs) -> "BlockScaledLinear":
