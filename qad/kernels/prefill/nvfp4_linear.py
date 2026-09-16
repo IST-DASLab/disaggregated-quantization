@@ -32,6 +32,8 @@ Verified on GB10 (sm_121); `ops.cutlass_scaled_mm_supports_fp4(121)` is True.
 import torch
 import torch.nn as nn
 
+import nvfp4_tuning
+
 FP4_MAX = 6.0
 E4M3_MAX = 448.0
 
@@ -57,6 +59,54 @@ def global_encode_scale(t: torch.Tensor) -> torch.Tensor:
 # LATENCY benchmark -- the kernels, the traffic and the launch count are all exactly what a
 # calibrated model would do -- and the wrong thing to draw an accuracy conclusion from.
 ACT_AMAX = 10.0
+
+# The second fp4 GEMM. On GB10 it is 1.9-2.3x vLLM's on tall-output `gate_up` shapes at
+# M=16384 -- where vLLM's kernel is in the collapse documented in the README -- and 1.3-1.5x
+# SLOWER on `down`, whose output is short. Neither kernel wins everywhere and the crossover
+# moves with the box, so which one runs is a measured per-shape decision: see nvfp4_tuning.py
+# and the tuner that writes it. Absent a tuned entry nothing here changes behaviour.
+#
+# Output is BITWISE identical to vLLM's on every shape measured, which is what makes the
+# choice safe: offload_forward.py checks the offload path against the resident one bitwise,
+# and a kernel that merely agreed to a tolerance would turn that check into a judgement call.
+try:
+    from flashinfer.gemm import mm_fp4 as _mm_fp4
+except Exception:                                   # noqa: BLE001 - optional dependency
+    _mm_fp4 = None
+
+if _mm_fp4 is not None:
+    # A custom op, not a direct call: `mm_fp4` dispatches on backend and shape in Python and
+    # has no fake-tensor rule, so tracing it under fullgraph=True fails the same way FA2 does
+    # in gemma3_block.py. Wrapped, it is opaque to dynamo and capturable into a CUDA graph.
+    @torch.library.custom_op("qad_prefill::fi_mm_fp4", mutates_args=())
+    def fi_mm_fp4(a: torch.Tensor, b: torch.Tensor, a_sf: torch.Tensor,
+                  b_sf: torch.Tensor, alpha: torch.Tensor) -> torch.Tensor:
+        # b arrives as the (N, K/2) packed weight; mm_fp4 wants (K/2, N) column-major,
+        # which is exactly its transpose -- no copy.
+        return _mm_fp4(a, b.T, a_sf, b_sf, alpha, torch.bfloat16, block_size=16,
+                       backend="cutlass")
+
+    @fi_mm_fp4.register_fake
+    def _(a, b, a_sf, b_sf, alpha):
+        return torch.empty((a.shape[0], b.shape[0]), dtype=torch.bfloat16, device=a.device)
+
+FLASHINFER_OK = _mm_fp4 is not None
+_DEVICE_NAME = None
+
+
+def device_name() -> str:
+    """The tuning table's key, resolved on first use and cached.
+
+    Deliberately not a module-level constant: `get_device_name` initializes a CUDA context,
+    and a module that does that merely by being imported will do it on a GPU that is busy
+    with something else -- e.g. an import smoke-test landing in the middle of a latency
+    sweep. By the time any plan is needed a context exists anyway, since NVFP4Linear has
+    already moved weights to the device.
+    """
+    global _DEVICE_NAME
+    if _DEVICE_NAME is None:
+        _DEVICE_NAME = torch.cuda.get_device_name(0) if torch.cuda.is_available() else ""
+    return _DEVICE_NAME
 
 
 
@@ -93,6 +143,14 @@ class NVFP4Linear(nn.Module):
         self.register_buffer("alpha", ((1.0 / x_gs) * (1.0 / w_gs)).to(torch.float32))
         self.bias = lin.bias
 
+        # Resolved once, here, because _plan runs INSIDE the compiled graph: asking the
+        # device its name from there is a graph break. A tuple of plain ints and strs is a
+        # dynamo constant, so the lookup costs nothing at trace time and nothing at runtime.
+        rules = nvfp4_tuning.rules(device_name(), self.out_features, self.in_features)
+        if rules and not FLASHINFER_OK:
+            rules = tuple(r for r in rules if r[1] != "flashinfer")
+        self.rules = rules or ()
+
     @property
     def nbytes(self) -> int:
         """Bytes that would have to be streamed to use this layer."""
@@ -104,21 +162,29 @@ class NVFP4Linear(nn.Module):
         shape = x.shape
         x2d = x.reshape(-1, self.in_features).to(torch.bfloat16)
         rows = x2d.shape[0]
-        chunk = self._chunk_rows(rows)
+        backend, chunk = self._plan(rows)
         if chunk >= rows:
-            out = self._mm(ops, x2d)
+            out = self._mm(ops, x2d, backend)
         else:
             # See _chunk_rows: the fp4 GEMM collapses on tall outputs, and feeding it the
             # same work in slices it handles recovers most of the loss. Bitwise identical
             # to the unchunked call -- each slice is an independent row block.
-            out = torch.cat([self._mm(ops, x2d[i:i + chunk])
+            out = torch.cat([self._mm(ops, x2d[i:i + chunk], backend)
                              for i in range(0, rows, chunk)], 0)
         out = out.reshape(*shape[:-1], self.out_features)
         return out if self.bias is None else out + self.bias
 
-    def _mm(self, ops, x2d: torch.Tensor) -> torch.Tensor:
+    def _mm(self, ops, x2d: torch.Tensor, backend: str = "vllm") -> torch.Tensor:
         x_fp4, x_bs = ops.scaled_fp4_quant(x2d, self.x_gs, is_sf_swizzled_layout=True,
                                            backend="cutlass")
+        return self._gemm(ops, x_fp4, x_bs, backend)
+
+    def _gemm(self, ops, x_fp4: torch.Tensor, x_bs: torch.Tensor,
+              backend: str) -> torch.Tensor:
+        """The fp4 GEMM itself. Both kernels take the same operands and agree bitwise."""
+        if backend == "flashinfer":
+            return torch.ops.qad_prefill.fi_mm_fp4(x_fp4, self.w_fp4, x_bs, self.w_bs,
+                                                   self.alpha)
         return ops.cutlass_scaled_fp4_mm(x_fp4, self.w_fp4, x_bs, self.w_bs, self.alpha,
                                          torch.bfloat16)
 
@@ -166,6 +232,31 @@ class NVFP4Linear(nn.Module):
         (24576, 4096): 8192,     # Qwen3-8B   gate_up
     }
 
+    def _plan(self, rows: int) -> tuple[str, int]:
+        """(kernel, rows per call), from the measured table when this box has one.
+
+        Reads `self.rules`, a plain tuple resolved in __init__, and does nothing else. That
+        is load-bearing, not tidiness: the block is compiled with fullgraph=True, and an
+        earlier version called `torch.cuda.get_device_name` here to key the table. Dynamo
+        traces this function, `get_device_name` is a torch.* op returning a str, and a
+        torch.* op that returns a non-Tensor is an unconditional graph break -- so every
+        NVFP4 model died at its first point with "torch.* op returned non-Tensor" while
+        bf16, which never imports this module, sailed through. Resolve anything that has to
+        ask the device a question in __init__, where it runs once and eagerly.
+
+        Falling back to _chunk_rows when the table has no entry is what makes this safe to
+        port. A box that has never been tuned -- a 5090, say -- behaves exactly as it did
+        before the table existed, rather than inheriting GB10's crossovers, which are not
+        its own.
+        """
+        for max_rows, backend, chunk in self.rules:
+            if rows <= max_rows:
+                return backend, min(chunk or rows, rows)
+        if self.rules:
+            _, backend, chunk = self.rules[-1]
+            return backend, min(chunk or rows, rows)
+        return "vllm", self._chunk_rows(rows)
+
     def _chunk_rows(self, rows: int) -> int:
         """Rows per GEMM call. Pure function of shape, so it survives tracing.
 
@@ -199,24 +290,25 @@ class NVFP4Linear(nn.Module):
         """
         ops = _ops()
         rows = x_fp4.shape[0]
-        chunk = self._chunk_rows(rows)
+        backend, chunk = self._plan(rows)
         if chunk >= rows:
-            out = ops.cutlass_scaled_fp4_mm(x_fp4, self.w_fp4, x_bs, self.w_bs, self.alpha,
-                                            torch.bfloat16)
+            out = self._gemm(ops, x_fp4, x_bs, backend)
         else:
             # The swizzled block-scale layout groups 128 rows contiguously, so slicing it
             # at a multiple of 128 is exactly the slice for those rows -- verified bitwise
             # down to chunk=128. Without that, this path could not be chunked at all, and
             # `down` (the one the GeGLU fusion routes here) would keep missing its 1.28x.
-            out = torch.cat([ops.cutlass_scaled_fp4_mm(x_fp4[i:i + chunk], self.w_fp4,
-                                                       x_bs[i:i + chunk], self.w_bs,
-                                                       self.alpha, torch.bfloat16)
+            out = torch.cat([self._gemm(ops, x_fp4[i:i + chunk], x_bs[i:i + chunk], backend)
                              for i in range(0, rows, chunk)], 0)
         out = out.reshape(*lead_shape, self.out_features)
         return out if self.bias is None else out + self.bias
 
 
-def convert(model: nn.Module, skip=("lm_head",), act_amax: float = ACT_AMAX) -> int:
+# `in_proj_ba` is Qwen3.5's gated-delta-net decay/beta projection. vLLM does not fuse it
+# into the quantized in_proj_qkvz and the PTQ recipe ignores it by name, so quantizing it
+# here would measure something no served model runs. No other architecture has this name.
+def convert(model: nn.Module, skip=("lm_head", "in_proj_ba"),
+            act_amax: float = ACT_AMAX) -> int:
     """Swap every nn.Linear for an NVFP4 one, in place. Returns the count."""
     n = 0
     for module in model.modules():

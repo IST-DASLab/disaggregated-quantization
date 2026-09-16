@@ -147,7 +147,7 @@ CROP = dict(bbox_inches="tight", pad_inches=0.02)
 
 
 def save(fig, path) -> None:
-    """Write the figure as vector PDF -- the only artifact the paper consumes."""
+    """Write the figure as vector PDF -- the only a1rtifact the paper consumes."""
     from pathlib import Path as _P
     p = _P(path)
     p.parent.mkdir(parents=True, exist_ok=True)

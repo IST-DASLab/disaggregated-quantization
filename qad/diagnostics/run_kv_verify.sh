@@ -12,16 +12,16 @@
 #SBATCH --job-name=kv-verify
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --gpus-per-node=2
+#SBATCH --gpus-per-node=4
 #SBATCH --partition=batch
 #SBATCH --qos=normal
 #SBATCH --time=01:00:00
 #SBATCH --mem=0
-#SBATCH --account=adlr_psx_numerics
+#SBATCH --account=coreai_psx_qad
 
-CONTAINER=/lustre/fsw/portfolios/adlr/users/apanferov/containers/nemo:26.02.nemotron_3_super_luts_v2.sqsh
-HF_CACHE=/lustre/fsw/portfolios/adlr/users/apanferov/hf_cache
-LM_EVAL_OVERLAY=/lustre/fsw/portfolios/adlr/users/apanferov/prefill-decode/lm_eval_overlay
+CONTAINER=${CONTAINER:-/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/containers/vllm-nightly.sqsh}
+HF_CACHE=${HF_CACHE:-/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/hf_cache}
+LM_EVAL_OVERLAY=${LM_EVAL_OVERLAY:-/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/lm_eval_overlay_vllm}
 
 KV_STEP="${KV_STEP:-0002450}"
 KV_A4_RUN="${KV_A4_RUN:-qad3x-Qwen-Qwen3-0.6B-nvfp4-99914b93}"
@@ -65,7 +65,7 @@ if command -v scontrol &>/dev/null && [ -z "${KV_IN_CONTAINER:-}" ]; then
     export QAD_DIR=$(dirname "$SCRIPT_DIR")       # qad
     export HF_CACHE LM_EVAL_OVERLAY KV_IN_CONTAINER=1
     srun --ntasks=1 --container-image="$CONTAINER" --no-container-mount-home \
-        --container-mounts="/lustre:/lustre,$HOME/.netrc:/root/.netrc" --export=ALL \
+        --container-mounts="/scratch:/scratch,/lustre:/lustre,$HOME/.netrc:/root/.netrc" --export=ALL \
         bash "$SCRIPT_PATH"
     exit $?
 fi
@@ -88,13 +88,25 @@ A16="$CKPT/$KV_A16_RUN/weights/step_$KV_STEP"
 for d in "$A4" "$A16"; do
     [ -d "$d" ] || { echo "ERROR: missing checkpoint $d" >&2; exit 1; }
 done
+# DUAL-FORMAT runs (nvfp4prefill/nvfp4decode/nvfp4pd*/lloyd*) export prefill/ and decode/
+# side by side UNDER step_N rather than a model.safetensors at step_N itself, so the plain
+# two-run form above resolves to a directory vLLM cannot serve. When both --a4-run and
+# --a16-run name the SAME dual run, take its two variants as the pair: that is exactly the
+# mixed W4A4-prefill / higher-precision-decode stack the gate wants, and it means the gate
+# can be run against any dual format without needing a separate nvfp4a16 run to exist.
+if [ "$KV_A4_RUN" = "$KV_A16_RUN" ] && [ ! -f "$A4/model.safetensors" ] \
+   && [ -f "$A4/prefill/model.safetensors" ] && [ -f "$A4/decode/model.safetensors" ]; then
+    echo "[kv-verify] dual-format run detected -> pairing its own prefill/ and decode/"
+    A16="$A4/decode"
+    A4="$A4/prefill"
+fi
 WORK="$(dirname "$QAD_DIR")/logs/checks/kvverify"
 echo "[kv-verify] a4=$A4"
 echo "[kv-verify] a16=$A16"
 echo "[kv-verify] work=$WORK"
 nvidia-smi --query-gpu=index,name,memory.total --format=csv,noheader
 
-exec python "$SCRIPT_DIR/verify_kv_transfer.py" \
+exec python3 "$SCRIPT_DIR/verify_kv_transfer.py" \
     --a4 "$A4" --a16 "$A16" \
     --tokenizer "$KV_TOKENIZER" \
     --work-dir "$WORK"

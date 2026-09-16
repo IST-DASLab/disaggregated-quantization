@@ -1,0 +1,12 @@
+compressed-tensors==0.18.0
+datasets==5.0.1
+dill==0.4.1
+fsspec==2026.7.0
+llmcompressor==0.13.0
+loguru==0.7.3
+multiprocess==0.70.19
+nvidia-ml-py==13.610.43
+pandas==3.0.5
+pyarrow==25.0.1
+pynvml==13.0.1
+xxhash==4.0.1

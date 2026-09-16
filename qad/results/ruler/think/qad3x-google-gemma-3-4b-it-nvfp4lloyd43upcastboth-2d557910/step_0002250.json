@@ -1,0 +1,1448 @@
+{
+  "results": {
+    "niah_single_1": {
+      "name": "niah_single_1",
+      "alias": "niah_single_1",
+      "sample_len": 500,
+      "4096,none": 1.0,
+      "4096_stderr,none": "N/A",
+      "8192,none": 1.0,
+      "8192_stderr,none": "N/A",
+      "16384,none": 1.0,
+      "16384_stderr,none": "N/A",
+      "32768,none": 0.944,
+      "32768_stderr,none": "N/A",
+      "65536,none": 0.496,
+      "65536_stderr,none": "N/A"
+    },
+    "niah_single_2": {
+      "name": "niah_single_2",
+      "alias": "niah_single_2",
+      "sample_len": 500,
+      "4096,none": 1.0,
+      "4096_stderr,none": "N/A",
+      "8192,none": 1.0,
+      "8192_stderr,none": "N/A",
+      "16384,none": 0.998,
+      "16384_stderr,none": "N/A",
+      "32768,none": 0.996,
+      "32768_stderr,none": "N/A",
+      "65536,none": 0.074,
+      "65536_stderr,none": "N/A"
+    },
+    "niah_single_3": {
+      "name": "niah_single_3",
+      "alias": "niah_single_3",
+      "sample_len": 500,
+      "4096,none": 1.0,
+      "4096_stderr,none": "N/A",
+      "8192,none": 0.998,
+      "8192_stderr,none": "N/A",
+      "16384,none": 1.0,
+      "16384_stderr,none": "N/A",
+      "32768,none": 0.972,
+      "32768_stderr,none": "N/A",
+      "65536,none": 0.096,
+      "65536_stderr,none": "N/A"
+    },
+    "niah_multikey_1": {
+      "name": "niah_multikey_1",
+      "alias": "niah_multikey_1",
+      "sample_len": 500,
+      "4096,none": 0.948,
+      "4096_stderr,none": "N/A",
+      "8192,none": 0.634,
+      "8192_stderr,none": "N/A",
+      "16384,none": 0.434,
+      "16384_stderr,none": "N/A",
+      "32768,none": 0.32,
+      "32768_stderr,none": "N/A",
+      "65536,none": 0.086,
+      "65536_stderr,none": "N/A"
+    },
+    "niah_multikey_2": {
+      "name": "niah_multikey_2",
+      "alias": "niah_multikey_2",
+      "sample_len": 500,
+      "4096,none": 0.772,
+      "4096_stderr,none": "N/A",
+      "8192,none": 0.338,
+      "8192_stderr,none": "N/A",
+      "16384,none": 0.184,
+      "16384_stderr,none": "N/A",
+      "32768,none": 0.1,
+      "32768_stderr,none": "N/A",
+      "65536,none": 0.03,
+      "65536_stderr,none": "N/A"
+    },
+    "niah_multikey_3": {
+      "name": "niah_multikey_3",
+      "alias": "niah_multikey_3",
+      "sample_len": 500,
+      "4096,none": 0.668,
+      "4096_stderr,none": "N/A",
+      "8192,none": 0.134,
+      "8192_stderr,none": "N/A",
+      "16384,none": 0.008,
+      "16384_stderr,none": "N/A",
+      "32768,none": 0.0,
+      "32768_stderr,none": "N/A",
+      "65536,none": 0.0,
+      "65536_stderr,none": "N/A"
+    },
+    "niah_multiquery": {
+      "name": "niah_multiquery",
+      "alias": "niah_multiquery",
+      "sample_len": 500,
+      "4096,none": 0.986,
+      "4096_stderr,none": "N/A",
+      "8192,none": 0.8795,
+      "8192_stderr,none": "N/A",
+      "16384,none": 0.707,
+      "16384_stderr,none": "N/A",
+      "32768,none": 0.4835,
+      "32768_stderr,none": "N/A",
+      "65536,none": 0.079,
+      "65536_stderr,none": "N/A"
+    },
+    "niah_multivalue": {
+      "name": "niah_multivalue",
+      "alias": "niah_multivalue",
+      "sample_len": 500,
+      "4096,none": 0.889,
+      "4096_stderr,none": "N/A",
+      "8192,none": 0.6955,
+      "8192_stderr,none": "N/A",
+      "16384,none": 0.488,
+      "16384_stderr,none": "N/A",
+      "32768,none": 0.2745,
+      "32768_stderr,none": "N/A",
+      "65536,none": 0.0785,
+      "65536_stderr,none": "N/A"
+    },
+    "ruler_vt": {
+      "name": "ruler_vt",
+      "alias": "ruler_vt",
+      "sample_len": 500,
+      "4096,none": 0.6612,
+      "4096_stderr,none": "N/A",
+      "8192,none": 0.6128000000000001,
+      "8192_stderr,none": "N/A",
+      "16384,none": 0.5164,
+      "16384_stderr,none": "N/A",
+      "32768,none": 0.4868,
+      "32768_stderr,none": "N/A",
+      "65536,none": 0.234,
+      "65536_stderr,none": "N/A"
+    },
+    "ruler_cwe": {
+      "name": "ruler_cwe",
+      "alias": "ruler_cwe",
+      "sample_len": 500,
+      "4096,none": 0.6672,
+      "4096_stderr,none": "N/A",
+      "8192,none": 0.6457999999999999,
+      "8192_stderr,none": "N/A",
+      "16384,none": 0.43660000000000004,
+      "16384_stderr,none": "N/A",
+      "32768,none": 0.034,
+      "32768_stderr,none": "N/A",
+      "65536,none": 0.0014000000000000002,
+      "65536_stderr,none": "N/A"
+    },
+    "ruler_fwe": {
+      "name": "ruler_fwe",
+      "alias": "ruler_fwe",
+      "sample_len": 500,
+      "4096,none": 0.8413333333333334,
+      "4096_stderr,none": "N/A",
+      "8192,none": 0.69,
+      "8192_stderr,none": "N/A",
+      "16384,none": 0.8093333333333333,
+      "16384_stderr,none": "N/A",
+      "32768,none": 0.7846666666666666,
+      "32768_stderr,none": "N/A",
+      "65536,none": 0.75,
+      "65536_stderr,none": "N/A"
+    },
+    "ruler_qa_squad": {
+      "name": "ruler_qa_squad",
+      "alias": "ruler_qa_squad",
+      "sample_len": 500,
+      "4096,none": 0.6613333333333333,
+      "4096_stderr,none": "N/A",
+      "8192,none": 0.528,
+      "8192_stderr,none": "N/A",
+      "16384,none": 0.3716666666666667,
+      "16384_stderr,none": "N/A",
+      "32768,none": 0.19633333333333333,
+      "32768_stderr,none": "N/A",
+      "65536,none": 0.1195,
+      "65536_stderr,none": "N/A"
+    },
+    "ruler_qa_hotpot": {
+      "name": "ruler_qa_hotpot",
+      "alias": "ruler_qa_hotpot",
+      "sample_len": 500,
+      "4096,none": 0.466,
+      "4096_stderr,none": "N/A",
+      "8192,none": 0.408,
+      "8192_stderr,none": "N/A",
+      "16384,none": 0.36,
+      "16384_stderr,none": "N/A",
+      "32768,none": 0.284,
+      "32768_stderr,none": "N/A",
+      "65536,none": 0.152,
+      "65536_stderr,none": "N/A"
+    }
+  },
+  "group_subtasks": {},
+  "configs": {
+    "niah_multikey_1": {
+      "task": "niah_multikey_1",
+      "custom_dataset": "def niah_multikey_1(**kwargs):\n    seq_lengths = kwargs.pop(\"max_seq_lengths\", DEFAULT_SEQ_LENGTHS)\n    tokenizer = get_tokenizer(resolve_tokenizer_name(kwargs))\n    return download_dataset(\n        generate_samples(\n            get_haystack(type_haystack=\"essay\"),\n            max_seq_length=seq,\n            template=TEMPLATE,\n            type_haystack=\"essay\",\n            type_needle_k=\"words\",\n            type_needle_v=\"numbers\",\n            num_needle_k=4,\n            num_samples=500,\n            TOKENIZER=tokenizer,\n        )\n        for seq in seq_lengths\n    )\n",
+      "dataset_path": "",
+      "dataset_name": "",
+      "test_split": "test",
+      "doc_to_text": "{{input}}",
+      "doc_to_target": "{{outputs}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    # hacky: set all other lengths to -1\n    metrics = {str(length): -1.0 for length in DEFAULT_SEQ_LENGTHS}\n    input_len = doc[\"max_length\"]\n    pred = postprocess_pred(results)\n    score = string_match_all(pred, [doc[\"outputs\"]])\n    metrics[str(input_len)] = score\n    return metrics\n",
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "default",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": null,
+        "doc_to_text": "{{input}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{outputs}}",
+        "gen_prefix": "{{gen_prefix}}",
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "4096",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "8192",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "16384",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "32768",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "65536",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "131072",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 128,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "gen_prefix": "{{gen_prefix}}",
+      "metadata": {
+        "version": 1.0,
+        "max_seq_lengths": [
+          4096
+        ],
+        "tokenizer": "google/gemma-3-4b-it",
+        "config_source": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/lm_eval_overlay_vllm/lm_eval/tasks/ruler/niah_multikey_1.yaml"
+      }
+    },
+    "niah_multikey_2": {
+      "task": "niah_multikey_2",
+      "custom_dataset": "def niah_multikey_2(**kwargs):\n    seq_lengths = kwargs.pop(\"max_seq_lengths\", DEFAULT_SEQ_LENGTHS)\n    tokenizer = get_tokenizer(resolve_tokenizer_name(kwargs))\n    return download_dataset(\n        generate_samples(\n            get_haystack(type_haystack=\"needle\"),\n            max_seq_length=seq,\n            template=TEMPLATE,\n            type_haystack=\"needle\",\n            type_needle_k=\"words\",\n            type_needle_v=\"numbers\",\n            num_samples=500,\n            TOKENIZER=tokenizer,\n        )\n        for seq in seq_lengths\n    )\n",
+      "dataset_path": "",
+      "dataset_name": "",
+      "test_split": "test",
+      "doc_to_text": "{{input}}",
+      "doc_to_target": "{{outputs}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    # hacky: set all other lengths to -1\n    metrics = {str(length): -1.0 for length in DEFAULT_SEQ_LENGTHS}\n    input_len = doc[\"max_length\"]\n    pred = postprocess_pred(results)\n    score = string_match_all(pred, [doc[\"outputs\"]])\n    metrics[str(input_len)] = score\n    return metrics\n",
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "default",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": null,
+        "doc_to_text": "{{input}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{outputs}}",
+        "gen_prefix": "{{gen_prefix}}",
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "4096",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "8192",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "16384",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "32768",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "65536",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "131072",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 128,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "gen_prefix": "{{gen_prefix}}",
+      "metadata": {
+        "version": 1.0,
+        "max_seq_lengths": [
+          4096
+        ],
+        "tokenizer": "google/gemma-3-4b-it",
+        "config_source": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/lm_eval_overlay_vllm/lm_eval/tasks/ruler/niah_multikey_2.yaml"
+      }
+    },
+    "niah_multikey_3": {
+      "task": "niah_multikey_3",
+      "custom_dataset": "def niah_multikey_3(**kwargs):\n    seq_lengths = kwargs.pop(\"max_seq_lengths\", DEFAULT_SEQ_LENGTHS)\n    tokenizer = get_tokenizer(resolve_tokenizer_name(kwargs))\n    return download_dataset(\n        generate_samples(\n            get_haystack(type_haystack=\"needle\"),\n            max_seq_length=seq,\n            template=TEMPLATE,\n            type_haystack=\"needle\",\n            type_needle_k=\"uuids\",\n            type_needle_v=\"uuids\",\n            num_samples=500,\n            TOKENIZER=tokenizer,\n        )\n        for seq in seq_lengths\n    )\n",
+      "dataset_path": "",
+      "dataset_name": "",
+      "test_split": "test",
+      "doc_to_text": "{{input}}",
+      "doc_to_target": "{{outputs}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    # hacky: set all other lengths to -1\n    metrics = {str(length): -1.0 for length in DEFAULT_SEQ_LENGTHS}\n    input_len = doc[\"max_length\"]\n    pred = postprocess_pred(results)\n    score = string_match_all(pred, [doc[\"outputs\"]])\n    metrics[str(input_len)] = score\n    return metrics\n",
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "default",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": null,
+        "doc_to_text": "{{input}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{outputs}}",
+        "gen_prefix": "{{gen_prefix}}",
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "4096",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "8192",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "16384",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "32768",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "65536",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "131072",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 128,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "gen_prefix": "{{gen_prefix}}",
+      "metadata": {
+        "version": 1.0,
+        "max_seq_lengths": [
+          4096
+        ],
+        "tokenizer": "google/gemma-3-4b-it",
+        "config_source": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/lm_eval_overlay_vllm/lm_eval/tasks/ruler/niah_multikey_3.yaml"
+      }
+    },
+    "niah_multiquery": {
+      "task": "niah_multiquery",
+      "custom_dataset": "def niah_multiquery(**kwargs):\n    seq_lengths = kwargs.pop(\"max_seq_lengths\", DEFAULT_SEQ_LENGTHS)\n    tokenizer = get_tokenizer(resolve_tokenizer_name(kwargs))\n    return download_dataset(\n        generate_samples(\n            get_haystack(type_haystack=\"essay\"),\n            max_seq_length=seq,\n            template=TEMPLATE,\n            type_haystack=\"essay\",\n            type_needle_k=\"words\",\n            type_needle_v=\"numbers\",\n            num_needle_q=4,\n            num_samples=500,\n            TOKENIZER=tokenizer,\n        )\n        for seq in seq_lengths\n    )\n",
+      "dataset_path": "",
+      "dataset_name": "",
+      "test_split": "test",
+      "doc_to_text": "{{input}}",
+      "doc_to_target": "{{outputs}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    # hacky: set all other lengths to -1\n    metrics = {str(length): -1.0 for length in DEFAULT_SEQ_LENGTHS}\n    input_len = doc[\"max_length\"]\n    pred = postprocess_pred(results)\n    score = string_match_all(pred, [doc[\"outputs\"]])\n    metrics[str(input_len)] = score\n    return metrics\n",
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "default",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": null,
+        "doc_to_text": "{{input}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{outputs}}",
+        "gen_prefix": "{{gen_prefix}}",
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "4096",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "8192",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "16384",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "32768",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "65536",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "131072",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 128,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "gen_prefix": "{{gen_prefix}}",
+      "metadata": {
+        "version": 1.0,
+        "max_seq_lengths": [
+          4096
+        ],
+        "tokenizer": "google/gemma-3-4b-it",
+        "config_source": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/lm_eval_overlay_vllm/lm_eval/tasks/ruler/niah_multiquery.yaml"
+      }
+    },
+    "niah_multivalue": {
+      "task": "niah_multivalue",
+      "custom_dataset": "def niah_multivalue(**kwargs):\n    seq_lengths = kwargs.pop(\"max_seq_lengths\", DEFAULT_SEQ_LENGTHS)\n    tokenizer = get_tokenizer(resolve_tokenizer_name(kwargs))\n    return download_dataset(\n        generate_samples(\n            get_haystack(type_haystack=\"essay\"),\n            max_seq_length=seq,\n            template=TEMPLATE,\n            type_haystack=\"essay\",\n            type_needle_k=\"words\",\n            type_needle_v=\"numbers\",\n            num_needle_v=4,\n            num_samples=500,\n            TOKENIZER=tokenizer,\n        )\n        for seq in seq_lengths\n    )\n",
+      "dataset_path": "",
+      "dataset_name": "",
+      "test_split": "test",
+      "doc_to_text": "{{input}}",
+      "doc_to_target": "{{outputs}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    # hacky: set all other lengths to -1\n    metrics = {str(length): -1.0 for length in DEFAULT_SEQ_LENGTHS}\n    input_len = doc[\"max_length\"]\n    pred = postprocess_pred(results)\n    score = string_match_all(pred, [doc[\"outputs\"]])\n    metrics[str(input_len)] = score\n    return metrics\n",
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "default",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": null,
+        "doc_to_text": "{{input}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{outputs}}",
+        "gen_prefix": "{{gen_prefix}}",
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "4096",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "8192",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "16384",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "32768",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "65536",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "131072",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 128,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "gen_prefix": "{{gen_prefix}}",
+      "metadata": {
+        "version": 1.0,
+        "max_seq_lengths": [
+          4096
+        ],
+        "tokenizer": "google/gemma-3-4b-it",
+        "config_source": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/lm_eval_overlay_vllm/lm_eval/tasks/ruler/niah_multivalue.yaml"
+      }
+    },
+    "niah_single_1": {
+      "task": "niah_single_1",
+      "custom_dataset": "def niah_single_1(**kwargs):\n    seq_lengths = kwargs.pop(\"max_seq_lengths\", DEFAULT_SEQ_LENGTHS)\n    tokenizer = get_tokenizer(resolve_tokenizer_name(kwargs))\n    return download_dataset(\n        generate_samples(\n            get_haystack(type_haystack=\"repeat\"),\n            max_seq_length=seq,\n            template=TEMPLATE,\n            type_haystack=\"repeat\",\n            type_needle_k=\"words\",\n            type_needle_v=\"numbers\",\n            num_samples=500,\n            TOKENIZER=tokenizer,\n        )\n        for seq in seq_lengths\n    )\n",
+      "dataset_path": "",
+      "dataset_name": "",
+      "test_split": "test",
+      "doc_to_text": "{{input}}",
+      "doc_to_target": "{{outputs}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    # hacky: set all other lengths to -1\n    metrics = {str(length): -1.0 for length in DEFAULT_SEQ_LENGTHS}\n    input_len = doc[\"max_length\"]\n    pred = postprocess_pred(results)\n    score = string_match_all(pred, [doc[\"outputs\"]])\n    metrics[str(input_len)] = score\n    return metrics\n",
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "default",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": null,
+        "doc_to_text": "{{input}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{outputs}}",
+        "gen_prefix": "{{gen_prefix}}",
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "4096",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "8192",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "16384",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "32768",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "65536",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "131072",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 128,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "gen_prefix": "{{gen_prefix}}",
+      "metadata": {
+        "version": 1.0,
+        "max_seq_lengths": [
+          4096
+        ],
+        "tokenizer": "google/gemma-3-4b-it",
+        "config_source": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/lm_eval_overlay_vllm/lm_eval/tasks/ruler/niah_single_1.yaml"
+      }
+    },
+    "niah_single_2": {
+      "task": "niah_single_2",
+      "custom_dataset": "def niah_single_2(**kwargs):\n    seq_lengths = kwargs.pop(\"max_seq_lengths\", DEFAULT_SEQ_LENGTHS)\n    tokenizer = get_tokenizer(resolve_tokenizer_name(kwargs))\n    return download_dataset(\n        generate_samples(\n            get_haystack(type_haystack=\"essay\"),\n            max_seq_length=seq,\n            template=TEMPLATE,\n            type_haystack=\"essay\",\n            type_needle_k=\"words\",\n            type_needle_v=\"numbers\",\n            num_samples=500,\n            TOKENIZER=tokenizer,\n        )\n        for seq in seq_lengths\n    )\n",
+      "dataset_path": "",
+      "dataset_name": "",
+      "test_split": "test",
+      "doc_to_text": "{{input}}",
+      "doc_to_target": "{{outputs}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    # hacky: set all other lengths to -1\n    metrics = {str(length): -1.0 for length in DEFAULT_SEQ_LENGTHS}\n    input_len = doc[\"max_length\"]\n    pred = postprocess_pred(results)\n    score = string_match_all(pred, [doc[\"outputs\"]])\n    metrics[str(input_len)] = score\n    return metrics\n",
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "default",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": null,
+        "doc_to_text": "{{input}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{outputs}}",
+        "gen_prefix": "{{gen_prefix}}",
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "4096",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "8192",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "16384",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "32768",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "65536",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "131072",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 128,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "gen_prefix": "{{gen_prefix}}",
+      "metadata": {
+        "version": 1.0,
+        "max_seq_lengths": [
+          4096
+        ],
+        "tokenizer": "google/gemma-3-4b-it",
+        "config_source": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/lm_eval_overlay_vllm/lm_eval/tasks/ruler/niah_single_2.yaml"
+      }
+    },
+    "niah_single_3": {
+      "task": "niah_single_3",
+      "custom_dataset": "def niah_single_3(**kwargs):\n    seq_lengths = kwargs.pop(\"max_seq_lengths\", DEFAULT_SEQ_LENGTHS)\n    tokenizer = get_tokenizer(resolve_tokenizer_name(kwargs))\n    return download_dataset(\n        generate_samples(\n            get_haystack(type_haystack=\"essay\"),\n            max_seq_length=seq,\n            template=TEMPLATE,\n            type_haystack=\"essay\",\n            type_needle_k=\"words\",\n            type_needle_v=\"uuids\",\n            num_samples=500,\n            TOKENIZER=tokenizer,\n        )\n        for seq in seq_lengths\n    )\n",
+      "dataset_path": "",
+      "dataset_name": "",
+      "test_split": "test",
+      "doc_to_text": "{{input}}",
+      "doc_to_target": "{{outputs}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    # hacky: set all other lengths to -1\n    metrics = {str(length): -1.0 for length in DEFAULT_SEQ_LENGTHS}\n    input_len = doc[\"max_length\"]\n    pred = postprocess_pred(results)\n    score = string_match_all(pred, [doc[\"outputs\"]])\n    metrics[str(input_len)] = score\n    return metrics\n",
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "default",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": null,
+        "doc_to_text": "{{input}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{outputs}}",
+        "gen_prefix": "{{gen_prefix}}",
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "4096",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "8192",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "16384",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "32768",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "65536",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "131072",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 128,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "gen_prefix": "{{gen_prefix}}",
+      "metadata": {
+        "version": 1.0,
+        "max_seq_lengths": [
+          4096
+        ],
+        "tokenizer": "google/gemma-3-4b-it",
+        "config_source": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/lm_eval_overlay_vllm/lm_eval/tasks/ruler/niah_single_3.yaml"
+      }
+    },
+    "ruler_cwe": {
+      "task": "ruler_cwe",
+      "custom_dataset": "def get_cw_dataset(**kwargs):\n    tokenizer = get_tokenizer(resolve_tokenizer_name(kwargs))\n    df = (\n        get_dataset(tokenizer, seq=seq)\n        for seq in kwargs.pop(\"max_seq_lengths\", DEFAULT_SEQ_LENGTHS)\n    )\n\n    return {\n        \"test\": datasets.Dataset.from_list(\n            list(itertools.chain.from_iterable(df)), split=datasets.Split.TEST\n        )\n    }\n",
+      "dataset_path": "",
+      "dataset_name": "",
+      "test_split": "test",
+      "doc_to_text": "{{input}}",
+      "doc_to_target": "{{outputs}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    # hacky: set all other lengths to -1\n    metrics = {str(length): -1.0 for length in DEFAULT_SEQ_LENGTHS}\n    input_len = doc[\"max_length\"]\n    pred = postprocess_pred(results)\n    score = string_match_all(pred, [doc[\"outputs\"]])\n    metrics[str(input_len)] = score\n    return metrics\n",
+      "description": "",
+      "target_delimiter": "\n\n",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "default",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": null,
+        "doc_to_text": "{{input}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{outputs}}",
+        "gen_prefix": "{{gen_prefix}}",
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": "\n\n"
+      },
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "4096",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "8192",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "16384",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "32768",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "65536",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "131072",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 120,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "gen_prefix": "{{gen_prefix}}",
+      "metadata": {
+        "version": 1.0,
+        "max_seq_lengths": [
+          4096
+        ],
+        "tokenizer": "google/gemma-3-4b-it",
+        "config_source": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/lm_eval_overlay_vllm/lm_eval/tasks/ruler/cwe.yaml"
+      }
+    },
+    "ruler_fwe": {
+      "task": "ruler_fwe",
+      "custom_dataset": "def fwe_download(**kwargs):\n    tokenizer = get_tokenizer(resolve_tokenizer_name(kwargs))\n    df = (\n        get_dataset(tokenizer, max_seq_length=seq)\n        for seq in kwargs.pop(\"max_seq_lengths\", DEFAULT_SEQ_LENGTHS)\n    )\n\n    return {\n        \"test\": datasets.Dataset.from_list(\n            list(itertools.chain.from_iterable(df)), split=datasets.Split.TEST\n        )\n    }\n",
+      "dataset_path": "",
+      "dataset_name": "",
+      "test_split": "test",
+      "doc_to_text": "{{input}}",
+      "doc_to_target": "{{outputs}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    # hacky: set all other lengths to -1\n    metrics = {str(length): -1.0 for length in DEFAULT_SEQ_LENGTHS}\n    input_len = doc[\"max_length\"]\n    pred = postprocess_pred(results)\n    score = string_match_all(pred, [doc[\"outputs\"]])\n    metrics[str(input_len)] = score\n    return metrics\n",
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "default",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": null,
+        "doc_to_text": "{{input}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{outputs}}",
+        "gen_prefix": "{{gen_prefix}}",
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "4096",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "8192",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "16384",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "32768",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "65536",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "131072",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 50,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "gen_prefix": "{{gen_prefix}}",
+      "metadata": {
+        "version": 1.0,
+        "max_seq_lengths": [
+          4096
+        ],
+        "tokenizer": "google/gemma-3-4b-it",
+        "config_source": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/lm_eval_overlay_vllm/lm_eval/tasks/ruler/fwe.yaml"
+      }
+    },
+    "ruler_qa_hotpot": {
+      "task": "ruler_qa_hotpot",
+      "custom_dataset": "def get_hotpotqa(**kwargs):\n    return get_qa_dataset(\"hotpotqa\", **kwargs)\n",
+      "dataset_path": "",
+      "dataset_name": "",
+      "test_split": "test",
+      "doc_to_text": "{{input}}",
+      "doc_to_target": "{{outputs}}",
+      "unsafe_code": false,
+      "process_results": "def process_results_part(doc: dict, results: list[str]) -> dict[str, float]:\n    # hacky: set all other lengths to -1\n    metrics = {str(length): -1.0 for length in DEFAULT_SEQ_LENGTHS}\n    input_len = doc[\"max_length\"]\n    pred = postprocess_pred(results)\n    score = string_match_part(pred, [doc[\"outputs\"]])\n    metrics[str(input_len)] = score\n    return metrics\n",
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "default",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": null,
+        "doc_to_text": "{{input}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{outputs}}",
+        "gen_prefix": "{{gen_prefix}}",
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "4096",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "8192",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "16384",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "32768",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "65536",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "131072",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 32,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "gen_prefix": "{{gen_prefix}}",
+      "metadata": {
+        "version": 1.0,
+        "max_seq_lengths": [
+          4096
+        ],
+        "tokenizer": "google/gemma-3-4b-it",
+        "config_source": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/lm_eval_overlay_vllm/lm_eval/tasks/ruler/qa_hotpot.yaml"
+      }
+    },
+    "ruler_qa_squad": {
+      "task": "ruler_qa_squad",
+      "custom_dataset": "def get_squad(**kwargs):\n    return get_qa_dataset(\"squad\", **kwargs)\n",
+      "dataset_path": "",
+      "dataset_name": "",
+      "test_split": "test",
+      "doc_to_text": "{{input}}",
+      "doc_to_target": "{{outputs}}",
+      "unsafe_code": false,
+      "process_results": "def process_results_part(doc: dict, results: list[str]) -> dict[str, float]:\n    # hacky: set all other lengths to -1\n    metrics = {str(length): -1.0 for length in DEFAULT_SEQ_LENGTHS}\n    input_len = doc[\"max_length\"]\n    pred = postprocess_pred(results)\n    score = string_match_part(pred, [doc[\"outputs\"]])\n    metrics[str(input_len)] = score\n    return metrics\n",
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "default",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": null,
+        "doc_to_text": "{{input}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{outputs}}",
+        "gen_prefix": "{{gen_prefix}}",
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "4096",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "8192",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "16384",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "32768",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "65536",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "131072",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 32,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "gen_prefix": "{{gen_prefix}}",
+      "metadata": {
+        "version": 1.0,
+        "max_seq_lengths": [
+          4096
+        ],
+        "tokenizer": "google/gemma-3-4b-it",
+        "config_source": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/lm_eval_overlay_vllm/lm_eval/tasks/ruler/qa_squad.yaml"
+      }
+    },
+    "ruler_vt": {
+      "task": "ruler_vt",
+      "custom_dataset": "def get_vt_dataset(**kwargs) -> dict[str, datasets.Dataset]:\n    tokenizer = get_tokenizer(resolve_tokenizer_name(kwargs))\n    df = (\n        get_dataset(tokenizer=tokenizer, seq=seq)\n        for seq in kwargs.pop(\"max_seq_lengths\", DEFAULT_SEQ_LENGTHS)\n    )\n\n    return {\n        \"test\": datasets.Dataset.from_list(\n            list(itertools.chain.from_iterable(df)), split=datasets.Split.TEST\n        )\n    }\n",
+      "dataset_path": "",
+      "dataset_name": "",
+      "test_split": "test",
+      "doc_to_text": "{{input}}",
+      "doc_to_target": "{{outputs}}",
+      "unsafe_code": false,
+      "process_results": "def process_results(doc: dict, results: list[str]) -> dict[str, float]:\n    # hacky: set all other lengths to -1\n    metrics = {str(length): -1.0 for length in DEFAULT_SEQ_LENGTHS}\n    input_len = doc[\"max_length\"]\n    pred = postprocess_pred(results)\n    score = string_match_all(pred, [doc[\"outputs\"]])\n    metrics[str(input_len)] = score\n    return metrics\n",
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "default",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": null,
+        "doc_to_text": "{{input}}",
+        "doc_to_choice": null,
+        "doc_to_target": "{{outputs}}",
+        "gen_prefix": "{{gen_prefix}}",
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "4096",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "8192",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "16384",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "32768",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "65536",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "131072",
+          "aggregation": "def aggregate_metrics(metrics: list[float]) -> float:\n    res = [x for x in metrics if x != -1]\n    if not res:\n        # we don't have any samples with this length\n        return -1\n    return sum(res) / len(res)\n",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "do_sample": false,
+        "temperature": 0.0,
+        "max_gen_toks": 30,
+        "until": []
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "gen_prefix": "{{gen_prefix}}",
+      "metadata": {
+        "version": 1.0,
+        "max_seq_lengths": [
+          4096
+        ],
+        "tokenizer": "google/gemma-3-4b-it",
+        "config_source": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/lm_eval_overlay_vllm/lm_eval/tasks/ruler/vt.yaml"
+      }
+    }
+  },
+  "versions": {
+    "niah_multikey_1": 1.0,
+    "niah_multikey_2": 1.0,
+    "niah_multikey_3": 1.0,
+    "niah_multiquery": 1.0,
+    "niah_multivalue": 1.0,
+    "niah_single_1": 1.0,
+    "niah_single_2": 1.0,
+    "niah_single_3": 1.0,
+    "ruler_cwe": 1.0,
+    "ruler_fwe": 1.0,
+    "ruler_qa_hotpot": 1.0,
+    "ruler_qa_squad": 1.0,
+    "ruler_vt": 1.0
+  },
+  "n-shot": {
+    "niah_multikey_1": 0,
+    "niah_multikey_2": 0,
+    "niah_multikey_3": 0,
+    "niah_multiquery": 0,
+    "niah_multivalue": 0,
+    "niah_single_1": 0,
+    "niah_single_2": 0,
+    "niah_single_3": 0,
+    "ruler_cwe": 0,
+    "ruler_fwe": 0,
+    "ruler_qa_hotpot": 0,
+    "ruler_qa_squad": 0,
+    "ruler_vt": 0
+  },
+  "higher_is_better": {
+    "niah_multikey_1": {
+      "4096": true,
+      "8192": true,
+      "16384": true,
+      "32768": true,
+      "65536": true,
+      "131072": true
+    },
+    "niah_multikey_2": {
+      "4096": true,
+      "8192": true,
+      "16384": true,
+      "32768": true,
+      "65536": true,
+      "131072": true
+    },
+    "niah_multikey_3": {
+      "4096": true,
+      "8192": true,
+      "16384": true,
+      "32768": true,
+      "65536": true,
+      "131072": true
+    },
+    "niah_multiquery": {
+      "4096": true,
+      "8192": true,
+      "16384": true,
+      "32768": true,
+      "65536": true,
+      "131072": true
+    },
+    "niah_multivalue": {
+      "4096": true,
+      "8192": true,
+      "16384": true,
+      "32768": true,
+      "65536": true,
+      "131072": true
+    },
+    "niah_single_1": {
+      "4096": true,
+      "8192": true,
+      "16384": true,
+      "32768": true,
+      "65536": true,
+      "131072": true
+    },
+    "niah_single_2": {
+      "4096": true,
+      "8192": true,
+      "16384": true,
+      "32768": true,
+      "65536": true,
+      "131072": true
+    },
+    "niah_single_3": {
+      "4096": true,
+      "8192": true,
+      "16384": true,
+      "32768": true,
+      "65536": true,
+      "131072": true
+    },
+    "ruler_cwe": {
+      "4096": true,
+      "8192": true,
+      "16384": true,
+      "32768": true,
+      "65536": true,
+      "131072": true
+    },
+    "ruler_fwe": {
+      "4096": true,
+      "8192": true,
+      "16384": true,
+      "32768": true,
+      "65536": true,
+      "131072": true
+    },
+    "ruler_qa_hotpot": {
+      "4096": true,
+      "8192": true,
+      "16384": true,
+      "32768": true,
+      "65536": true,
+      "131072": true
+    },
+    "ruler_qa_squad": {
+      "4096": true,
+      "8192": true,
+      "16384": true,
+      "32768": true,
+      "65536": true,
+      "131072": true
+    },
+    "ruler_vt": {
+      "4096": true,
+      "8192": true,
+      "16384": true,
+      "32768": true,
+      "65536": true,
+      "131072": true
+    }
+  },
+  "n-samples": {
+    "niah_single_1": {
+      "original": 500,
+      "effective": 500
+    },
+    "niah_single_2": {
+      "original": 500,
+      "effective": 500
+    },
+    "niah_single_3": {
+      "original": 500,
+      "effective": 500
+    },
+    "niah_multikey_1": {
+      "original": 500,
+      "effective": 500
+    },
+    "niah_multikey_2": {
+      "original": 500,
+      "effective": 500
+    },
+    "niah_multikey_3": {
+      "original": 500,
+      "effective": 500
+    },
+    "niah_multiquery": {
+      "original": 500,
+      "effective": 500
+    },
+    "niah_multivalue": {
+      "original": 500,
+      "effective": 500
+    },
+    "ruler_vt": {
+      "original": 500,
+      "effective": 500
+    },
+    "ruler_cwe": {
+      "original": 500,
+      "effective": 500
+    },
+    "ruler_fwe": {
+      "original": 500,
+      "effective": 500
+    },
+    "ruler_qa_squad": {
+      "original": 500,
+      "effective": 500
+    },
+    "ruler_qa_hotpot": {
+      "original": 500,
+      "effective": 500
+    }
+  },
+  "config": {
+    "model": "LocalCompletionsAPI",
+    "model_args": null,
+    "batch_size": null,
+    "batch_sizes": [],
+    "device": null,
+    "use_cache": null,
+    "limit": null,
+    "bootstrap_iters": 100000,
+    "gen_kwargs": null,
+    "random_seed": 0,
+    "numpy_seed": 1234,
+    "torch_seed": 1234,
+    "fewshot_seed": 1234
+  },
+  "git_hash": null,
+  "date": 1789160056.2029574,
+  "pretty_env_info": "PyTorch version: 2.13.0+cu130\nIs debug build: False\nCUDA used to build PyTorch: 13.0\nROCM used to build PyTorch: N/A\n\nOS: Ubuntu 24.04.3 LTS (aarch64)\nGCC version: (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nClang version: Could not collect\nCMake version: Could not collect\nLibc version: glibc-2.39\n\nPython version: 3.12.3 (main, Jul 15 2026, 23:46:41) [GCC 13.3.0] (64-bit runtime)\nPython platform: Linux-6.8.0-1051-nvidia-64k-aarch64-with-glibc2.39\nIs CUDA available: True\nCUDA runtime version: 13.0.88\nCUDA_MODULE_LOADING set to: \nGPU models and configuration: \nGPU 0: NVIDIA GB300\nGPU 1: NVIDIA GB300\nGPU 2: NVIDIA GB300\nGPU 3: NVIDIA GB300\n\nNvidia driver version: 580.159.03\ncuDNN version: Could not collect\nIs XPU available: False\nHIP runtime version: N/A\nMIOpen runtime version: N/A\nIs XNNPACK available: False\nCaching allocator config: N/A\n\nCPU:\nArchitecture:                            aarch64\nCPU op-mode(s):                          64-bit\nByte Order:                              Little Endian\nCPU(s):                                  144\nOn-line CPU(s) list:                     0-143\nVendor ID:                               ARM\nModel name:                              Neoverse-V2\nModel:                                   0\nThread(s) per core:                      1\nCore(s) per socket:                      72\nSocket(s):                               2\nStepping:                                r0p0\nFrequency boost:                         disabled\nCPU(s) scaling MHz:                      100%\nCPU max MHz:                             3375.0000\nCPU min MHz:                             81.0000\nBogoMIPS:                                2000.00\nFlags:                                   fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 sm3 sm4 asimddp sha512 sve asimdfhm dit uscat ilrcpc flagm ssbs sb paca pacg dcpodp sve2 sveaes svepmull svebitperm svesha3 svesm4 flagm2 frint svei8mm svebf16 i8mm bf16 dgh bti\nL1d cache:                               9 MiB (144 instances)\nL1i cache:                               9 MiB (144 instances)\nL2 cache:                                144 MiB (144 instances)\nL3 cache:                                228 MiB (2 instances)\nNUMA node(s):                            34\nNUMA node0 CPU(s):                       0-71\nNUMA node1 CPU(s):                       72-143\nNUMA node2 CPU(s):                       \nNUMA node3 CPU(s):                       \nNUMA node4 CPU(s):                       \nNUMA node5 CPU(s):                       \nNUMA node6 CPU(s):                       \nNUMA node7 CPU(s):                       \nNUMA node8 CPU(s):                       \nNUMA node9 CPU(s):                       \nNUMA node10 CPU(s):                      \nNUMA node11 CPU(s):                      \nNUMA node12 CPU(s):                      \nNUMA node13 CPU(s):                      \nNUMA node14 CPU(s):                      \nNUMA node15 CPU(s):                      \nNUMA node16 CPU(s):                      \nNUMA node17 CPU(s):                      \nNUMA node18 CPU(s):                      \nNUMA node19 CPU(s):                      \nNUMA node20 CPU(s):                      \nNUMA node21 CPU(s):                      \nNUMA node22 CPU(s):                      \nNUMA node23 CPU(s):                      \nNUMA node24 CPU(s):                      \nNUMA node25 CPU(s):                      \nNUMA node26 CPU(s):                      \nNUMA node27 CPU(s):                      \nNUMA node28 CPU(s):                      \nNUMA node29 CPU(s):                      \nNUMA node30 CPU(s):                      \nNUMA node31 CPU(s):                      \nNUMA node32 CPU(s):                      \nNUMA node33 CPU(s):                      \nVulnerability Gather data sampling:      Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Not affected\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; CSV2, BHB\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Not affected\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Not affected\n\nVersions of relevant libraries:\n[pip3] nccl4py==0.5.0\n[pip3] numpy==2.5.3\n[pip3] nvidia-cublas==13.1.1.3\n[pip3] nvidia-cuda-cupti==13.0.85\n[pip3] nvidia-cuda-nvrtc==13.0.88\n[pip3] nvidia-cuda-runtime==13.0.96\n[pip3] nvidia-cudnn-cu13==9.20.0.48\n[pip3] nvidia-cudnn-frontend==1.28.0\n[pip3] nvidia-cufft==12.0.0.61\n[pip3] nvidia-curand==10.4.0.35\n[pip3] nvidia-cusolver==12.0.4.66\n[pip3] nvidia-cusparse==12.6.3.3\n[pip3] nvidia-cusparselt-cu13==0.8.1\n[pip3] nvidia-nccl-cu13==2.30.7\n[pip3] nvidia-nvjitlink==13.4.52\n[pip3] nvidia-nvtx==13.0.85\n[pip3] nvtx==0.2.15\n[pip3] tokenspeed-triton==3.8.10.post20260906\n[pip3] torch==2.13.0+cu130\n[pip3] torch_c_dlpack_ext==0.1.5\n[pip3] torchaudio==2.11.0+cu130\n[pip3] torchcodec==0.16.0+cu130\n[pip3] torchvision==0.28.0+cu130\n[pip3] triton==3.7.1\n[conda] Could not collect",
+  "transformers_version": "5.17.0",
+  "lm_eval_version": "0.4.13",
+  "upper_git_hash": null,
+  "tokenizer_pad_token": [
+    "<pad>",
+    "0"
+  ],
+  "tokenizer_eos_token": [
+    "<eos>",
+    "1"
+  ],
+  "tokenizer_bos_token": [
+    "<bos>",
+    "2"
+  ],
+  "eot_token_id": 1,
+  "max_length": 66175,
+  "seqlens": [
+    4096,
+    8192,
+    16384,
+    32768,
+    65536
+  ]
+}

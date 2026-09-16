@@ -1,5 +1,12 @@
 """Paper figure: prefill latency, blocks streamed off the SSD vs resident on GPU.
 
+The offloaded curve is `zero-ssd`, the ODP protocol we actually propose: the first block is
+read INSIDE the timer (no free warm-up) and the two streaming buffers are carved out of
+decode-only weights, which the run then restores from the drive before generation can start.
+The older `ssd` mode is still measured and still in the CSV, but it preloads block 0 off the
+clock and assumes its slots are free memory on top of residency, so it charges less than the
+protocol costs. Reading `ssd` numbers as ODP numbers flatters it by the carve-out.
+
     python plot_for_paper.py
 
 Same data and same claims as plot_prefill.py, restyled for print: a 2x2 grid on a 6x4 inch
@@ -17,7 +24,7 @@ information for the paper -- below 2k the offloaded curve is a flat line pinned 
 above 16k every curve has converged -- and including them compresses the crossover, which is
 the part being argued about.
 
-BF16 SSD is measured and in the CSV but not drawn. It is drive-bound across this entire
+BF16 ODP is measured and in the CSV but not drawn. It is drive-bound across this entire
 window (parity only at 16k, and only just), so it is a flat line that adds nothing but ink;
 the BF16 resident curve is the baseline that matters and the NVFP4 pair carries the claim.
 
@@ -68,6 +75,8 @@ FIGDIR = pathlib.Path(__file__).resolve().parents[3] / "notebooks" / "figures"
 FIGDIR.mkdir(parents=True, exist_ok=True)
 
 CSV = HERE / "offload_prefill.csv"
+# The 27B model has its own latency panel in pareto_gsq_rco_both.
+PAPER_EXCLUDED_MODELS = {"Qwen/Qwen3.8-27B"}
 # One figure per model family, each a 2x2 at the same size, so they can sit side by side
 # or stack in a paper. `{family}_prefill_offload_paper.{pdf,png}`.
 OUT_FMT = str(FIGDIR / "{family}_prefill_offload_paper")
@@ -76,7 +85,14 @@ OUT_FMT = str(FIGDIR / "{family}_prefill_offload_paper")
 # real block size. NOT derived from one throughput figure: the drive gives 2.63 GB/s on
 # 0.6B's 8 MiB NVFP4 blocks and 5.92 GB/s on 8B's 368 MiB bf16 ones, so a single rate is
 # ~2.3x too optimistic at the small end.
-FLOOR_CSV = HERE / "load_floor.csv"
+# load_floor.py writes load_floor_ssd.csv (with a load_floor_ram.csv counterpart for the
+# H2D-only floor); it used to write load_floor.csv. Prefer the current name and fall back to
+# the legacy one, because the failure mode of getting this wrong is silent: the floor lines
+# are drawn from whatever stale file is still lying around, over freshly measured curves.
+# Match the P + C traffic of zero-ssd; never substitute a checkpoint-only reference.
+# This is a separately measured loading reference, not a strict bound on another run:
+# it sums checkpoint pipeline and carve-out read timings without their joint schedule.
+FLOOR_CSV = HERE / "load_floor_zero_ssd.csv"
 
 # bf16 is the baseline, so it takes the cool hue; NVFP4 is the intervention and takes the
 # warm one. RED against BLUE is the strongest separation the palette offers, and survives
@@ -85,14 +101,18 @@ QUANT = ("bf16", "nvfp4")
 QUANT_LABEL = {"bf16": "BF16", "nvfp4": "NVFP4"}
 STYLE = {
     "resident": dict(ls="-", marker="o", lw=2.0, ms=5.0),
-    "ssd": dict(ls="--", marker="s", lw=2.0, ms=5.0),
+    "zero-ssd": dict(ls="--", marker="s", lw=2.0, ms=5.0),
 }
-MODE_LABEL = {"resident": " prefill", "ssd": " ODP"}
-MODE_COLOR = {"resident": RED, "ssd": BLUE}
-MODES = ("resident", "ssd")
+# zero-ssd is the default offload mode: it charges the cold first block and the decode
+# carve-out restoration, where `ssd` preloads block 0 outside the clock and assumes room
+# for its slots on top of residency. Both are still measured and in the CSV; this is the
+# one the figures report.
+MODE_LABEL = {"resident": " prefill", "zero-ssd": " ODP"}
+MODE_COLOR = {"resident": RED, "zero-ssd": BLUE}
+MODES = ("resident", "zero-ssd")
 # Measured, in the CSV, deliberately not drawn -- see the module docstring.
 SKIP = {
-    ("bf16", "ssd"),
+    ("bf16", "zero-ssd"),
     ("bf16", "resident"),
 }
 
@@ -128,7 +148,8 @@ def short_name(model: str) -> str:
 
 
 def plot_family(df, load_floor, family: str):
-    df = df[df["model"].map(family_of) == family]
+    df = df[(df["model"].map(family_of) == family)
+            & ~df["model"].isin(PAPER_EXCLUDED_MODELS)]
     if df.empty:
         print(f"no rows for {family}, skipping")
         return
@@ -138,7 +159,7 @@ def plot_family(df, load_floor, family: str):
     # A 1x4 strip reads better in isolation but cannot be paired with a bar chart.
     ncol = 2 if len(models) > 2 else len(models)
     nrow = -(-len(models) // ncol)
-    fig, axes_grid = plt.subplots(nrow, ncol, figsize=(6, 4), sharex=True, sharey=False)
+    fig, axes_grid = plt.subplots(nrow, ncol, figsize=(6, 3.6), sharex=True, sharey=False)
     axes = list(np.atleast_1d(axes_grid).ravel())
     for extra in axes[len(models):]:          # unused cell if the count is odd
         extra.set_visible(False)
@@ -164,7 +185,7 @@ def plot_family(df, load_floor, family: str):
                 if (quant, mode) in SKIP:
                     continue
                 cur = sub[sub["mode"] == mode].sort_values("seq_len")
-                cur = cur[seq_len_rule]
+                cur = cur[cur["seq_len"].between(2048, 32768)]
                 if cur.empty:
                     continue
                 ax.plot(cur["seq_len"], cur["latency_ms"], color=MODE_COLOR[mode],
@@ -196,9 +217,16 @@ def plot_family(df, load_floor, family: str):
     axes[0].set_xticklabels([f"{s // 1024}k" if s >= 1024 else str(s) for s in seq])
     # Outer labels only: at 6x4 a label per panel is most of the canvas.
     for i, ax in enumerate(axes[:len(models)]):
-        if i // ncol == nrow - 1:
+        # Bottom of a COLUMN, not of the grid. With an odd model count (Qwen is five now
+        # that 27B is in) the last row is short, so the panel above the hidden cell is the
+        # bottom of its column: it needs the axis label AND its tick labels back, which
+        # sharex hid on the assumption that a panel below would carry them.
+        if i + ncol >= len(models):
             ax.set_xlabel("Sequence length, tokens", fontsize=12)
-        if i % ncol == 0:
+            ax.tick_params(axis="x", labelbottom=True, labelsize=8)
+        # One y label per column-stack reads fine at two rows; at three the labels are
+        # taller than their panels and run into each other, so a single centred one.
+        if i % ncol == 0 and (nrow <= 2 or i // ncol == nrow // 2):
             ax.set_ylabel("Prefill latency, ms", fontsize=12)
 
     # Label the NVFP4 drive floor once -- it is the same construction on every panel and
@@ -208,15 +236,28 @@ def plot_family(df, load_floor, family: str):
     # same reason.
     ax_first = axes[0]
     if models[0] in floors:
-        ax_first.annotate(fr"SSD$\rightarrow$DRAM latency",
+        ax_first.annotate("SSD loading latency",
                           xy=(1.00, floors[models[0]]),
                           xycoords=ax_first.get_yaxis_transform(),
                           xytext=(0, -6), textcoords="offset points",
                           ha="right", va="top", fontsize=8, color=BLUE)
 
-    # Inside the rightmost panel: a figure-level legend would cost a strip of the canvas,
-    # and at this aspect ratio that is a large fraction of it.
-    axes[-1].legend(loc="lower right", frameon=False, fontsize=10, handlelength=2.0,
+    # Inside the last DRAWN panel: a figure-level legend would cost a strip of the canvas,
+    # and at this aspect ratio that is a large fraction of it. Not axes[-1] -- with an odd
+    # model count (Qwen is five now that 27B is in) that is the hidden filler cell, and the
+    # legend silently vanishes.
+    last = axes[len(models) - 1]
+    if len(models) % ncol:
+        # Odd model count leaves a blank cell. That is strictly better than any corner of a
+        # real panel -- nothing to collide with, and no judgement call about which corner is
+        # empty on this particular data. Frame off, ticks off, just the key.
+        spare = axes[len(models)]
+        spare.set_visible(True)
+        spare.axis("off")
+        spare.legend(*last.get_legend_handles_labels(), loc="center left", frameon=False,
+                     fontsize=10, handlelength=2.0, labelspacing=0.4)
+    else:
+        last.legend(loc="lower right", frameon=False, fontsize=10, handlelength=2.0,
                     borderaxespad=0.4, labelspacing=0.3)
 
     fig.tight_layout(pad=0.4, w_pad=0.6, h_pad=0.5)

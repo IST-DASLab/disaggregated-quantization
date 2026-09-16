@@ -1,4 +1,4 @@
-"""Paper figure: decode speedup of the linear layers, 3-bit and 4-bit weight formats.
+"""Paper figure: end-to-end decode speedup, 3-bit and 4-bit weight formats.
 
     python vllm_serve.py --model Qwen/Qwen3-8B --quant none lloyd43 lloyd21 \
         --out benchmarks/vllm_decode.csv                   # measure, per model
@@ -41,6 +41,33 @@ W4A4 versus W4A16 is the other axis. Decode has no arithmetic intensity to speak
 fp4 tensor cores have nothing to do, while W4A4 still pays to quantize the activation on
 every call. W4A16 should therefore win at batch 1 even though W4A4 wins at prefill -- the
 two are not competing for the same job.
+
+WHAT THE BARS ARE NOT
+---------------------
+This is WHOLE-MODEL per-output-token latency, not a linear-layer speedup. Attention, the
+norms, the residual adds, the embeddings and the lm_head are BF16 in every arm and are
+included in every bar, so a bar is always below what its projections alone achieve. That is
+the point -- it is what a user gets -- but it means a bar must not be read against the
+format's compression ratio: LUT2 moves 6.4x fewer weight bytes than bf16 and delivers ~3.8x,
+and most of that gap is work no weight format touches.
+
+FAIRNESS BETWEEN THE FORMATS
+----------------------------
+The four bars are not all charged for the same thing. NVFP4 is W4A4 and pays to quantize
+the activation before every projection; NVFP4A16 and the two LUT formats are weight-only
+and do not. Comparing LUT3/LUT2 against NVFP4A16 is therefore like-for-like, and against
+NVFP4 it is not -- the LUT bars are enjoying an exemption NVFP4 does not get.
+
+The figure resolves this by NAMING what it plots rather than by hiding it. The LUT bars are
+the format-disaggregated arms -- decode keeps activations in bf16 -- and the legend says
+"Disag. LUT3"/"Disag. LUT2", so the exemption is stated instead of assumed. Setting
+LUT_FORMAT_DISAGGREGATED = False plots the *aq arms instead, which run the identical kernel
+and weights plus one discarded fp4 activation quantization per linear: what the format
+costs when it is NOT disaggregated, and the like-for-like comparison against W4A4. That is
+an upper bound on the tax rather than a deployable configuration, because a real W4A4 stack
+would have a kernel that consumes the quantized activation and gets something back for the
+cost; here it is pure overhead. Measured, it is worth 7-8% at 0.6B and 2-3% at 8B and 12B
+-- almost entirely per-launch, so it shrinks as weight traffic grows.
 
 There is no roofline series: the memory ceiling is a bound on lloyd43's traffic
 specifically (HANDOFF 5.1) and is not a quantity the NVFP4 bars can be read against.
@@ -118,12 +145,23 @@ def short_name(model: str) -> str:
 # activation widths. Close is not indistinguishable: the pair separates by dE 14.4 under
 # deuteranopia and 16.4 under normal vision, comfortably clear of the dE 8 floor, so the
 # bars stay readable without value labels on them.
+# Which LUT configuration the bars show, named as the paper's ladder names it: "LUT3" is
+# the un-disaggregated row, which pays an fp4 activation quantization per linear that this
+# weight-only GEMV cannot use, and "Disag. LUT3" is the format-disaggregated one, where
+# decode skips that quantization and keeps activations in bf16. The default plots the
+# disaggregated arms and says so in the legend, so the bar is not read as a weight-only
+# format getting an exemption NVFP4 does not get -- it is labelled as the configuration it
+# actually is. A hard-coded switch rather than a flag: which comparison the figure makes is
+# an editorial decision about the paper, not something to vary per invocation.
+LUT_FORMAT_DISAGGREGATED = True
+
+_LUT = ([("lloyd43", "Disag. LUT3", BLUE), ("lloyd21", "Disag. LUT2", NAVY)]
+        if LUT_FORMAT_DISAGGREGATED else
+        [("lloyd43aq", "LUT3", BLUE), ("lloyd21aq", "LUT2", NAVY)])
 SERIES = [
     ("nvfp4", "NVFP4", RED),
     ("nvfp4a16", "NVFP4A16", ORANGE),
-    ("lloyd43", "LUT3", BLUE),
-    ("lloyd21", "LUT2", NAVY),
-]
+] + _LUT
 
 
 def _placeholder(family: str, reason: str) -> None:
@@ -197,7 +235,7 @@ def plot_family(family: str):
     # Just the size: every model is a Qwen3, and the axis label says Model.
     ax.set_xticklabels(names)
     ax.tick_params(labelsize=9)
-    ax.set_ylabel("Decode speedup over BF16", fontsize=12)
+    ax.set_ylabel("End-to-end decode speedup over BF16", fontsize=12)
     ax.set_xlabel(f"{FAMILY_LABEL.get(family, family)} model", fontsize=12)
     finite = [v for _, vals in bars for v in vals if v == v]
     # Headroom for the legend, which sits inside the axes above the bars.

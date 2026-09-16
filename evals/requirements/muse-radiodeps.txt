@@ -1,0 +1,14 @@
+audioread==3.1.0
+decorator==5.3.1
+ftfy==6.3.1
+joblib==1.5.3
+lazy-loader==0.5
+librosa==1.0.0
+open-clip-torch==3.3.0
+pooch==1.9.0
+scipy==1.18.1
+soundfile==0.14.0
+soxr==1.1.0
+standard-aifc==3.13.0
+standard-sunau==3.13.0
+wcwidth==0.8.2

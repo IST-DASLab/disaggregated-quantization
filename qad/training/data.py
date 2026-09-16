@@ -5,12 +5,14 @@ assistant-only labels, truncated to max_seq_len and padded. Chunks are sharded
 across ranks and cached to disk, since tokenizing the full mixture is slow.
 """
 
+import os
 from pathlib import Path
 
 import torch
 from torch import Tensor
 from tqdm import tqdm
 
+from .reasoning import get_reasoning_train_val  # noqa: F401  (re-exported)
 from .tulu import get_tulu_train_val   # noqa: F401  (re-exported for callers)
 # NOT .datasets: qad.py lives in this directory, so Python puts it first on sys.path
 # and a module named datasets.py here shadows HuggingFace's `datasets` for the whole
@@ -71,6 +73,7 @@ def build_chunks(
     cache_dir: Path | None = None,
     split: str = "data",
     model_name: str = "",
+    drop_overlong: bool = False,
 ) -> list[tuple[Tensor, Tensor, Tensor]]:
     """One chunk per document: tokenize, truncate to max_seq_len, pad shorter docs.
 
@@ -78,6 +81,12 @@ def build_chunks(
       - labels[t] = token id if position t is part of an assistant reply, else -100.
       - attention_mask[t] = 1 for real tokens, 0 for padding.
     Stops once target_tokens // world_size tokens have been collected for this rank.
+
+    drop_overlong skips documents longer than max_seq_len instead of truncating them.
+    For reasoning traces truncation is worse than dropping: the answer follows the
+    <think> block, so a cut example supervises the model to reason and never conclude.
+    The check runs on the tokenized length because the dataset's own token counts
+    undercount the chat template by ~1.4x.
     """
     if cache_dir is not None:
         cache_file = _chunk_cache_path(
@@ -99,6 +108,9 @@ def build_chunks(
         try:
             ids, lbls = _tokenize_with_labels(tokenizer, example["messages"])
         except Exception:
+            continue
+
+        if drop_overlong and len(ids) > max_seq_len:
             continue
 
         # Truncate
@@ -131,7 +143,19 @@ def build_chunks(
 
     if cache_dir is not None:
         cache_file.parent.mkdir(parents=True, exist_ok=True)
-        torch.save(chunks, cache_file)
+        # Write to a unique temp file and rename, rather than torch.save() straight onto
+        # cache_file. The cache key is (model, split, tokens, seq, rank, world) and does
+        # NOT include the quantizer, which is the point -- every format trained on one
+        # model reuses one tokenization. But it means concurrent runs of different
+        # formats target the SAME path, and a plain in-place save is not atomic: a
+        # reader that hits the file mid-write gets a truncated pickle
+        # (UnpicklingError), and two writers interleave into a corrupt one. os.replace
+        # is atomic within a directory, so a reader sees either the old file or the
+        # complete new one, never a partial. The temp name carries pid+rank so two
+        # writers cannot collide on the temp either.
+        tmp = cache_file.with_suffix(f".tmp.{os.getpid()}.r{rank}")
+        torch.save(chunks, tmp)
+        os.replace(tmp, cache_file)
 
     return chunks
 

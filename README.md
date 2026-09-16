@@ -1,6 +1,4 @@
-# Disaggregated Quantization (DQ)
-
-Code for the paper *Disaggregated Quantization of Large Language Models* (`manuscript.tex`).
+# Disaggregated Quantization of Large Language Models
 
 LLM inference has two regimes: compute-bound **prefill** and memory-bound **decode**.
 This repo trains and evaluates quantization formats that treat them as separate targets
@@ -139,7 +137,6 @@ The paper's figures come from three places, not one:
 | `quantized_linear`, `dq_linear`, `full_disag_linear` | `notebooks/schematics/fig_dq_linear.py` |
 | `odp_timeline` | `notebooks/schematics/fig_odp_timeline.py` |
 | `qwen3_prefill_offload_paper` | `qad/kernels/prefill/plot_for_paper.py` |
-| `offload_cost` | `qad/kernels/prefill/plot_offload_cost.py` |
 | decode-speed comparison | `qad/kernels/lloyd43/plot_decode.py` |
 
 The accuracy figures are regenerated from the results tree; the kernel and offloading

@@ -1,0 +1,19 @@
+model,seq_len,component,bf16_ms,nvfp4_ms,run
+Qwen/Qwen3-8B,16384,qkv,8.156,3.683,resweep
+Qwen/Qwen3-8B,16384,o,6.265,1.586,resweep
+Qwen/Qwen3-8B,16384,gate_up,33.680,9.721,resweep
+Qwen/Qwen3-8B,16384,down,18.536,4.626,resweep
+Qwen/Qwen3-8B,16384,MLP non-linearity,4.792,4.194,resweep
+Qwen/Qwen3-8B,16384,activation quant (standalone),0.000,2.339,resweep
+Qwen/Qwen3-8B,16384,norms + RoPE + residual,6.440,15.807,resweep
+Qwen/Qwen3-8B,16384,attention,25.592,24.589,resweep
+Qwen/Qwen3-8B,16384,LAYER wall clock,103.378,66.536,resweep
+google/gemma-3-12b-it,16384,qkv,10.225,5.569,resweep
+google/gemma-3-12b-it,16384,o,6.512,1.457,resweep
+google/gemma-3-12b-it,16384,gate_up,38.474,11.658,resweep
+google/gemma-3-12b-it,16384,down,20.262,6.320,resweep
+google/gemma-3-12b-it,16384,MLP non-linearity,6.000,5.185,resweep
+google/gemma-3-12b-it,16384,activation quant (standalone),0.000,2.239,resweep
+google/gemma-3-12b-it,16384,norms + RoPE + residual,6.481,16.361,resweep
+google/gemma-3-12b-it,16384,attention,7.400,7.383,resweep
+google/gemma-3-12b-it,16384,LAYER wall clock,95.118,55.935,resweep

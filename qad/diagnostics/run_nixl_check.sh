@@ -25,13 +25,13 @@
 #SBATCH --qos=normal
 #SBATCH --time=00:40:00
 #SBATCH --mem=0
-#SBATCH --account=adlr_psx_numerics
+#SBATCH --account=coreai_psx_qad
 
-CONTAINER=/lustre/fsw/portfolios/adlr/users/apanferov/containers/nemo:26.02.nemotron_3_super_luts_v2.sqsh
-HF_CACHE=/lustre/fsw/portfolios/adlr/users/apanferov/hf_cache
+CONTAINER=/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/containers/nemo-26.02.sqsh
+HF_CACHE=/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/hf_cache
 # Fresh dir. The old .../prefill-decode/nixl_overlay is poison (full torch inside)
 # and must never go on PYTHONPATH.
-NIXL_PREFIX="${NIXL_PREFIX:-/lustre/fsw/portfolios/adlr/users/apanferov/prefill-decode/nixl_nodeps}"
+NIXL_PREFIX="${NIXL_PREFIX:-/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/nixl_nodeps}"
 
 if [ -z "${SLURM_JOB_ID:-}" ]; then
     SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
@@ -52,7 +52,7 @@ if command -v scontrol &>/dev/null && [ -z "${NIXL_IN_CONTAINER:-}" ]; then
     export QAD_DIR=$(dirname "$SCRIPT_DIR")       # qad
     export HF_CACHE NIXL_PREFIX NIXL_IN_CONTAINER=1
     srun --ntasks=1 --container-image="$CONTAINER" --no-container-mount-home \
-        --container-mounts="/lustre:/lustre,$HOME/.netrc:/root/.netrc" --export=ALL \
+        --container-mounts="/scratch:/scratch,/lustre:/lustre,$HOME/.netrc:/root/.netrc" --export=ALL \
         bash "$SCRIPT_PATH"
     exit $?
 fi

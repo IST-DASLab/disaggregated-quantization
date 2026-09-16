@@ -95,10 +95,26 @@ def load_optimizer_state(optimizer, saved: list) -> None:
         st = optimizer.state[p]
         st["step"] = entry["step"]
         small = p.numel() < 1024
-        rsize = p.shape[0] // world_size
+        # FLAT, matching DistOptimizer. This used to slice rows --
+        # `full[rank * (p.shape[0] // world_size) : ...]` -- which is wrong twice now:
+        # the shard has to be the same FLAT slice the optimizer updates, and shape[0]
+        # need not divide the world (Qwen3.5's (48, 5120) gate projections do not divide
+        # 32, which is why the optimizer moved to flat views in the first place).
+        #
+        # It also has to produce a 1-D moment. _adamw_step is compiled with
+        # fullgraph=True, so a 2-D exp_avg restored beside a 1-D gradient does not
+        # broadcast-error in eager -- it fails inside Dynamo, ~8 minutes into the run, at
+        # the first optimizer step. That is exactly how all 8 27B runs died: they RESUMED
+        # from a state written before the flat-sharding change. A fresh start was fine,
+        # because zeros_like(p_slice) is 1-D by construction, which is why every smoke
+        # and probe run passed.
+        #
+        # reshape(-1) FIRST, so this reads both layouts: moments saved as p.shape by any
+        # earlier run, and the 1-D small-parameter moments saved since.
+        rsize = p.numel() // world_size
         for key in sorted(k for k in entry if k != "step"):
-            full = entry[key]
-            shard = full if small else full[rank * rsize : (rank + 1) * rsize]
+            flat = entry[key].reshape(-1)
+            shard = flat if small else flat[rank * rsize : (rank + 1) * rsize]
             st[key] = shard.to(device=p.device, dtype=p.dtype).contiguous()
 
 

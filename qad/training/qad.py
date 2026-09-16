@@ -51,12 +51,12 @@ from liger_kernel.chunked_loss import LigerFusedLinearJSDLoss
 
 from export.save import build_state_dict, export_variants, save_checkpoint
 from quantizers import (REGISTRY, build_quantizer_params, calibrate_nvfp4,
-                        prefill_mask_from_labels, quant_phase,
+                        load_frozen_decode, prefill_mask_from_labels, quant_phase,
                         uses_compressed_tensors)
 from training.checkpoint import (find_latest, load_training_state,
                                  save_training_state)
-from training.data import build_chunks, get_tulu_train_val
-from training.models import load_model, text_stack
+from training.data import build_chunks, get_reasoning_train_val, get_tulu_train_val
+from training.models import _PLAIN, _TEXT_PATHS, load_model, text_stack
 from quantizers.full_disag import (apply_full_disag, dual_lm_head_weights,
                                    full_disag_hash)
 from training.dist_optim import DistOptimizer
@@ -266,6 +266,16 @@ def main() -> None:
     parser.add_argument("--train-tokens", type=int, default=100_000_000)
     parser.add_argument("--val-tokens", type=int, default=100_000)
     parser.add_argument("--max-seq-len", type=int, default=2048)
+    parser.add_argument("--dataset", choices=("tulu", "reasoning"), default="tulu",
+                        help="tulu = allenai/tulu-3-sft-mixture (no reasoning traces; the "
+                             "chat template then supervises an EMPTY <think> block). "
+                             "reasoning = faunix/Qwen3.8-27B-Distillation-40K, traced by "
+                             "the teacher itself. Its median example is 2322 tokens and "
+                             "half of that is the think block, so it needs a much larger "
+                             "--max-seq-len than tulu: rows longer than --max-seq-len are "
+                             "DROPPED, not truncated, because the answer follows the think "
+                             "block and a truncated row would train reasoning that never "
+                             "concludes.")
     parser.add_argument("--recompute-wq", action="store_true",
                         help="recompute the hard-quantized weight every forward instead of "
                              "caching it. EXACT (same function of the same master), "
@@ -315,8 +325,14 @@ def main() -> None:
     parser.add_argument("--lr-schedule", type=str, default="constant",
                         choices=["cosine", "constant"],
                         help="constant = linear warmup then a flat plateau (no cooldown)")
-    parser.add_argument("--save-every", type=int, default=100,
-                        help="steps between resumable training-state saves")
+    parser.add_argument("--save-every", type=int, default=50,
+                        help="steps between resumable training-state saves. States are "
+                             "pruned to --keep-last (default 1), so this costs write "
+                             "bandwidth, not quota. 250 was chosen when a chain link ran "
+                             "far past one save; at 40 s/step a 4 h link covers ~360 "
+                             "steps, so a restart threw away up to 249 of them (~2.8 h). "
+                             "Measured on the 27B: a state save is ~150 s (295 GiB), so "
+                             "50 costs ~7% of wall-clock and caps the loss at ~33 min.")
     parser.add_argument("--keep-last", type=int, default=1,
                         help="how many training states to retain (they are ~12 bytes/param)")
     parser.add_argument("--resume", type=str, default="auto", choices=["auto", "never"],
@@ -334,10 +350,14 @@ def main() -> None:
     # what is WRITTEN past the threshold, the other what is KEPT. They were mismatched
     # once -- retention was generous past 2000 while the writer had already thinned the
     # tail to the 250 grid, so the rule protected nothing on newly-trained runs.
-    parser.add_argument("--export-dense-after", type=int, default=2000,
+    parser.add_argument("--export-dense-after", type=int, default=0,
                         help="past this step, export at --export-tail-every instead of "
-                             "--export-every. 0 disables.")
-    parser.add_argument("--export-tail-every", type=int, default=125,
+                             "--export-every. DISABLED (0) by default: a denser tail "
+                             "wrote checkpoints at steps no figure plots and no eval "
+                             "grid asks for (submit_missing_evals GRID is 0,250,...,2250), "
+                             "and at ~27 GB per 12b export that is pure quota. Every "
+                             "export is now on the single --export-every cadence.")
+    parser.add_argument("--export-tail-every", type=int, default=250,
                         help="tail export cadence past --export-dense-after. Previously "
                              "this was the --val-every cadence (25), which wrote ~19 "
                              "checkpoints per run that nothing plots -- about two thirds "
@@ -423,7 +443,7 @@ def main() -> None:
 
     # Student — same checkpoint, quantized linears, gradient checkpointing.
     student = load_model(args.model, torch.float32,
-                         attn_implementation="flash_attention_2").to(device)
+                         attn_implementation="sdpa").to(device)
     student_text = text_stack(student)
     # The quantizer is scoped to the TEXT stack, never to the whole model. On a plain
     # CausalLM that is the same set of linears as before (the head lives outside
@@ -444,6 +464,18 @@ def main() -> None:
             p.requires_grad_(False)
     if n_frozen and rank == 0:
         print(f"frozen (outside the text stack): {n_frozen / 1e6:.1f}M params", flush=True)
+    if args.quantizer == "nvfp4frozendec":
+        # The LM head is SHARED and FROZEN for this format, and it lives outside
+        # student_text.base, so the quantizer's own apply() cannot reach it. Sharing
+        # rather than duplicating is the point: at 248320 x 5120, untied, a per-phase copy
+        # would cost 1.27B parameters plus gradient and optimizer state to represent two
+        # tensors that are both frozen and identical. The embedding is frozen inside
+        # apply_nvfp4frozendec, which does have it in scope.
+        _head_n = sum(p.numel() for p in student_text.head.parameters())
+        for p in student_text.head.parameters():
+            p.requires_grad_(False)
+        if rank == 0:
+            print(f"frozen (shared lm_head): {_head_n / 1e6:.1f}M params", flush=True)
     if args.full_disag:
         # --full-disag is DEPRECATED (docs/GEMMA3_PLAN.md 2.7) and was only ever
         # validated on Qwen3. Two separate things break it elsewhere: Gemma3RMSNorm is
@@ -489,15 +521,38 @@ def main() -> None:
         print(f"Model: {args.model}  ({n_params:.1f}B params)  quantizer={args.quantizer}  hash={quant_hash}", flush=True)
         print("Loading and tokenizing dataset …", flush=True)
 
-    train_raw, val_raw = get_tulu_train_val()
+    # Rank 0 alone computes+caches the split first. datasets' cross-process cache
+    # locking relies on flock, which Lustre does not reliably serialize across
+    # separate NODES (only within one) -- with every rank racing this call at once,
+    # multiple ranks write the same fingerprinted .arrow cache file concurrently and
+    # one loses with FileNotFoundError mid-chmod. Once rank 0's write lands, every
+    # other rank's call just reads the now-complete cache instead of computing it.
+    def _load_raw():
+        if args.dataset == "reasoning":
+            return get_reasoning_train_val()
+        return get_tulu_train_val()
+
+    if rank == 0:
+        train_raw, val_raw = _load_raw()
+    dist.barrier()
+    if rank != 0:
+        train_raw, val_raw = _load_raw()
     cache_dir = Path(args.chunk_cache_dir) if args.chunk_cache_dir else None
+    # The dataset goes in the `split` label because it is part of the chunk cache key
+    # (model, split, tokens, seq, rank, world) -- without it two datasets tokenized at
+    # the same --max-seq-len would share one cache path and silently serve each other's
+    # chunks.
+    tag = "" if args.dataset == "tulu" else f"{args.dataset}-"
+    drop_overlong = args.dataset == "reasoning"
     train_chunks = build_chunks(
         tokenizer, train_raw, args.train_tokens, args.max_seq_len, dp_rank, dp_size,
-        cache_dir=cache_dir, split="train", model_name=args.model,
+        cache_dir=cache_dir, split=f"{tag}train", model_name=args.model,
+        drop_overlong=drop_overlong,
     )
     val_chunks = build_chunks(
         tokenizer, val_raw, args.val_tokens, args.max_seq_len, dp_rank, dp_size,
-        cache_dir=cache_dir, split="val", model_name=args.model,
+        cache_dir=cache_dir, split=f"{tag}val", model_name=args.model,
+        drop_overlong=drop_overlong,
     )
     if rank == 0:
         print(f"Train: {len(train_chunks)} docs/rank  ({len(train_chunks) * dp_size} total)", flush=True)
@@ -513,7 +568,7 @@ def main() -> None:
     # AutoModelForCausalLM is not safe here (it maps gemma3 -> Gemma3ForCausalLM, which
     # loads a 4b/12b repo into a half-random model without complaining).
     teacher = load_model(args.model, torch.bfloat16,
-                         attn_implementation="flash_attention_2").to(device)
+                         attn_implementation="sdpa").to(device)
     teacher_text = text_stack(teacher)
     teacher.config.use_cache = False
     # A wrapper's decoder stack carries its OWN config object (config.text_config), and
@@ -572,6 +627,22 @@ def main() -> None:
             n = sum(p.numel() for p in student.parameters())
             print(f"PP={args.pp}: stage {groups.pp_rank} holds {n/1e9:.2f}B student "
                   f"params, dp_size={groups.dp_size}", flush=True)
+
+    # Frozen external decode half. AFTER split_stack on purpose: each rank then fills only
+    # the layers it actually holds, and load_frozen_decode undoes split_stack's layer
+    # renumbering so stage 1 reads original layer `cut`, not layer 0. Before the first
+    # forward, which is what the layer's own has_decode guard enforces.
+    if args.quantizer == "nvfp4frozendec":
+        _dm = quant_params.get("decode_model") or ""
+        if not _dm:
+            raise SystemExit(
+                "nvfp4frozendec needs the external decode checkpoint: pass "
+                '--quantizer-params \'{"decode_model": "/path/to/...-bf16"}\'')
+        _base_path, _ = _TEXT_PATHS.get(type(student).__name__, _PLAIN)
+        _n = load_frozen_decode(student_text.base, _dm, prefix=f"{_base_path}.")
+        if rank == 0:
+            print(f"frozen decode: filled {_n['linear']} linears and {_n['norm']} norms "
+                  f"from {_dm}", flush=True)
 
     # DistAdamW handles gradient reduction — no DDP wrapper required.
     # Quantizers that need separate LR / weight_decay per parameter class
@@ -632,7 +703,17 @@ def main() -> None:
     )
     # chunks consumed per rank per optimizer step
     chunks_per_step = mbs * grad_accum
-    total_steps = len(train_chunks) // chunks_per_step
+    # len(train_chunks) is LOCAL: each rank tokenizes its own dp_rank/dp_size shard
+    # of the dataset, and shard sizes need not tokenize to identical chunk counts.
+    # An unsynchronized total_steps lets ranks disagree on which step is "the last
+    # one" -- the loop's `step == total_steps - 1` special-cases (final validation,
+    # final export) then fire on DIFFERENT steps per rank, which permanently
+    # desyncs the collective sequence (observed: one rank stuck issuing an
+    # ALLGATHER_COALESCED that no other rank ever calls, everything after hangs).
+    # MIN, not e.g. rank 0's value, so no rank ever runs past the data it has.
+    total_steps_t = torch.tensor(len(train_chunks) // chunks_per_step, device=device)
+    dist.all_reduce(total_steps_t, op=dist.ReduceOp.MIN)
+    total_steps = int(total_steps_t.item())
     if rank == 0:
         print(
             f"Steps: {total_steps}  "
@@ -874,7 +955,11 @@ def main() -> None:
             # 25, i.e. ~19 tail checkpoints per run, none of which anything plots.
             dense = args.export_dense_after and step >= args.export_dense_after
             cadence = args.export_tail_every if dense else args.export_every
-            if step % cadence == 0 or step == total_steps - 1:
+            # EVERY exported step is a multiple of the cadence (250). The old
+            # `or step == total_steps - 1` also exported e.g. 2457, which no figure
+            # plots and no eval grid asks for -- submit_missing_evals' GRID is
+            # 0,250,...,2250 -- so it only consumed quota.
+            if step % cadence == 0:
                 save_weights(student, step, args, val_chunks, device)
             if rank == 0:
                 delta = ntp - teacher_val_ntp
@@ -893,6 +978,13 @@ def main() -> None:
                              args.eval_batch_size, groups)
                    if groups is not None else
                    eval_ntp(student, val_chunks, device, args.eval_batch_size))
+    # ALWAYS export the finished model, even off the 250 grid. This used to be gated on
+    # `total_steps % export_every == 0` to avoid one export per run that no figure plots
+    # and no eval grid asks for. That reasoning held while totals were ~2458 and the gate
+    # cost the last 208 steps, but it does not survive a short run: the reasoning corpus
+    # gives 980 steps, so the gate silently discarded the last 230 -- 23% of training,
+    # including the only checkpoint anyone actually wants to evaluate. One off-grid
+    # directory is much cheaper than re-deriving the final weights from the state.
     save_weights(student, total_steps, args, val_chunks, device)
     save_training_state(student, optimizer, total_steps, args, args.keep_last)
     if rank == 0:

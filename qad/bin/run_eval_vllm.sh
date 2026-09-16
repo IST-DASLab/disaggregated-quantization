@@ -19,16 +19,16 @@
 #SBATCH --qos=normal
 #SBATCH --time=02:00:00
 #SBATCH --mem=0
-#SBATCH --account=adlr_psx_numerics
+#SBATCH --account=coreai_psx_qad
 #SBATCH --output=logs/%x_%A_%a.out
 #SBATCH --error=logs/%x_%A_%a.err
 
 # ---------------------------------------------------------------------------
 # Constants (set before any mode-split so both modes see them)
 # ---------------------------------------------------------------------------
-CONTAINER=/lustre/fsw/portfolios/adlr/users/apanferov/containers/nemo:26.02.nemotron_3_super_luts_v2.sqsh
-HF_CACHE=/lustre/fsw/portfolios/adlr/users/apanferov/hf_cache
-LM_EVAL_OVERLAY=/lustre/fsw/portfolios/adlr/users/apanferov/prefill-decode/lm_eval_overlay
+CONTAINER=/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/containers/nemo-26.02.sqsh
+HF_CACHE=/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/hf_cache
+LM_EVAL_OVERLAY=/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/lm_eval_overlay
 LOG_KIND=eval_vllm   # log subfolder: logs/<LOG_KIND>/<timestamp>_<tag>/
 
 # ---------------------------------------------------------------------------
@@ -98,7 +98,7 @@ if command -v scontrol &>/dev/null; then
         --ntasks=1 \
         --container-image="$CONTAINER" \
         --no-container-mount-home \
-        --container-mounts="/lustre:/lustre,$HOME/.netrc:/root/.netrc" \
+        --container-mounts="/scratch:/scratch,/lustre:/lustre,$HOME/.netrc:/root/.netrc" \
         --export=ALL \
         bash "$SCRIPT_PATH" "$@"
     exit $?

@@ -1,0 +1,23 @@
+{
+  "prefill": {
+    "intervals": 101,
+    "prompt_tp_mean_all": 5197.070297029703,
+    "prompt_tp_mean_active": 5249.041,
+    "prompt_tp_max": 20784.7,
+    "active_intervals": 100,
+    "external_hit_max": 0.0,
+    "external_hit_mean": 0.0
+  },
+  "decode": {
+    "intervals": 201,
+    "prompt_tp_mean_all": 0.8606965174129353,
+    "prompt_tp_mean_active": 1.73,
+    "prompt_tp_max": 8.8,
+    "active_intervals": 100,
+    "external_hit_max": 100.0,
+    "external_hit_mean": 99.99850746268656
+  },
+  "kv_crossed": true,
+  "prefill_did_the_prefill": true,
+  "pass": true
+}

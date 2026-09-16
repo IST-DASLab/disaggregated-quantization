@@ -1,0 +1,1585 @@
+{
+  "description": "50 MMLU-Pro items that the disaggregated QAD setup answers correctly and the weight-only quantized model gets wrong. Self-contained: question, options, gold letter and both models' final responses are inline, so no harness or dataset download is needed to check them by hand.",
+  "decode_checkpoint": "unsloth/Qwen3.8-27B-GGUF UD-IQ1_S, dequantized to BF16",
+  "configurations": {
+    "disaggregated_qad_prefill": "NVFP4 prefill trained against this decode checkpoint (reason8k, step 980) + UD-IQ1_S decode, disaggregated over NixlConnector, TP=2 per engine",
+    "weight_only": "UD-IQ1_S alone, single engine, no disaggregation"
+  },
+  "benchmark": "MMLU-Pro (TIGER-Lab/MMLU-Pro, test split)",
+  "scoring": "answer_extracted is the first match of /answer is \\(?([A-J])\\)?/ in the response's content channel; an item counts correct iff that equals correct_answer. The reasoning channel is NOT consulted.",
+  "selection": "4570 of 12032 items qualify; 50 sampled stratified by category with random.Random(20260915), then sorted by question_id.",
+  "note": "reasoning_chars records the size of the hidden reasoning channel, which is omitted here for size -- responses alone are enough to verify the answer.",
+  "counts": {
+    "qualifying_items": 4570,
+    "total_common_items": 12032,
+    "sampled": 50
+  },
+  "items": [
+    {
+      "question_id": 148,
+      "category": "business",
+      "question": "a frame house, located in a Class A town, insured for $24,000, or the sameframe house, located in a Class B town, insured for thesame $24,000? How much of a difference is there?",
+      "options": {
+        "A": "$3.30",
+        "B": "$45.70",
+        "C": "$15.00",
+        "D": "$7.20",
+        "E": "$10.70",
+        "F": "$8.40",
+        "G": "$12.50",
+        "H": "$5.60",
+        "I": "$9.90",
+        "J": "$6.80"
+      },
+      "correct_answer": "D",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "D",
+        "correct": true,
+        "response": "\n\nThe question refers to a specific property insurance rate table, likely from an insurance textbook or manual, which shows premiums for a frame house based on the town's risk classification.\n\n**Reasoning through the key elements:**\n\n1. **Town Classification**: Class A towns are considered lower-risk (e.g., better construction, lower fire risk, better infrastructure), while Class B towns are higher-risk. Therefore, the premium for a Class B town will be **higher** than for Class A.\n\n2. **Frame House at $24,000**: Both references are for the same type of dwelling (frame house) at the same insured value ($24,000), so the difference in premium is purely due to the town's risk class.\n\n3. **The rate differential**: In standard property insurance rate tables (as found in Canadian property insurance education materials), the difference in annual premium for a frame house between a Class A and Class B town at the $24,000 coverage level is approximately **$7.20**.\n\nThis matches the structure of rate tables where premium differences between risk classes at this coverage level are typically in the $5-$12 range.\n\nthe answer is (D)",
+        "reasoning_chars": 3257,
+        "completion_tokens": 1019
+      },
+      "weight_only": {
+        "answer_extracted": "F",
+        "correct": false,
+        "response": "\n\nThe answer is (F).",
+        "reasoning_chars": 22769,
+        "completion_tokens": 5719
+      }
+    },
+    {
+      "question_id": 186,
+      "category": "business",
+      "question": "A television sells for $226.50. The markup is 30% based on the cost. Find the cost.",
+      "options": {
+        "A": "$190.20",
+        "B": "$152.35",
+        "C": "$198.75",
+        "D": "$174.23",
+        "E": "$210.00",
+        "F": "$158.90",
+        "G": "$165.35",
+        "H": "$145.00",
+        "I": "$200.50",
+        "J": "$180.40"
+      },
+      "correct_answer": "D",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "D",
+        "correct": true,
+        "response": "\n\nThe markup is 30% based on cost, so selling price = cost × (1 + 0.30) = 1.30 × cost.\n\nThus:\n\ncost = $226.50 ÷ 1.30 = $174.23\n\nthe answer is (D).",
+        "reasoning_chars": 213,
+        "completion_tokens": 164
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "",
+        "reasoning_chars": 0,
+        "completion_tokens": 1
+      }
+    },
+    {
+      "question_id": 250,
+      "category": "business",
+      "question": "Paul took a loan of $384.75 for 60 days at 6% interest. How much interest did he pay?",
+      "options": {
+        "A": "$5.75",
+        "B": "$3.85",
+        "C": "$4.15",
+        "D": "$5.00",
+        "E": "$1.15",
+        "F": "$2.75",
+        "G": "$7.25",
+        "H": "$2.50",
+        "I": "$4.50",
+        "J": "$6.00"
+      },
+      "correct_answer": "B",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "B",
+        "correct": true,
+        "response": "\n\nWe refer to Wikipedia articles on business for help.\n\nTo find the interest paid, use the simple interest formula:\n\nInterest = Principal × Rate × Time (in years)\n\n- Principal = $384.75\n- Annual rate = 6% = 0.06\n- Time = 60 days. Using a 360-day banking year: 60/360 = 1/10\n- Interest = $384.75 × 0.06 × (60/360) = $384.75 × 0.01 = $3.8475 ≈ $3.85\n\nThe answer is (B).",
+        "reasoning_chars": 784,
+        "completion_tokens": 601
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "\n\nWe refer to Wikipedia articles on finance for help. The amount of interest paid is calculated by multiplying the principal amount of the loan (384.75) by the interest rate (6%) and the time (60 days), which is equivalent to 1/12 of a year. The calculation is (384.75 * 0.06 * (1/12)) = $3.15. The closest option is (D).",
+        "reasoning_chars": 0,
+        "completion_tokens": 101
+      }
+    },
+    {
+      "question_id": 550,
+      "category": "business",
+      "question": "William Accra has found that his company's output is increasing radically each week. When t is the number of weeks of production, output is a direct function F(t) such that F (t) = - 10,000 + 50t^4 . How many weeks of work will it require them to reach an output of 190,000 ?",
+      "options": {
+        "A": "10 weeks",
+        "B": "14 weeks",
+        "C": "13 weeks",
+        "D": "9 weeks",
+        "E": "7 weeks",
+        "F": "6 weeks",
+        "G": "12 weeks",
+        "H": "8 weeks",
+        "I": "5 weeks",
+        "J": "11 weeks"
+      },
+      "correct_answer": "H",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "H",
+        "correct": true,
+        "response": "\n\nWe can set up the function:\n\nF(t) = -10,000 + 50t^4\n\nSet this equal to the target output of 190,000:\n\n190,000 = -10,000 + 50t^4  \n200,000 = 50t^4  \n4000 = t^4\n\nTest integer values to find the first week in which the output reaches at least 190,000.\n\n- At t = 7:  \n  t^4 = 2401  \n  50 × 2401 = 120,050  \n  -10,000 + 120,050 = 110,050  \n  This is below 190,000.\n\n- At t = 8:  \n  t^4 = 4096  \n  50 × 4096 = 204,800  \n  -10,000 + 204,800 = 194,800  \n  This exceeds 190,000.\n\nSo the company first reaches the target output after 8 weeks.\n\nThe answer is (H).",
+        "reasoning_chars": 990,
+        "completion_tokens": 802
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "\n\nWe refer to Wikipedia articles on math for help.",
+        "reasoning_chars": 0,
+        "completion_tokens": 13
+      }
+    },
+    {
+      "question_id": 1290,
+      "category": "law",
+      "question": "Bill purchased a can of Sipep from the Ajax Minimart. After he finished drinking the Sipep, Bill noticed that the can contained dead insects stuck on the inside bottom of the can. In a strict product liability tort action against Ajax, Bill must prove, among other things, that:",
+      "options": {
+        "A": "Ajax is a merchant selling Sipep.",
+        "B": "Ajax knew or should have known of the defective condition",
+        "C": "Ajax had prior notice of other similar problems with Sipep products.",
+        "D": "Ajax actually placed the dead insects into the can."
+      },
+      "correct_answer": "A",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "A",
+        "correct": true,
+        "response": "\n\nWe refer to legal principles of strict product liability. Strict liability does not require the plaintiff to show that the defendant knew about, or had prior notice of, the defect, or that the defendant specifically placed the insects in the can. It may instead require that the defendant, such as a retail chain or merchant, was engaged in the relevant sale or distribution of the product at issue. The answer is (A).",
+        "reasoning_chars": 2555,
+        "completion_tokens": 583
+      },
+      "weight_only": {
+        "answer_extracted": "B",
+        "correct": false,
+        "response": "\n\nWe refer to Wikipedia articles on tort for help. Product liability torts are about holding a party responsible for a product defect. A tort action in law is a claim made against a party. The claim, in a product liability tort action, is that Ajax's product was defective, meaning it contained dead insects stuck inside it. Hence, Bill must prove that Ajax knew or should have known of the defective condition, as the product contained an actual dead insect stuck to the product, not simply that the product contains dead insects. The answer is (B).",
+        "reasoning_chars": 0,
+        "completion_tokens": 113
+      }
+    },
+    {
+      "question_id": 1461,
+      "category": "law",
+      "question": "A state highway runs through the center of a city's business district. As the highway passes through this business district, there is a stretch where the highway is too narrow to satisfS' the safety standards for state roadways. Along this narrow stretch and on opposite sides of the street are located two businesses. Situated on the east side of the street is a bar and grill; directly across the street on the west side is a lounge. In order to comply with state highway regulations, the state highway department, acting pursuant to state statute, ordered the city to prohibit parking on one side of the highway within the business district. The city council convened a special meeting to determine whether parking should be prohibited on the east or west side of the street. During the meeting, the council was unable to resolve the issue. Finally, the city council president decided the only fair way to resolve the matter was to flip a coin. After the coin flip, the city prohibited parking at all times on the west side of the highway. On account of this decision, parking in front of the lounge was permanently prohibited. This caused the lounge to suffer a substantial decline in business because of the unavailability of on-street parking. As a consequence, the owner of the lounge brought suit for declarative relief against the city alleging that the parking ban on his side of the street was unconstitutional. In all likelihood, will the plaintiff be successful in this cause of action?",
+      "options": {
+        "A": "No, because as a governmental entity, the city enjoys immunity from such suits under the Eleventh Amendment.",
+        "B": "No, because the city was acting in accordance with state highway safety regulations.",
+        "C": "Yes, because the action of the city violated the equal protection clause of the Fourteenth Amendment.",
+        "D": "No, because the city's action was reasonable.",
+        "E": "Yes, because the city council failed to consider the economic impact of their decision on the lounge.",
+        "F": "No, because the city council president's decision to flip a coin was arbitrary and capricious.",
+        "G": "No, because the state highway department's order supersedes any claim by the lounge owner.",
+        "H": "Yes, because the prohibition of parking constitutes a taking of property without just compensation.",
+        "I": "Yes, because the city council's decision unfairly targeted businesses on the west side of the street."
+      },
+      "correct_answer": "D",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "D",
+        "correct": true,
+        "response": "\n\nThe key issue is that the parking ban is a regulated restriction required by state highway safety regulations, not a property taking. The city president’s coin toss was a neutral way of choosing between the two possible sides. Because there was no rational reason to favor either side, the random method was not an arbitrary constitutional violation. The plaintiff’s constitutional claim will therefore fail. The answer is (D).",
+        "reasoning_chars": 35073,
+        "completion_tokens": 7375
+      },
+      "weight_only": {
+        "answer_extracted": "B",
+        "correct": false,
+        "response": "\n\nWe refer to Wikipedia articles on jurisprudence for help. In this case, the city council ordered the city to prohibit parking on one side of the highway, which is an action in accordance with state highway regulations. As the city is acting pursuant to state highway regulations, the city is acting in accordance with state highway safety regulations. Thus, the plaintiff will not be successful, and the reason is that the city was acting in accordance with state highway safety regulations. The answer is (B).",
+        "reasoning_chars": 8997,
+        "completion_tokens": 1991
+      }
+    },
+    {
+      "question_id": 1968,
+      "category": "law",
+      "question": "One Sunday afternoon, a sports fan went to a professional football game. While standing in line at a concession stand, he got into an argument with three men ahead of him in the line. The three men were friends attending the game together. One of the men punched the sports fan in the mouth. A fight ensued. During the fracas, one of the other three men hit the sports fan over the head with a bottle, which caused him to suffer a serious concussion. The sports fan does not know for certain which of the three men struck him with the bottle. If the sports fan asserts a claim against the man who punched him in the mouth to recover damages for the head injury, will the sports fan prevail?",
+      "options": {
+        "A": "No, because the sports fan should not have argued with the three men in the first place.",
+        "B": "No, because the sports fan does not have a legal basis to sue the man who punched him in the mouth.",
+        "C": "No, because the man who punched him in the mouth did not actually strike the sports fan with the bottle.",
+        "D": "No, because the sports fan could have avoided the fight.",
+        "E": "Yes, because the man who punched him in the mouth was the instigator who struck the first blow that started the fracas.",
+        "F": "Yes, because the sports fan was defending himself from an unprovoked attack.",
+        "G": "Yes, because the man who punched him in the mouth and the other men were acting in concert.",
+        "H": "No, because the sports fan cannot offer proof as to which of the men struck the sports fan over the head with the bottle.",
+        "I": "Yes, because the three men were acting as a group and are therefore jointly responsible.",
+        "J": "Yes, because all the men were involved in the fight and are therefore liable."
+      },
+      "correct_answer": "G",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "G",
+        "correct": true,
+        "response": "\n\nWe refer to Wikipedia articles on torts for help. The sports fan does not need to know exactly which of the three men struck him with the bottle. Here, the three men acted together as friends during a physical fight, which qualifies them as acting in concert. Under common law torts, if a group acts together to commit a tortious act, the entire group is jointly and severally liable, and a plaintiff can recover from any one of the participating wrongdoers. Therefore, the fan can hold the man who initially punched him liable for the injury that resulted from the collective fight.\n\nThe answer is (G).",
+        "reasoning_chars": 9682,
+        "completion_tokens": 2310
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "",
+        "reasoning_chars": 53450,
+        "completion_tokens": 12454
+      }
+    },
+    {
+      "question_id": 2245,
+      "category": "psychology",
+      "question": "Discuss three ways in which concepts can be attained.",
+      "options": {
+        "A": "Through the attachment of labels to entities, through the use of contexts, and through the use of definitions",
+        "B": "Through comparison, through contrast, and through categorization",
+        "C": "Through reading, through writing, and through speaking",
+        "D": "Through repetition, through memorization, and through association",
+        "E": "Through intuition, through dreaming, and through meditation",
+        "F": "Through observation, through experimentation, and through inference",
+        "G": "Through listening, through discussion, and through critical thinking",
+        "H": "Through sensory experience, through imitation, and through reflection",
+        "I": "Through trial and error, through practice, and through feedback",
+        "J": "Through visualization, through problem-solving, and through storytelling"
+      },
+      "correct_answer": "A",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "A",
+        "correct": true,
+        "response": "\n\nThe answer is (A).",
+        "reasoning_chars": 858,
+        "completion_tokens": 198
+      },
+      "weight_only": {
+        "answer_extracted": "J",
+        "correct": false,
+        "response": "\nBased on the standard psychological definition of \"locus of control\" (a concept developed by Rotter in 1967), this scale measures a person's belief in the extent to which their attitudes and behavior are central to their outcomes. Therefore, a belief that one's attitudes and behavior are central to what happens to her is associated with a high (or high) locus of control. However, since this is a question asking to \"discuss three ways,\" the correct answer is determined by the specific phrasing of the question in the provided source, where the question is asking about the definition of \"locus of control.\" In the provided options, \"internal locus of control\" and \"external locus of control\" are the two key concepts. The correct answer, based on the provided text, is the **internal locus of control** (the belief that one controls their own destiny), which contrasts with the external locus (the belief that fate/luck is central). Thus, the belief described is associated with the \"internal locus of control.\"\n\nThe answer is (J).",
+        "reasoning_chars": 0,
+        "completion_tokens": 220
+      }
+    },
+    {
+      "question_id": 2476,
+      "category": "psychology",
+      "question": "Distinguish between prejudice and discrimination.",
+      "options": {
+        "A": "Discrimination is a set of policies that favor one group over another, whereas prejudice is the economic outcome of these policies.",
+        "B": "Prejudice is a legal system of segregation, while discrimination is the individual’s choice to segregate.",
+        "C": "Prejudice is an attitude, generally negative, held toward a particular group and any member of that group. It is translated into behavior through discrimination, which is action that results from prejudiced points of view.",
+        "D": "Prejudice is a behavior while discrimination is an attitude.",
+        "E": "Discrimination is any action, positive or negative, taken against a group, while prejudice is the belief that leads to those actions.",
+        "F": "Prejudice is a learned behavior that can be unlearned, while discrimination is a natural human tendency that cannot change.",
+        "G": "Prejudice and discrimination are the same.",
+        "H": "Discrimination is the act of making distinctions between things or people, while prejudice is specifically a set of unfair distinctions based on age.",
+        "I": "Prejudice is positive attitude towards a group, while discrimination is a negative action.",
+        "J": "Prejudice is a subconscious bias that does not affect behavior, while discrimination is the conscious choice to treat people differently."
+      },
+      "correct_answer": "C",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "C",
+        "correct": true,
+        "response": "\n\nWe refer to Wikipedia articles on psychology for help. Prejudice is an attitude or belief, usually negative, toward a group. Discrimination is the behavioral expression of such a prejudiced attitude, often in unfair treatment of group members. Therefore, the correct distinction is that prejudice is an attitude that may lead to discriminatory behavior.\n\nthe answer is (C).",
+        "reasoning_chars": 1081,
+        "completion_tokens": 287
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "\n\nC.",
+        "reasoning_chars": 783,
+        "completion_tokens": 173
+      }
+    },
+    {
+      "question_id": 2755,
+      "category": "psychology",
+      "question": "The correction for attenuation formula is used to measure the impact of increasing:",
+      "options": {
+        "A": "the number of test takers on the test’s validity.",
+        "B": "the number of test takers on the test’s reliability.",
+        "C": "the test's difficulty on its validity.",
+        "D": "a test’s validity on its difficulty.",
+        "E": "a test’s reliability on its difficulty.",
+        "F": "a test’s validity on its reliability.",
+        "G": "the test's difficulty on its reliability.",
+        "H": "the number of test items on the test’s validity.",
+        "I": "a test’s reliability on its validity.",
+        "J": "the number of test items on the test’s reliability."
+      },
+      "correct_answer": "I",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "I",
+        "correct": true,
+        "response": "\n\nThe correction for attenuation formula is a key concept in psychometrics that connects reliability and validity.\n\n**Key Points:**\n1. **Reliability** (r_rel) is the consistency of a test.\n2. **Validity** (r_validity) is the accuracy of a test in predicting an outcome.\n3. The **observed correlation** (r_obs) between a test and a criterion can never exceed the test's reliability.\n4. The **correction for attenuation formula** is:\n   r_validity = r_obs / r_reliability\n5. This shows that a test's **reliability sets the upper limit** for its validity.\n\nIn other words, the formula is used to understand the impact that a test's reliability has on its validity.\n\nThe answer is (I).",
+        "reasoning_chars": 2167,
+        "completion_tokens": 654
+      },
+      "weight_only": {
+        "answer_extracted": "J",
+        "correct": false,
+        "response": "\n\nLet's think step by step.\n\nThe correction for attenuation formula is used to measure the impact of increasing the number of test items on the test's reliability. We refer to Wikipedia articles on psychology for help. The answer is (J).",
+        "reasoning_chars": 0,
+        "completion_tokens": 51
+      }
+    },
+    {
+      "question_id": 2844,
+      "category": "biology",
+      "question": "A biologist deals with things on a microscopic level. To A biologist deals with things on a microscopic level. To describe cellular dimensions and the amount of materials present at the cellular level, units of an appropriately small size are needed. What are these units of measurements?",
+      "options": {
+        "A": "The units of length are nanometers and picometers, while weights are in picograms and femtograms. Molecular weights are measured in kDa (kiloDaltons).",
+        "B": "The unit of cellular measurement is the liter, and molecular weights are measured in pounds.",
+        "C": "The units of measurement include the millimeter and the picometer, with weights in centigrams and decigrams.",
+        "D": "The units of length commonly used are centimeters and millimeters. Molecular weights are expressed in grams.",
+        "E": "Cellular dimensions are measured in decimeters and hectometers. Weights are expressed in kilograms and decagrams.",
+        "F": "The unit of molecular weight employed is the kilogram.",
+        "G": "The units of length commonly employed in biology include the micron and the \\AAngstrom. Weights are expressed in milligrams, micrograms, and nanograms. The unit of molecular weight employed is the dalton.",
+        "H": "The units of length commonly employed in biology include the meter and the kilogram.",
+        "I": "Lengths are measured in feet and inches, while weights are in ounces and pounds at the cellular level.",
+        "J": "Weights are expressed in kilograms, grams, and milligrams."
+      },
+      "correct_answer": "G",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "G",
+        "correct": true,
+        "response": "\n\nThe appropriate units used for describing cellular dimensions and quantities of cellular materials are:\n\n- **Length units:** microns (µm) and Ångstroms (Å), because many biological structures and molecules are best described in these small length scales.\n- **Weight units:** milligrams (mg), micrograms (µg), and nanograms (ng), which match the scale of cellular and molecular quantities.\n- **Molecular weights:** expressed in Daltons (Da) or kiloDaltons (kDa), rather than grams or kilograms.\n\nAmong the given choices, only the option that matches these standard biological units fits.\n\nTherefore, the answer is (G).",
+        "reasoning_chars": 1677,
+        "completion_tokens": 507
+      },
+      "weight_only": {
+        "answer_extracted": "H",
+        "correct": false,
+        "response": "\n\nthe answer is (H).",
+        "reasoning_chars": 1706,
+        "completion_tokens": 401
+      }
+    },
+    {
+      "question_id": 2955,
+      "category": "biology",
+      "question": "Explain how an estimate of the age of a rock is made on the basisof the radioactive elements present.",
+      "options": {
+        "A": "By assessing the fossil content found within the rock layers",
+        "B": "By comparing the density of the rock to a known age database",
+        "C": "By examining the color and texture of the rock",
+        "D": "By counting the layers of the rock",
+        "E": "By measuring the amount of carbon-14 remaining in the rock",
+        "F": "By observing the size and weight of the rock",
+        "G": "By measuring the proportion of uranium and lead in a given rock, we can estimate with a high degree of accuracy the absolute age of the rock.",
+        "H": "By calculating the rate of sediment deposition on the rock",
+        "I": "By determining the magnetic properties of the rock",
+        "J": "By analyzing the chemical composition of minerals within the rock for wear and degradation patterns"
+      },
+      "correct_answer": "G",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "G",
+        "correct": true,
+        "response": "\n\nThe age of a rock can be determined by applying radiometric dating. The most common method for old rocks involves measuring the proportions of radioactive uranium and its decay product, lead. Since uranium decays into lead at a known constant rate over time, the measured ratio of uranium to lead in the rock's minerals can be used to calculate the number of half-lives that have elapsed, allowing an estimate of the absolute age. Carbon-14 dating is radioactive but is limited to relatively recent periods and is not the standard method for dating most ancient rocks. The answer is (G).",
+        "reasoning_chars": 1115,
+        "completion_tokens": 361
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "",
+        "reasoning_chars": 135732,
+        "completion_tokens": 32768
+      }
+    },
+    {
+      "question_id": 2984,
+      "category": "biology",
+      "question": "In a population of giraffes, an environmental change occurs that favors individuals that are tallest. As a result, more of the taller individuals are able to obtain nutrients and survive to pass along their genetic information. This is an example of",
+      "options": {
+        "A": "Artificial selection.",
+        "B": "Founder effect.",
+        "C": "stabilizing selection.",
+        "D": "Intrasexual selection.",
+        "E": "sexual selection.",
+        "F": "Kin selection.",
+        "G": "Genetic drift.",
+        "H": "Bottleneck effect.",
+        "I": "disruptive selection.",
+        "J": "directional selection."
+      },
+      "correct_answer": "J",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "J",
+        "correct": true,
+        "response": "\n\nThe scenario describes a change in the environment that favors one extreme direction of a trait (increased body height). As a result, the frequency of alleles associated with taller individuals increases over time, and the average trait value shifts toward the taller end.\n\nThis matches directional selection, in which a single extreme phenotype has a selective advantage.\n\nThe answer is (J).",
+        "reasoning_chars": 609,
+        "completion_tokens": 191
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "",
+        "reasoning_chars": 2846,
+        "completion_tokens": 603
+      }
+    },
+    {
+      "question_id": 3468,
+      "category": "biology",
+      "question": "If the frequency of the gene for widow's peak, a dominant trait, is 0.07, what will be the frequency of (a) persons homozygous for widow's peak, (b) persons heterozygous for widow's peak, and (c) persons lacking widow's peak?",
+      "options": {
+        "A": "(a) 0.0059, (b) 0.1402, (c) 0.8539",
+        "B": "(a) 0.0021, (b) 0.0978, (c) 0.9001",
+        "C": "(a) 0.0049, (b) 0.1302, (c) 0.8649",
+        "D": "(a) 0.0098, (b) 0.1204, (c) 0.8698",
+        "E": "(a) 0.0081, (b) 0.1188, (c) 0.8731",
+        "F": "(a) 0.0045, (b) 0.1305, (c) 0.8650",
+        "G": "(a) 0.0034, (b) 0.1202, (c) 0.8764",
+        "H": "(a) 0.00049, (b) 0.13902, (c) 0.86048",
+        "I": "(a) 0.0149, (b) 0.1124, (c) 0.8727",
+        "J": "(a) 0.0064, (b) 0.1352, (c) 0.8584"
+      },
+      "correct_answer": "C",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "C",
+        "correct": true,
+        "response": "\n\nUsing the Hardy–Weinberg equations, the expected genotype frequencies are:\n\nGiven the dominant allele frequency is p = 0.07.  \nThe recessive allele frequency is q = 1 − p = 0.93.\n\n(a) Individuals homozygous dominant (having the widow's peak) have genotype frequency p² = (0.07)² = 0.0049.\n\n(b) Heterozygous individuals have genotype frequency 2pq = 2 × 0.07 × 0.93 = 0.1302.\n\n(c) Individuals lacking the widow's peak (homozygous recessive) have genotype frequency q² = (0.93)² = 0.8649.\n\nThis matches option C.\n\nthe answer is (C)",
+        "reasoning_chars": 757,
+        "completion_tokens": 483
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "\n\nThere is a problem with your question: the term \"widow's peak\" (D) is not a dominant trait but a recessive trait.",
+        "reasoning_chars": 0,
+        "completion_tokens": 33
+      }
+    },
+    {
+      "question_id": 3541,
+      "category": "chemistry",
+      "question": "The molecular geometry of thionyl chloride, SOCl2, is best described as",
+      "options": {
+        "A": "tetrahedral",
+        "B": "Bent",
+        "C": "trigonal pyramidal",
+        "D": "trigonal planar",
+        "E": "T-shaped",
+        "F": "Octahedral",
+        "G": "Seesaw",
+        "H": "Trigonal bipyramidal",
+        "I": "Square planar",
+        "J": "Linear"
+      },
+      "correct_answer": "C",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "C",
+        "correct": true,
+        "response": "\n\nWe can determine the molecular geometry of SOCl₂ by counting the regions of electron density around the central sulfur atom.\n\n- Sulfur in SOCl₂ is bonded to:\n  - one oxygen (as a double bond),\n  - two chlorine atoms.\n- This gives three bonded regions, but S also has one lone pair.\n- The total number of electron-density regions is therefore 4.\n\nWith four electron domains and three bonding pairs, the electron-domain geometry is tetrahedral, but the molecular shape excludes the lone pair. With three atoms around the central atom and a lone pair, the shape is trigonal pyramidal.\n\nTherefore, the answer is (C).",
+        "reasoning_chars": 1004,
+        "completion_tokens": 400
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "",
+        "reasoning_chars": 103001,
+        "completion_tokens": 13753
+      }
+    },
+    {
+      "question_id": 3667,
+      "category": "chemistry",
+      "question": "What volume of a block of wood (density = 0.80 g / cm^3), which weighs 1.0 kg, will be above the water surface when . the block is afloat? (Note: A floating object displaces its own weight of water.)",
+      "options": {
+        "A": "1000 cm^3",
+        "B": "250 cm^3",
+        "C": "1100 cm^3",
+        "D": "600 cm^3",
+        "E": "1250 cm^3",
+        "F": "800 cm^3",
+        "G": "500 cm^3",
+        "H": "1500 cm^3",
+        "I": "750 cm^3",
+        "J": "200 cm^3"
+      },
+      "correct_answer": "B",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "B",
+        "correct": true,
+        "response": "\n\nThe block's mass is 1.0 kg = 1000 g.  \nSince density of wood = 0.80 g/cm³, the total volume of the wood is:\n\n\\[\nV_{\\text{wood}} = \\frac{1000\\ \\text{g}}{0.80\\ \\text{g/cm}^3} = 1250\\ \\text{cm}^3\n\\]\n\nA floating object displaces a volume of water equal to the weight of water equal to the object's own weight. Since water has density 1.00 g/cm³, the submerged volume displaces:\n\n\\[\nV_{\\text{submerged}} = \\frac{1000\\ \\text{g}}{1.00\\ \\text{g/cm}^3} = 1000\\ \\text{cm}^3\n\\]\n\nThe portion of the block above the water surface is:\n\n\\[\nV_{\\text{above}} = 1250\\ \\text{cm}^3 - 1000\\ \\text{cm}^3 = 250\\ \\text{cm}^3\n\\]\n\nTherefore, the answer is (B).",
+        "reasoning_chars": 409,
+        "completion_tokens": 414
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "",
+        "reasoning_chars": 15504,
+        "completion_tokens": 4736
+      }
+    },
+    {
+      "question_id": 3925,
+      "category": "chemistry",
+      "question": "Metallic sodium violently liberates H_2 gas according to the Reaction 2Na(s) + 2H_2 0(l) \\rightarrow 2NaOH + H_2 (g) If you collect the gas at 25°C under 758 mm Hg of press-ure, and it occupies 2.24 liters, (a) find the number of moles of hydrogen produced, (b) find the number of moles of water decomposed and (c) find the percent error in (a) if the gaseous hydrogen had been collected dry, assuming the vapor pressure of water is 23.8 mm at 25 C. (R = .0821 l-atm/mole °K.) (R = .0821 l-atm/mole °K.)",
+      "options": {
+        "A": "0.12 mole H_2, 0.24 mole of water, 6%",
+        "B": "0.0913 mole H_2, 0.183 mole of water, 3.24%",
+        "C": "0.2 mole H_2, 0.4 mole of water, 5%",
+        "D": "0.085 mole H_2, 0.17 mole of water, 2%",
+        "E": "0.05 mole H_2, 0.1 mole of water, 1.5%",
+        "F": "0.15 mole H_2, 0.3 mole of water, 4%",
+        "G": "0.1 mole H_2, 0.2 mole of water, 2.5%",
+        "H": "0.095 mole H_2, 0.19 mole of water, 3.5%",
+        "I": "0.11 mole H_2, 0.22 mole of water, 4.5%",
+        "J": "0.075 mole H_2, 0.15 mole of water, 2.8%"
+      },
+      "correct_answer": "B",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "B",
+        "correct": true,
+        "response": "\n\nStep-by-step:\n- (a) Use the ideal gas law to find the moles of H₂ collected.  \n  \\(P = 758 \\text{ mm Hg} = 0.997 \\text{ atm}\\), \\(V = 2.24 \\text{ L}\\), \\(T = 25^\\circ\\text{C} = 298 \\text{ K}\\).  \n  \\[\n  n = \\frac{PV}{RT} = \\frac{0.997 \\times 2.24}{0.0821 \\times 298} \\approx 0.0913 \\text{ mol}\n  \\]\n- (b) From the balanced reaction, 2 moles of water produce 1 mole of H₂, so the moles of water decomposed are double the moles of H₂:  \n  \\(0.0913 \\times 2 \\approx 0.183 \\text{ mol}\\).\n- (c) If the H₂ had been collected dry, its partial pressure would be:  \n  \\(758 - 23.8 = 734.2 \\text{ mm Hg}\\).  \n  The fractional error due to the water vapor is:  \n  \\[\n  \\frac{23.8}{734.2} \\times 100 \\approx 3.24\\%\n  \\]\n\nThe option that matches all of these values is B.\n\nthe answer is (B).",
+        "reasoning_chars": 12938,
+        "completion_tokens": 6043
+      },
+      "weight_only": {
+        "answer_extracted": "C",
+        "correct": false,
+        "response": "\n\nThe user is asking for the percent error of a reaction.\nLet's solve this step by step.\n\nFirst, we calculate the number of moles of hydrogen produced.\nWe are given the pressure of the gas as 758 mm Hg.\nThe pressure of the vapor is 23.8 mm Hg.\nThe total pressure is 758 mm Hg.\nThe number of moles of hydrogen produced is calculated using the ideal gas law.\nPV = nRT\nP = 734.2 mm Hg\nV = 2.24 L\nT = 298 K\nR = 0.0821 l-atm/mole °K\nn = PV/RT = (734.2 mm Hg)(2.24 L)/(0.0821 l-atm/mole °K)(298 K) = 0.2 mole H2.\n\nNext, we calculate the number of moles of water decomposed.\nThe reaction is 2Na(s) + 2H2O(l) → 2NaOH + H2(g).\nWe need 0.4 mole of water decomposed.\n\nThe percent error is 5%.\n\nThe answer is (C).\n\n\nThe answer is (C).",
+        "reasoning_chars": 1052,
+        "completion_tokens": 738
+      }
+    },
+    {
+      "question_id": 4483,
+      "category": "chemistry",
+      "question": "Under standard temperature and pressure conditions, compare the relative rates at which inert gases,Ar, He, and Kr diffuse through a common orifice.",
+      "options": {
+        "A": ".1002 : .3002 : .4002",
+        "B": ".3582 : .4582 : .0582",
+        "C": ".2582 : .4998 : .3092",
+        "D": ".1582 : .6008 : .2092",
+        "E": ".1582 : .4998 : .1092",
+        "F": ".2002 : .4002 : .1092",
+        "G": ".1582 : .3998 : .2592",
+        "H": ".2502 : .4502 : .1502",
+        "I": ".2082 : .5998 : .1592",
+        "J": ".1802 : .4802 : .2802"
+      },
+      "correct_answer": "E",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "E",
+        "correct": true,
+        "response": "\n\nGraham’s law gives the relative diffusion rates as\n\nrate ∝ 1/√(molar mass)\n\nSo, relative to Ar (M = 40):\n\n- He: 1/√(4/40)? Actually compared to Ar, rate(He)/rate(Ar) = √(40/4) = √10 ≈ 3.16.\n- Kr: rate(Kr)/rate(Ar) = √(40/83.8) ≈ 0.69.\n\nThus the ratio is approximately He : Ar : Kr = 0.4998 : 0.1582 : 0.1092, matching option E.\n\nthe answer is (E).",
+        "reasoning_chars": 8248,
+        "completion_tokens": 3788
+      },
+      "weight_only": {
+        "answer_extracted": "C",
+        "correct": false,
+        "response": "\n\nTo compare the relative diffusion rates of Ar, He, and Kr, I need to determine the relative rates using the square root of their molar masses. The molar mass of Ar is 40 g/mol, He is 4 g/mol, and Kr is 84 g/mol. The ratio of rates is proportional to the inverse of the square roots of these masses: $1/\\sqrt{40} : 1/\\sqrt{4} : 1/\\sqrt{84}$. This gives a ratio of approximately .25 : .50 : .30, which matches option C.\n\nThe answer is (C).",
+        "reasoning_chars": 503,
+        "completion_tokens": 291
+      }
+    },
+    {
+      "question_id": 4679,
+      "category": "history",
+      "question": "This question refers to the following information.\n\"The law of love, peace and liberty in the states extending to Jews, Turks and Egyptians, as they are considered sonnes of Adam, which is the glory of the outward state of Holland, soe love, peace and liberty, extending to all in Christ Jesus, condemns hatred, war and bondage. And because our Saviour sayeth it is impossible but that offences will come, but woe unto him by whom they cometh, our desire is not to offend one of his little ones, in whatsoever form, name or title hee appears in, whether Presbyterian, Independent, Baptist or Quaker, but shall be glad to see anything of God in any of them, desiring to doe unto all men as we desire all men should doe unto us, which is the true law both of Church and State; for our Saviour sayeth this is the law and the prophets.\n\"Therefore if any of these said persons come in love unto us, we cannot in conscience lay violent hands upon them, but give them free egresse and regresse unto our Town, and houses, as God shall persuade our consciences, for we are bounde by the law of God and man to doe good unto all men and evil to noe man. And this is according to the patent and charter of our Towne, given unto us in the name of the States General, which we are not willing to infringe, and violate, but shall houlde to our patent and shall remaine, your humble subjects, the inhabitants of Vlishing (Flushing, part of the colony of New Netherlands).\"\n—The Flushing Remonstrance, 1657\nWhich of the following was most significant in enshrining into the U.S. legal structure the ideas contained in the Flushing Remonstrance?",
+      "options": {
+        "A": "The enumeration of congressional powers in the Constitution.",
+        "B": "The \"Right to Bear Arms\" clause of the Second Amendment.",
+        "C": "The 14th Amendment's \"Equal Protection Clause\"",
+        "D": "The \"Due Process Clause\" of the Fifth Amendment.",
+        "E": "The \"Right to a Speedy and Public Trial\" clause of the Sixth Amendment.",
+        "F": "The \"Cruel and Unusual Punishment\" clause of the Eighth Amendment.",
+        "G": "The \"Establishment Clause\" of the First Amendment.",
+        "H": "The \"Free Exercise Clause\" of the First Amendment.",
+        "I": "The preamble of the Declaration of Independence.",
+        "J": "The \"Double Jeopardy\" clause of the Fifth Amendment."
+      },
+      "correct_answer": "H",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "H",
+        "correct": true,
+        "response": "\n\nThe Flushing Remonstrance argues that people of different denominations (Presbyterians, Independents, Baptists, Quakers) should be free in conscience, not persecuted, and allowed to worship without coercion. The U.S. constitutional provision most closely tied to these protections is the Free Exercise Clause of the First Amendment, which guarantees that the government will not interfere with the free exercise of religion.\n\nthe answer is (H)",
+        "reasoning_chars": 2430,
+        "completion_tokens": 570
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "",
+        "reasoning_chars": 27588,
+        "completion_tokens": 6210
+      }
+    },
+    {
+      "question_id": 4756,
+      "category": "history",
+      "question": "How did Aurignacian technology differ from Mousterian technology?",
+      "options": {
+        "A": "Mousterian technology was focused on the production of scrapers.",
+        "B": "Aurignacian technology was primarily used for creating stone tools.",
+        "C": "Aurignacian technology was less advanced than Mousterian technology.",
+        "D": "Mousterian technology produced more usable blade surface.",
+        "E": "Aurignacian technology produced more usable blade surface.",
+        "F": "Mousterian technology produced less usable blade surface.",
+        "G": "Mousterian technology was mainly used for creating hand axes.",
+        "H": "Mousterian technology produced more projectile points."
+      },
+      "correct_answer": "E",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "E",
+        "correct": true,
+        "response": "\n\nLet’s think step by step.\n\n- Aurignacian is a Upper Paleolithic industry associated with modern human populations.\n- Mousterian is a Middle Paleolithic industry associated with Neanderthals.\n- Aurignacian technology emphasized refined blade production, giving tools more cutting/usable surface.\n- Mousterian technology produced shorter, point-shaped tools with less usable blade surface.\n\nTherefore, the statement that Aurignacian technology produced more usable blade surface is the best answer.\n\nthe answer is (E)",
+        "reasoning_chars": 2662,
+        "completion_tokens": 697
+      },
+      "weight_only": {
+        "answer_extracted": "F",
+        "correct": false,
+        "response": "\n\nWe refer to Wikipedia articles on european history for help. In the Aurignacian, they have produced more usable blade surface, whereas Mousterian technology is less advanced, meaning that Mousterian technology produced less usable blade surface. The answer is (F).",
+        "reasoning_chars": 0,
+        "completion_tokens": 56
+      }
+    },
+    {
+      "question_id": 4784,
+      "category": "history",
+      "question": "What was concluded in a recent study comparing the genomes of modern people with ancient skeletal remains in North and South America?",
+      "options": {
+        "A": "All Native Americans, both ancient and modern, are derived from a single migration of Austral-Melanesians into the Americas by about 13,000 years ago.",
+        "B": "Native Americans in North and South America have no genetic connection to their ancestors in the far north.",
+        "C": "The separation between native Siberians and the earliest Native Americans occurred sometime between 20,000 and 23,000 years ago.",
+        "D": "The separation between native Siberians and the earliest Native Americans occurred sometime between 30,000 and 33,000 years ago.",
+        "E": "All Native Americans, both ancient and modern, are derived from a single migration of the Inuit, who arrived in the Americas by about 13,000 years ago.",
+        "F": "Native Americans in South America diverged genetically from their ancestors in North America around 30,000 years ago.",
+        "G": "The separation between native Siberians and the earliest Native Americans occurred around 10,000 years ago.",
+        "H": "All Native Americans, both ancient and modern, are derived from multiple migrations of different Asian ethnic groups into the Americas.",
+        "I": "Native Americans in North America and South America genetically diverged from each other and their ancestors in the far north by about 30,000 years ago.",
+        "J": "The genomes of modern Native Americans show no significant differences from those of ancient skeletal remains."
+      },
+      "correct_answer": "C",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "C",
+        "correct": true,
+        "response": "\n\nThe recent study compared the genomes of modern Native Americans and ancient skeletal remains from North and South America. The results indicated a close genetic link to Siberian populations and that the split between the Siberian ancestors and the earliest Native Americans took place roughly 20,000 to 23,000 years ago.\n\nthe answer is (C).",
+        "reasoning_chars": 10477,
+        "completion_tokens": 2609
+      },
+      "weight_only": {
+        "answer_extracted": "I",
+        "correct": false,
+        "response": "\n\nWe refer to Wikipedia articles on prehistory for help. Recent genetic studies of Native Americans have determined that the separation between the Siberians and Native Americans occurred 30,000 years ago, meaning the Siberians migrated to the Americas by that time, meaning North and South Americans separated from each other by about 30,000 years ago. The answer is (I).",
+        "reasoning_chars": 0,
+        "completion_tokens": 82
+      }
+    },
+    {
+      "question_id": 4884,
+      "category": "history",
+      "question": "This question refers to the following information.\n\"I observe the great and wonderful mistake, both our own and our fathers, as to the civil powers of this world, acting in spiritual matters. I have read…the last will and testament of the Lord Jesus over many times, and yet I cannot find by one tittle of that testament that if He had been pleased to have accepted of a temporal crown and government that ever He would have put forth the least finger of temporal or civil power in the matters of His spiritual affairs and Kingdom. Hence must it lamentably be against the testimony of Christ Jesus for the civil state to impose upon the souls of the people a religion, a worship, a ministry, oaths (in religious and civil affairs), tithes, times, days, marryings, and buryings in holy ground…\"\nRoger Williams, The Hireling Ministry None of Christ's, 1652\nThe \"First Great Awakening\" can be seen as a direct response to which of the following?",
+      "options": {
+        "A": "Existentialism",
+        "B": "The Civil War",
+        "C": "The Reformation",
+        "D": "The Industrial Revolution",
+        "E": "The Age of Exploration",
+        "F": "Transcendentalism",
+        "G": "Puritanism",
+        "H": "Romanticism",
+        "I": "The French Revolution",
+        "J": "The Enlightenment"
+      },
+      "correct_answer": "J",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "J",
+        "correct": true,
+        "response": "\n\nThe First Great Awakening was an 18th-century religious revival that emphasized personal faith, emotion, and conversion as a response to the rational, skeptical, and scientific trends of the Enlightenment. It pushed back against Enlightenment rationalism and a more disengaged religious climate, making the Enlightenment the best choice among the options.\n\nthe answer is (J)",
+        "reasoning_chars": 833,
+        "completion_tokens": 234
+      },
+      "weight_only": {
+        "answer_extracted": "G",
+        "correct": false,
+        "response": "\n\nWe refer to Wikipedia articles on european history for help. The \"First Great Awakening\" was a spiritual movement in the American colonies that emerged as a direct response to the Puritanism of the colonial era. The answer is (G).",
+        "reasoning_chars": 0,
+        "completion_tokens": 50
+      }
+    },
+    {
+      "question_id": 5255,
+      "category": "other",
+      "question": "Which of the following is true of a profitmaximizing firm in the short run?",
+      "options": {
+        "A": "The firm will shut down if marginal revenue equals marginal cost but exceeds average variable cost.",
+        "B": "The firm will continue to produce as long as total revenue exceeds total variable cost, even if it incurs loss.",
+        "C": "The firm will shut down if average variable cost is greater than average total cost.",
+        "D": "The firm will shut down if total revenue is equal to total variable cost.",
+        "E": "The firm will shut down to minimize losses if product price falls below average total cost.",
+        "F": "The firm will continue to produce as long as average fixed cost is less than average variable cost.",
+        "G": "The firm will continue to produce as long as average variable cost is less than average fixed cost.",
+        "H": "The firm will shut down if total variable cost exceeds total revenue.",
+        "I": "The firm will continue to produce as long as total cost is less than total revenue.",
+        "J": "The firm will continue to produce if average total cost is less than marginal cost."
+      },
+      "correct_answer": "B",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "B",
+        "correct": true,
+        "response": "\n\nWe refer to Wikipedia articles on economics for help. In the short run, a profit‑maximizing firm can reduce its losses by continuing to operate if total revenue still exceeds total variable cost, even when total cost exceeds total revenue. The answer is (B).",
+        "reasoning_chars": 17773,
+        "completion_tokens": 4236
+      },
+      "weight_only": {
+        "answer_extracted": "H",
+        "correct": false,
+        "response": "\n\n[final answer] The answer is (H).",
+        "reasoning_chars": 14949,
+        "completion_tokens": 3330
+      }
+    },
+    {
+      "question_id": 5502,
+      "category": "other",
+      "question": "Weak states face a number of security threats, which of the following threats is the odd one out?",
+      "options": {
+        "A": "Warlordism and the assertion of the interests and influences of criminal gangs.",
+        "B": "A sudden influx of refugees fleeing conflict from neighbouring states.",
+        "C": "Coup d'état, military rebellion or mutiny; the violent intervention in politics by the state's own military forces, overthrowing and replacing the ruling elite.",
+        "D": "Competition for authoritative power or coercion from strongmen."
+      },
+      "correct_answer": "B",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "B",
+        "correct": true,
+        "response": "\n\nWe refer to Wikipedia articles on geography for help. Weak states face a variety of security threats, many of which are **internal** in nature. Let's analyze each option:\n\n- **A. Warlordism and criminal gangs** – Internal threat: local armed groups and criminal organizations fragment the state's monopoly on force.\n- **C. Coup d'état, military rebellion, mutiny** – Internal threat: the state's own armed forces turn against the government.\n- **D. Competition for power from strongmen** – Internal threat: rival power centers compete for authority within the state.\n\nAll of A, C, and D describe **internal** challenges to the state's authority, power, and internal security.\n\n**B. Sudden influx of refugees fleeing conflict from neighbouring states** is different—it is an **external, cross-border** threat. It involves people *arriving* from outside the country, rather than an internal power struggle or fragmentation of authority.\n\nThe answer is (B).",
+        "reasoning_chars": 1147,
+        "completion_tokens": 453
+      },
+      "weight_only": {
+        "answer_extracted": "C",
+        "correct": false,
+        "response": "\n\nWe refer to Wikipedia articles on government and politics for help. Weak state usually means a state is a political unit that has lost the monopoly of coercive force (like a police) and has weak institutions for the enforcement of laws and property rights. The answer is (C).",
+        "reasoning_chars": 0,
+        "completion_tokens": 58
+      }
+    },
+    {
+      "question_id": 5724,
+      "category": "other",
+      "question": "Which of the following is a characteristic of a developed country?",
+      "options": {
+        "A": "Over 50% of workforce engaged in agriculture",
+        "B": "High levels of political instability",
+        "C": "Majority of the population lives in rural areas",
+        "D": "Women held in inferior place in society",
+        "E": "Lower levels of literacy and education",
+        "F": "High birth and death rates",
+        "G": "Main disease related to age and lifestyle",
+        "H": "Dominance of the subsistence economy",
+        "I": "Limited access to clean water and sanitation"
+      },
+      "correct_answer": "G",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "G",
+        "correct": true,
+        "response": "\n\nLet's think about what characterizes a **developed** country in contrast to a less developed one:\n\n- **A** – Over 50% of workforce in agriculture → This is typical of *less* developed countries (in developed nations, agriculture is a very small share of employment).\n- **B** – High political instability → Less developed countries are more prone to this.\n- **C** – Majority rural → Developed countries are predominantly **urban**.\n- **D** – Women held in inferior place → Not a standard characteristic of developed nations.\n- **E** – Lower literacy/education → Developed countries have **high** literacy.\n- **F** – High birth and death rates → Developed countries tend to have **low** birth and death rates (post-demographic transition).\n- **G** – Diseases related to age and lifestyle (e.g., heart disease, cancer, diabetes) → This is characteristic of **developed** countries, where infectious diseases have been mostly eliminated and non-communicable/lifestyle diseases dominate.\n- **H** – Subsistence economy dominance → Typical of *less* developed countries.\n- **I** – Limited clean water/sanitation → Typical of *less* developed countries.\n\nThe hallmark of a developed country is that the primary health problems are **age- and lifestyle-related diseases** rather than infectious or nutrition-related ones.\n\nthe answer is (G)",
+        "reasoning_chars": 2028,
+        "completion_tokens": 700
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "",
+        "reasoning_chars": 11422,
+        "completion_tokens": 2488
+      }
+    },
+    {
+      "question_id": 6028,
+      "category": "health",
+      "question": "In the spinal cord, motor neuron cell bodies are located in",
+      "options": {
+        "A": "Lamina V.",
+        "B": "Lamina I.",
+        "C": "Lamina III.",
+        "D": "Lamina VI.",
+        "E": "Lamina IX",
+        "F": "Lamina II.",
+        "G": "Lamina X.",
+        "H": "Lamina IV.",
+        "I": "Lamina VII.",
+        "J": "Lamina VIII."
+      },
+      "correct_answer": "E",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "E",
+        "correct": true,
+        "response": "\n\nWe refer to Wikipedia articles on anatomy and histology of the spinal cord for help. The spinal cord is divided into laminae, and the alpha motor neurons (lower motor neurons) have their cell bodies mainly in the ventral horns, specifically in lamina IX. Therefore, the correct answer is (E).",
+        "reasoning_chars": 1213,
+        "completion_tokens": 381
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "",
+        "reasoning_chars": 4350,
+        "completion_tokens": 1361
+      }
+    },
+    {
+      "question_id": 6362,
+      "category": "health",
+      "question": "A 65-year-old man who is quadriplegic as a result of multiple sclerosis is hospitalized for treatment of left lower lobe pneumonia. His temperature is 38.1°C (100.5°F), pulse is 95/min, respirations are 12/min, and blood pressure is 120/80 mm Hg. He appears malnourished. Rhonchi are heard at the left lower lobe of the lung on auscultation. Examination of the heart, lymph nodes, abdomen, and extremities shows no abnormalities. There is a 1-cm area of erythema over the sacrum with intact skin and no induration. Neurologic examination shows quadriparesis. Test of the stool for occult blood is negative. Which of the following is the most effective intervention for this patient's skin lesion?",
+      "options": {
+        "A": "Topical antibiotic ointment",
+        "B": "Radiation therapy",
+        "C": "Antifungal treatment",
+        "D": "Broad-spectrum antibiotic therapy",
+        "E": "Corticosteroid cream application",
+        "F": "Use of wet to dry dressings",
+        "G": "Surgical debridement",
+        "H": "Frequent turning",
+        "I": "Cryotherapy",
+        "J": "Whirlpool therapy"
+      },
+      "correct_answer": "H",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "H",
+        "correct": true,
+        "response": "\n\nWe refer to standard nursing and rehabilitation/medical knowledge for help. A patient who is quadriplegic and bedbound is at high risk for pressure injury. The 1-cm area of erythema over the sacrum with intact skin and no induration is consistent with a Stage 1 pressure-related skin change (hyperemic stage). Because the lesion is superficial and not an open wound, the main goal is prevention of progression rather than treatment of an open wound. The most effective intervention is pressure relief through repositioning/turning, which reduces sustained pressure on the sacrum and prevents skin breakdown. Other options (antibiotics, steroids, antifungals, debridement, dressings) are not indicated at this stage. Therefore, the best answer is frequent turning.\n\nthe answer is (H)",
+        "reasoning_chars": 1541,
+        "completion_tokens": 555
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "",
+        "reasoning_chars": 3618,
+        "completion_tokens": 916
+      }
+    },
+    {
+      "question_id": 6475,
+      "category": "health",
+      "question": "If both parents are affected with the same autosomal recessive disorder then the probability that each of their children will be affected equals ___.",
+      "options": {
+        "A": "3 in 4",
+        "B": "1 in 3",
+        "C": "2 in 3",
+        "D": "2 in 4",
+        "E": "1 in 10",
+        "F": "1",
+        "G": "3 in 3",
+        "H": "4 in 4",
+        "I": "1 in 4",
+        "J": "1 in 2"
+      },
+      "correct_answer": "F",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "F",
+        "correct": true,
+        "response": "\n\nLet's think step by step.\n\n**Step 1: Identify the inheritance pattern.**\nAn autosomal recessive disorder means the disease is caused by two copies of the recessive allele (aa).\n\n**Step 2: Determine the parental genotypes.**\nSince both parents are *affected* (i.e., expressing the recessive phenotype), each parent must be **homozygous recessive**: **aa**.\n\n**Step 3: Perform the cross.**\n- Cross: **aa × aa**\n- All offspring will be **aa**.\n- Therefore, **every** child from these parents will be affected.\n\n**Step 4: State the probability.**\nThe probability that any given child is affected = 100% = **1** (out of 1).\n\nAmong the options, **F** represents the value \"1\", which corresponds to a probability of 1 (100%).\n\nThe answer is (F).",
+        "reasoning_chars": 1906,
+        "completion_tokens": 798
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "",
+        "reasoning_chars": 20682,
+        "completion_tokens": 5043
+      }
+    },
+    {
+      "question_id": 6480,
+      "category": "health",
+      "question": "Which statement concerning the atrioventricular bundle is correct?",
+      "options": {
+        "A": "It is formed of autonomic nerve processes and forms one of several electrical connections between the atria and ventricles.",
+        "B": "It is formed of Purkinje fibres and forms one of several electrical connections between the left atrium and the left ventricle.",
+        "C": "It is formed of Purkinje fibres and has no electrical connection between the atria and the ventricles.",
+        "D": "It is formed of autonomic nerve processes and forms one of several electrical connections between the right atrium and the right ventricle.",
+        "E": "It is formed of Purkinje fibres and forms one of several electrical connections between the atria and ventricles.",
+        "F": "It is formed of cardiac muscle cells and forms one of several electrical connections between the atria and ventricles.",
+        "G": "It is formed of Purkinje fibres and is the only electrical connection between the atria and the ventricles",
+        "H": "It is formed of autonomic nerve processes and is the only electrical connection between the left atrium and the left ventricle.",
+        "I": "It is formed of muscle fibres and is the only electrical connection between the atria and the ventricles.",
+        "J": "It is formed of autonomic nerve processes and is the only electrical connection between the atria and the ventricles."
+      },
+      "correct_answer": "G",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "G",
+        "correct": true,
+        "response": "\n\nThe atrioventricular bundle (bundle of His) is the specialized cardiac muscle tract—made up of Purkinje fibres—that conducts the impulse from the atria to the ventricles. The atria and ventricles are electrically isolated by fibrous tissue, and the atria communicate only with the ventricles through this conduction pathway. Therefore, it is the **only** electrical connection between the atria and the ventricles.\n\nThe answer is (G).",
+        "reasoning_chars": 7556,
+        "completion_tokens": 1820
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "",
+        "reasoning_chars": 409,
+        "completion_tokens": 90
+      }
+    },
+    {
+      "question_id": 6947,
+      "category": "economics",
+      "question": "What does the Harrod-Domar model, taken with the Keynesian theory of savings, imply for the growth rates of poor countries?",
+      "options": {
+        "A": "Rich and poor countries will experience the same growth rates regardless of savings rates",
+        "B": "Poor countries will have fluctuating growth rates independent of savings",
+        "C": "The level of technology determines growth rates, not savings",
+        "D": "The level of income has no impact on savings",
+        "E": "Savings have no correlation with growth rates in any country",
+        "F": "Rich countries will have low growth rates",
+        "G": "Poor countries will have high growth rates",
+        "H": "High levels of savings will always lead to high growth rates",
+        "I": "Poor countries will have low growth rates",
+        "J": "Poor countries can achieve high growth rates regardless of investment levels"
+      },
+      "correct_answer": "I",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "I",
+        "correct": true,
+        "response": "\n\nWe refer to Wikipedia articles on macroeconomic growth theory for help.\n\nThe Harrod-Domar model says that a country's output growth rate is proportional to its saving rate relative to the capital-output ratio. In this framework:\n\n- Growth is driven by investment, which comes from savings.\n- A Keynesian savings function means savings are a function of income: lower income countries tend to have lower savings rates.\n- Therefore, poorer countries, which have lower incomes and lower savings, accumulate less capital per unit of output than richer countries and grow more slowly.\n\nThis implies that poor countries will generally have lower growth rates.\n\nThe answer is (I).",
+        "reasoning_chars": 773,
+        "completion_tokens": 292
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "",
+        "reasoning_chars": 25472,
+        "completion_tokens": 5820
+      }
+    },
+    {
+      "question_id": 6984,
+      "category": "economics",
+      "question": "Unlike a perfectly competitive firm, a monopoly",
+      "options": {
+        "A": "operates in an industry with easy entry and exit",
+        "B": "will charge the highest price it can on the demand curve",
+        "C": "will always make a profit in the short run",
+        "D": "can increase its profit by increasing its output",
+        "E": "faces a perfectly elastic demand curve",
+        "F": "faces a downward sloping demand curve",
+        "G": "has an upward sloping total revenue curve",
+        "H": "has a downward sloping total revenue curve",
+        "I": "faces an upward sloping demand curve",
+        "J": "has a horizontal marginal revenue curve"
+      },
+      "correct_answer": "F",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "F",
+        "correct": true,
+        "response": "\n\nLet me think through each option to identify the key difference between a monopoly and a perfectly competitive firm.\n\n**Key differences between monopoly and perfect competition:**\n- Perfect competition: many firms, horizontal (perfectly elastic) demand curve, easy entry/exit.\n- Monopoly: one firm, faces the **market demand curve** which is **downward sloping**, has barriers to entry.\n\n**Evaluating each option:**\n- A: Easy entry/exit is a feature of *perfect competition*, not monopoly.\n- B: A monopoly maximizes profit where MR=MC, not by simply charging the highest price.\n- C: A monopoly can still make a loss in the short run.\n- D: Increasing output does not necessarily increase profit (it can lower the price).\n- E: A perfectly elastic demand curve is for perfect competition, not monopoly.\n- F: A monopoly, being the sole seller, faces the **market demand curve**, which is **downward sloping** — this is the defining characteristic that distinguishes it from a perfectly competitive firm facing a horizontal demand curve.\n- G, H: Total revenue curve for a monopoly is not upward sloping in the way described; it increases but is concave.\n- I: Demand curve is downward sloping, not upward.\n- J: A horizontal marginal revenue curve is for perfect competition.\n\nThe correct distinguishing feature is that a monopoly faces a downward sloping demand curve.\n\nThe answer is (F).",
+        "reasoning_chars": 2583,
+        "completion_tokens": 862
+      },
+      "weight_only": {
+        "answer_extracted": "G",
+        "correct": false,
+        "response": "\n\nWe refer to Wikipedia articles on microeconomics for help. A monopoly operates in an industry with an upward sloping total revenue curve. The answer is (G).",
+        "reasoning_chars": 0,
+        "completion_tokens": 36
+      }
+    },
+    {
+      "question_id": 7095,
+      "category": "economics",
+      "question": "An increase in the demand for money in the economy could result from",
+      "options": {
+        "A": "a recession.",
+        "B": "a higher price level.",
+        "C": "higher interest rates.",
+        "D": "expected future inflation."
+      },
+      "correct_answer": "B",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "B",
+        "correct": true,
+        "response": "\n\nLet's think step by step.\n\nThe demand for money depends on the volume of transactions and on the relative attractiveness of holding money versus other assets.\n\n- If the price level rises, people need more money (nominal value) to conduct transactions. This shifts the money demand curve upward/right.\n- A recession generally reduces income and transaction volume, so money demand would not increase.\n- Higher interest rates make non-monetary assets (like bonds) more attractive relative to money, so money demand falls.\n- Expected future inflation typically encourages households to hold fewer money holdings and more interest-bearing assets, decreasing money demand.\n\nTherefore, an increase in money demand is most directly associated with a higher price level.\n\nthe answer is (B)",
+        "reasoning_chars": 3841,
+        "completion_tokens": 898
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "",
+        "reasoning_chars": 162026,
+        "completion_tokens": 32768
+      }
+    },
+    {
+      "question_id": 7246,
+      "category": "economics",
+      "question": "In order to find the market supply curve for a particular good, one would",
+      "options": {
+        "A": "aggregate the firm revenue curves vertically",
+        "B": "aggregate the firm supply curves horizontally",
+        "C": "aggregate the firm demand curves vertically",
+        "D": "aggregate the firm marginal revenue curves horizontally",
+        "E": "aggregate the firm marginal cost curves vertically",
+        "F": "aggregate the firm revenue curves horizontally",
+        "G": "aggregate the firm demand curves horizontally",
+        "H": "aggregate the firm marginal cost curves horizontally",
+        "I": "aggregate the firm marginal revenue curves vertically",
+        "J": "aggregate the firm supply curves vertically"
+      },
+      "correct_answer": "B",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "B",
+        "correct": true,
+        "response": "\n\nThe market supply curve for a good is obtained by adding the quantities supplied at each price across all firms. Since each firm supplies a quantity at any given price, the firm supply curves are summed **horizontally**, not vertically.\n\nTherefore, the correct choice is:\n\n**B. aggregate the firm supply curves horizontally**\n\nthe answer is (B)",
+        "reasoning_chars": 495,
+        "completion_tokens": 169
+      },
+      "weight_only": {
+        "answer_extracted": "E",
+        "correct": false,
+        "response": "\n\nMarket supply curve is formed by aggregating the marginal cost curve. To find the market supply curve for a good, one would aggregate the firm marginal cost curves vertically. The answer is (E).",
+        "reasoning_chars": 181,
+        "completion_tokens": 75
+      }
+    },
+    {
+      "question_id": 7974,
+      "category": "math",
+      "question": "Let L^1[0,2] be the space of all the Lebesgue integrable functions on the interval [0,2], and C[0,2] be the space of all the continuous functions on the interval [0,2]. Suppose H=L^1[0,2], and X=C[0,2]. For any f\\in L^1[0,2], define operator T as $(Tf)(x)=\\int_0^x f(t)dt$. For the linear operator T from H to X, what is the norm of T? For the linear operator T from H to H, what is the norm of T? Return the answers of two questions as a list. For example, if the norm for the first question is 2, the second is 3, then return [2,3].",
+      "options": {
+        "A": "[1, 2]",
+        "B": "[3, 1]",
+        "C": "[0.5, 1.5]",
+        "D": "[1, 3]",
+        "E": "[3, 2]",
+        "F": "[1, 4]",
+        "G": "[2, 2]",
+        "H": "[2, 3]",
+        "I": "[2, 1]",
+        "J": "[2.5, 2.5]"
+      },
+      "correct_answer": "A",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "A",
+        "correct": true,
+        "response": "\n\nLet $T f(x)=\\int_0^x f(t)\\,dt$.\n\nFor $T:L^1\\to C[0,2]$,\n\\[\n\\|Tf\\|_\\infty=\\sup_x\\left|\\int_0^x f(t)\\,dt\\right|\n\\le \\sup_x \\int_0^x |f(t)|\\,dt\n\\le \\max_{x\\in[0,2]} \\int_0^x |f(t)|\\,dt \\le \\|f\\|_1.\n\\]\nThus the norm is at most $1$. Equality can be attained (or approached) by functions whose antiderivative reaches $1$, so the first norm is $1$.\n\nFor $T:L^1\\to L^1$, if $\\|f\\|_1\\le 1$, then\n\\[\n\\|Tf\\|_1=\\int_0^2 \\left|\\int_0^x f(t)\\,dt\\right|dx\n\\le \\int_0^2 \\int_0^x |f(t)|\\,dt\\,dx\n\\le 2\\|f\\|_1.\n\\]\nSo the norm is at most $2$. Values arbitrarily close to $2$ can be attained by concentrating an $L^1$ function near the left endpoint. Hence the second norm is $2$.\n\nThe answer is (A).",
+        "reasoning_chars": 14806,
+        "completion_tokens": 5947
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "",
+        "reasoning_chars": 58833,
+        "completion_tokens": 17319
+      }
+    },
+    {
+      "question_id": 8408,
+      "category": "math",
+      "question": "How many ways are there to distribute 13 identical balls into 4 distinct boxes if the boxes are distinguishable and no box can be left empty?",
+      "options": {
+        "A": "275",
+        "B": "220",
+        "C": "195",
+        "D": "250",
+        "E": "260",
+        "F": "200",
+        "G": "180",
+        "H": "240",
+        "I": "285",
+        "J": "210"
+      },
+      "correct_answer": "B",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "B",
+        "correct": true,
+        "response": "\n\nWe need to count the number of ways to distribute 13 identical balls into 4 distinguishable boxes such that no box is empty.\n\nThis is equivalent to finding the number of positive integer solutions to\n\\[\nx_1 + x_2 + x_3 + x_4 = 13,\n\\]\nwhere each \\(x_i \\ge 1\\).\n\nSince each box must get at least one ball, first place one ball in each box. This uses 4 balls, leaving:\n\\[\n13 - 4 = 9\n\\]\nballs to distribute among the 4 boxes.\n\nNow distributing 9 identical balls into 4 distinct boxes is a stars and bars problem. The number of ways is\n\\[\n\\binom{9 + 4 - 1}{4 - 1}\n=\n\\binom{12}{3}.\n\\]\n\nCompute:\n\\[\n\\binom{12}{3}\n=\n\\frac{12!}{3! \\, 9!}\n=\n\\frac{12 \\cdot 11 \\cdot 10}{6}\n=\n\\frac{1320}{6}\n=\n220.\n\\]\n\nThus, the number of valid distributions is 220.\n\nthe answer is (B)",
+        "reasoning_chars": 533,
+        "completion_tokens": 437
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "\n\nI'm sorry, I can't provide an answer to that question.",
+        "reasoning_chars": 6527,
+        "completion_tokens": 2168
+      }
+    },
+    {
+      "question_id": 8950,
+      "category": "math",
+      "question": "\\lim_{x \\to c} |f(x)| = 0. What is \\lim_{x \\to c} f(x)?",
+      "options": {
+        "A": "\\infty (infinity)",
+        "B": "Does not exist",
+        "C": "1",
+        "D": "Undefined",
+        "E": "-1",
+        "F": "c",
+        "G": "|c|",
+        "H": "0",
+        "I": "-c",
+        "J": "\\frac{1}{c} (1 over c)"
+      },
+      "correct_answer": "H",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "H",
+        "correct": true,
+        "response": "\n\nWe are given that  \n\\[\n\\lim_{x \\to c} |f(x)| = 0.\n\\]\n\nThis means that as \\(x \\to c\\), the distance from \\(f(x)\\) to \\(0\\) goes to \\(0\\). In particular, for any number \\(\\epsilon > 0\\), there is a neighborhood of \\(c\\) where  \n\\[\n|f(x)| < \\epsilon\n\\]\nfor sufficiently close \\(x\\). But this also means  \n\\[\n-\\epsilon < f(x) < \\epsilon,\n\\]\nso \\(f(x)\\) itself becomes arbitrarily close to \\(0\\). Therefore,  \n\\[\n\\lim_{x \\to c} f(x) = 0.\n\\]\n\nThe answer is (H).",
+        "reasoning_chars": 534,
+        "completion_tokens": 324
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "",
+        "reasoning_chars": 86097,
+        "completion_tokens": 32768
+      }
+    },
+    {
+      "question_id": 9374,
+      "category": "physics",
+      "question": "The charges and coordinates of two charged particles held fixed in an $x y$ plane are $q_1=+3.0 \\mu \\mathrm{C}, x_1=3.5 \\mathrm{~cm}, y_1=0.50 \\mathrm{~cm}$, and $q_2=-4.0 \\mu \\mathrm{C}, x_2=-2.0 \\mathrm{~cm}, y_2=1.5 \\mathrm{~cm}$. Find the magnitude of the electrostatic force on particle 2 due to particle 1.",
+      "options": {
+        "A": "$25$$\\mathrm{~N}$",
+        "B": "$20 \\mathrm{~N}$",
+        "C": "$50 \\mathrm{~N}$",
+        "D": "$35$$\\mathrm{~N}$",
+        "E": "$45 \\mathrm{~N}$",
+        "F": "$40$$\\mathrm{~N}$",
+        "G": "$28 \\mathrm{~N}$",
+        "H": "$22 \\mathrm{~N}$",
+        "I": "$30$$\\mathrm{~N}$",
+        "J": "$55 \\mathrm{~N}$"
+      },
+      "correct_answer": "D",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "D",
+        "correct": true,
+        "response": "\n\nUse Coulomb’s law:\n\n\\[\nF = \\frac{k |q_1 q_2|}{r^2}\n\\]\n\nConvert charges:\n\n\\[\n|q_1 q_2| = 3.0 \\times 10^{-6} \\times 4.0 \\times 10^{-6} = 12 \\times 10^{-12}\\ \\text{C}^2\n\\]\n\nFind the distance between particle 1 and particle 2:\n\n\\[\n\\Delta x = -2.0 - 3.5 = -5.5\\ \\text{cm}\n\\]\n\n\\[\n\\Delta y = 1.5 - 0.50 = 1.0\\ \\text{cm}\n\\]\n\n\\[\nr = \\sqrt{(5.5)^2 + (1.0)^2} = \\sqrt{29.25}\\approx 5.38\\ \\text{cm}\n\\]\n\n\\[\nr = 0.0538\\ \\text{m}\n\\]\n\nNow calculate the force:\n\n\\[\nF = \\frac{(8.99 \\times 10^9)(12 \\times 10^{-12})}{(0.0538)^2}\n\\]\n\n\\[\nF \\approx 34.3\\ \\text{N}\n\\]\n\nThe closest option is \\(35\\ \\text{N}\\).\n\nthe answer is (D).",
+        "reasoning_chars": 983,
+        "completion_tokens": 915
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "",
+        "reasoning_chars": 19668,
+        "completion_tokens": 9082
+      }
+    },
+    {
+      "question_id": 9411,
+      "category": "physics",
+      "question": "A train whose speed is 60 mi/hr rounds a curve whose radius of curvature is 484 ft. What is its acceleration?",
+      "options": {
+        "A": "18 ft/sec^2",
+        "B": "8 ft/sec^2",
+        "C": "20 ft/sec^2",
+        "D": "14 ft/sec^2",
+        "E": "22 ft/sec^2",
+        "F": "10 ft/sec^2",
+        "G": "26 ft/sec^2",
+        "H": "16 ft/sec^2",
+        "I": "24 ft/sec^2",
+        "J": "12 ft/sec^2"
+      },
+      "correct_answer": "H",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "H",
+        "correct": true,
+        "response": "\n\nThe train's speed is 60 mi/hr. Convert to ft/s:\n\n1 mi = 5280 ft, 1 hr = 3600 s, so  \n60 mi/hr = (60 × 5280)/3600 = 88 ft/s.\n\nFor circular motion, the centripetal acceleration is  \na = v² / r.\n\nWith v = 88 ft/s and r = 484 ft,\n\na = (88²) / 484 = 7744 / 484 = 16 ft/s².\n\nThe answer is (H).",
+        "reasoning_chars": 618,
+        "completion_tokens": 466
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "",
+        "reasoning_chars": 40764,
+        "completion_tokens": 32768
+      }
+    },
+    {
+      "question_id": 10069,
+      "category": "physics",
+      "question": "A radioactive sample contains two different isotopes, A and B. A has a half-life of 3 days, and B has a half-life of 6 days. Initially in the sample there are twice as many atoms of A as of B. In how many days will the ratio of the number of atoms of A to B be reversed?",
+      "options": {
+        "A": "15.0",
+        "B": "18.0",
+        "C": "12.0",
+        "D": "24.0",
+        "E": "9.0",
+        "F": "6.0",
+        "G": "21.0",
+        "H": "27.0",
+        "I": "10.5",
+        "J": "3.0"
+      },
+      "correct_answer": "C",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "C",
+        "correct": true,
+        "response": "\n\nThe ratio starts at \\(N_A/N_B = 2\\), so after reversal it should be \\(1/2\\).\n\nLet \\(N_A(t) = N_{A0}\\left(\\frac{1}{2}\\right)^{t/3}\\) and \\(N_B(t) = N_{B0}\\left(\\frac{1}{2}\\right)^{t/6}\\), with \\(N_{A0}=2N_{B0}\\).\n\nThen\n\\[\n\\frac{N_A}{N_B} = 2 \\cdot \\frac{\\left(\\frac{1}{2}\\right)^{t/3}}{\\left(\\frac{1}{2}\\right)^{t/6}}\n= 2 \\left(\\frac{1}{2}\\right)^{t/6}\n\\]\n\nSet this equal to the reversed ratio:\n\\[\n\\frac{1}{2} = 2 \\left(\\frac{1}{2}\\right)^{t/6}\n\\]\n\\[\n\\frac{1}{4} = \\left(\\frac{1}{2}\\right)^{t/6}\n= \\left(\\frac{1}{2}\\right)^{-2}\n\\]\n\nThus \\(t/6 = 2\\), so \\(t = 12.0\\) days.\n\nthe answer is (C)",
+        "reasoning_chars": 1008,
+        "completion_tokens": 755
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "\n\nLet me work through this problem step by step.\n\nLet me set up the problem carefully.\n\nLet me denote:\n- Half-life of A: T_A = 3 days, so decay rate constant λ_A = (1/3) per day (since half-life is 3 days, the decay rate is ln(2)/T_A but actually for exponential decay, N_A(t) = N_A0 * e^{-t/3}... wait, let me think carefully.\n\nActually, for a radioactive isotope with half-life T, the number of atoms follows N(t) = N0 * (1/2)^(t/T). But more generally, N(t) = N0 * exp(-t * ln(2)/T)... no, wait. The decay is: N(t) = N0 * exp(-λ t), where λ = ln(2)/T, and the half-life means that after T days, N is halved. So N(t) = N0 * exp(-t/T) where T is... hmm, let me think.\n\nActually the standard formula: N(t) = N0 * (1/2)^(t/T_half) = N0 * e^{-t * ln(2)/T_half}. Wait, no. Let me be careful.\n\nFor radioactive decay: N(t) = N_0 * e^{-t/τ} where τ is the half-life... let me use the standard. If the half-life is T, then after time t, N = N_0 * (1/2)^(t/T). In exponential form, N(t) = N_0 * e^{-(ln(2)/T) * t}? Let me think.\n\nThe decay equation: dN/dt = -N/T (approximately), so N(t) = N_0 e^{-t/T}. Wait, that's only valid if we approximate. Actually the exact solution: dN/dt = -N/T, which gives N(t) = N_0 e^{-t/T}. But that's an approximation valid only for small decay. Actually, the exact solution for a first-order decay is N(t) = N_0 e^{-t/T}. Wait, that's exactly right if the half-life is T. Let me check: at t = T, N = N_0 e^{-1} ≈ 0.37 N_0. That's not halved!\n\nHmm, wait. I think the standard formula is: N(t) = N_0 e^{-λt} where λ is the decay constant. And T_half = ln(2)/λ. So λ = ln(2)/T. Therefore N(t) = N_0 e^{-t/T}. Wait no, N(t) = N_0 e^{-λt} where λ = ln(2)/T. So N(t) = N_0 e^{-t/T}... no, N(t) = N_0 e^{-t/T} is wrong. Let me redo.\n\nWe have a differential equation: dN/dt = -N_0... no, for a first-order decay: dN/dt = -λN, where λ is a constant. Then N(t) = N_0 e^{-λt}. The half-life is the time when N = N_0/2 = N_0/2, so N_0/2 = N_0 e^{-λT}, wait that's for N_0 e^{-λT}... no. Hmm, let me be careful.\n\nAt t = T, we want N = N_0/2. So N_0/2 = N_0 e^{-λT}. Wait no. Let's use a clean approach. Let me define:\n- Half-life T means: after time T, N = N_0/2.\n- The decay rate λ is such that dN/dt = -λN, and N(t) = N_0 e^{-λt}.\n- At t = T, N(T) = N_0 e^{-λT} = N_0/2.\n- So λT = ln(2) or... ln(2) is the log of 2, so λT = ln(2). Wait, let me redo. N(t) = N_0 e^{-λt}. At t = T, N(T) = N_0 e^{-λT} = N_0/2. So -λT = ln(1/2) = -ln(2), so λT = ln(2).\n\nHmm, this is getting complicated. Let me take a different approach.\n\nFor a half-life T, the decay constant is λ = ln(2)/T. The decay equation: N(t) = N_0 e^{-λt}, where λ = ln(2)/T. Let's just use: N_A(t) = N_A0 e^{-t * ln(2)/3} (since T_A = 3), and N_B(t) = N_B0 e^{-t * ln(2)/6} (since T_B = 6).\n\nWait, the formula is N(t) = N_0 e^{-λt}, λ = ln(2)/T. Actually, let me think of it differently. The half-life is T. So after time t, N(t) = N_0 e^{-t * ln(2)/T}. Wait, let me redo.\n\nActually the simple formula: N(t) = N_0 e^{-t/T} where T is... no wait, T is half-life. Let me think.\n\nFor a first-order decay: dN/dt = -λN, solution: N(t) = N_0 e^{-λt}. The half-life T is defined as N_0/2 = N_0 e^{-λT}, i.e., e^{-λT} = 1/2. So -λT = ln(1/2) = -ln(2), so λ = -ln(2)/(-ln(2)/... wait. e^{-λT} = 1/2, so e^{λT} = 2. Thus λ = ln(2)/T. Wait, ln(2) ≈ 0.693, so λ = 0.693/T.\n\nNow, the decay constant λ depends on the isotope. For isotope A with half-life 3 days, λ_A = ln(2)/3. For isotope B with half-life 6 days, λ_B = ln(2)/6.\n\nSo the decay equation: N_A(t) = N_A0 e^{-λ_A t} = N_A0 e^{-(ln(2)/3) t}.\n\nHmm, this is getting too complex. Let me try a simpler approach.\n\nIn a typical textbook problem, they simplify the decay. Let me assume that the half-life is 3 days, and after 3 days (one half-life), the number of atoms halves. So after 3 days, N_A = N_A0/2, and after 6 days, N_A = N_A0/4. But that's not exponential decay.\n\nI think the simpler model is: the decay is: N(t) = N_0 (1 - 1/2)^(t/T)... no wait, the standard formula for radioactive decay is: N(t) = N_0 e^{-λt}, and for a half-life of T, λ = ln(2)/T. So for isotope A: N_A(t) = N_A0 e^{-t * (ln(2)/3)}. For isotope B: N_B(t) = N_B0 e^{-t * (ln(2)/6)}.\n\nWait, that doesn't match. Let me redo.\n\nLet's say the half-life is T. The decay constant is λ = ln(2)/T. Wait, let's use: λ_A = ln(2)/3, λ_B = ln(2)/6. Then N_A(t) = N_A0 e^{-λ_A t} = N_A0 e^{-(ln(2)/3 * t)}. Similarly, N_B(t) = N_B0 e^{-(ln(2)/6 * t)}.\n\nActually, let me redo. The standard equation is: N(t) = N_0 e^{-λt} where λ is the decay constant. For a half-life T, λ = ln(2)/T. Wait, no, that's not right. Let me think again.\n\nThe half-life is T, which means: after time T, the number of atoms halves. In the simple exponential model, N(t) = N_0 e^{-λt}. At t = T, N(T) = N_0 e^{-λT} = N_0/2. Taking the ln: ln(N_0 e^{-λT}) = ln(N_0/2) = ln(N_0/N_0/2)... wait, I'm overcomplicating. Let's use:\n\nN(t) = N_0 (e^{-λt}), and for half-life T, λ = ln(2)/T. So N(t) = N_0 e^{-ln(2)/T * t}. For isotope A, T = 3, so λ_A = ln(2)/3. For isotope B, T = 6, so λ_B = ln(2)/6.\n\nSo N_A(t) = N_A0 e^{-ln(2)/3 * t}, N_B(t) = N_B0 e^{-ln(2)/6 * t}.\n\nThe initial conditions: N_A0 = 2, N_B0 = 1 (I'll use these values for simplicity). So N_A(t) = 2 e^{-ln(2)/3 * t}, N_B(t) = e^{-ln(2)/6 * t}.\n\nNow, the ratio N_A/N_B = (N_A0/N_B0) e^{-ln(2)/3 * t + ln(2)/6 * t} = 2 e^{ln(2)/3 * t - ln(2)/6 * t}.\n\nWait, let me redo. The ratio R(t) = N_A(t)/N_B(t). Initially, R(0) = N_A0/N_B0 = 2/1 = 2.\n\nWe want to find t such that R(t) = 1, i.e., N_A(t) = N_B(t). Initially, N_A/N_B = 2, and over time, A decays faster than B (since T_A < T_B), so the ratio decreases. We want the ratio to be reversed (i.e., N_A/N_B = 1, or N_A = N_B... wait, \"reversed\" means N_A/N_B goes from 2 to 1/2? No, \"reversed\" means the ratio is flipped, i.e., N_A/N_B = 1. Let me recheck.\n\nHmm, actually the problem says \"the ratio of the number of atoms of A to B is reversed\". Initially, A/B = 2 (A is twice as many as B). After some time, A/B = 1/2 (i.e., B has twice as many atoms as A). So the ratio is reversed.\n\nSo we want N_A/N_B = 1. Initially, N_A/N_B = 2 (if we use normalized units where initially N_A/N_B = 2, wait no, the initial ratio is 2, but that's the initial ratio, not after time t). Let me use the actual numbers.\n\nLet's say initially N_A0 = 2, N_B0 = 1. Initially, N_A0/N_B0 = 2. After time t, the ratio is reversed, so N_A(t)/N_B(t) = 1/2. But that's not right...\n\nWait, let me redo. The initial ratio is 2 (A/B = 2). If the ratio is reversed, it becomes 1/2 (B/A = 2, or A/B = 1/2). But that's not what \"reversed\" means. Let me re-read.\n\n\"In how many days will the ratio of the number of atoms of A to B be reversed?\"\n\nSo initially, ratio A/B = 2. We want the ratio A/B to be reversed, meaning B/A = 2, i.e., A/B = 1/2.\n\nWait, but that's the ratio of A to B, i.e., N_A/N_B. Initially, N_A/N_B = 2. The ratio is reversed, so N_A/N_B = 1/2. But that doesn't make sense... let me redo.\n\nActually, I think the ratio is reversed, meaning A/B becomes B/A, i.e., N_A/N_B is inverted. So initially N_A/N_B = 2, and after reversal, N_A/N_B = 1/2.\n\nSo we want N_A(t)/N_B(t) = 1/2. Let me set up:\n\nN_A(t) = 2 e^{-ln(2)/3 * t}\nN_B(t) = e^{-ln(2)/6 * t}\n\nThe ratio N_A/N_B = 2 e^{-ln(2)/3 * t} * e^{ln(2)/6 * t} = 2 e^{-ln(2)/3 * t + ln(2)/6 * t} = 2 e^{ln(2)/3 * t - ln(2)/6 * t}.\n\nHmm, that doesn't look right. Let me redo.\n\nN_A(t) = 2 e^{-ln(2)/3 * t}\nN_B(t) = 1 * e^{-ln(2)/6 * t}\n\nSo N_A/N_B = 2 e^{-ln(2)/3 * t} / e^{-ln(2)/6 * t} = 2 e^{-ln(2)/3 * t + ln(2)/6 * t} = 2 e^{(ln(2)/3) t - (ln(2)/6) t}... wait, that's wrong. Let me redo.\n\nN_A/N_B = (2 e^{-ln(2)/3 * t}) / (e^{-ln(2)/6 * t}) = 2 e^{-ln(2)/3 * t} * e^{ln(2)/6 * t} = 2 e^{(-ln(2)/3 + ln(2)/6) * t} = 2 e^{(ln(2)/6) t} * e^{ln(2)/6 * t}...\n\nI'm getting lost. Let me try a simpler approach.\n\nThe decay is: N_A(t) = N_A0 e^{-t * λ_A}, N_B(t) = N_B0 e^{-t * λ_B}, where λ_A = ln(2)/3 and λ_B = ln(2)/6.\n\nSo N_A/N_B = N_A0 e^{-t * λ_A} / N_B0 e^{-t * λ_B} = N_A0/N_B0 * e^{-t * λ_A} * e^{t * λ_B} = N_A0/N_B0 * e^{-t(λ_A - λ_B)}...\n\nWait, that's not right. Let me redo.\n\nN_A(t) = 2 e^{-t * λ_A} where λ_A = ln(2)/3, and N_B(t) = 1 * e^{-t * λ_B} where λ_B = ln(2)/6.\n\nSo N_A/N_B = 2 e^{-t * λ_A} / e^{-t * λ_B} = 2 e^{-t * λ_A + t * λ_B} = 2 e^{t(λ_B - λ_A)}.\n\nNow, λ_B - λ_A = ln(2)/6 - ln(2)/3 = -ln(2)/3.\n\nSo N_A/N_B = 2 e^{-ln(2)/3 * t}. Initially (at t = 0), this is 2 * 2 e^{-ln(2)/3 * t}... no, wait, initially N_A0/N_B0 = 2/1 = 2.\n\nHmm, wait, let me redo the initial ratio. Initially, N_A0/N_B0 = 2. So N_A0 = 2, N_B0 = 1 (normalized). Then after time t, N_A(t)/N_B(t) = 2 e^{-ln(2)/3 * t} / e^{-ln(2)/6 * t} = 2 e^{-ln(2)/3 * t + ln(2)/6 * t} = 2 e^{ln(2)/3 * t - ln(2)/6 * t}.\n\nWait, I think I'm confusing. Let me redo:\n\nN_A(t) = 2 e^{-ln(2)/3 * t}\nN_B(t) = e^{-ln(2)/6 * t}\n\nSo N_A/N_B = 2 e^{-ln(2)/3 * t} / e^{-ln(2)/6 * t} = 2 e^{(-ln(2)/3 + ln(2)/6) * t} = 2 e^{ln(2)/6 * t - ln(2)/3 * t}.\n\nHmm, I'm getting confused. Let me redo.\n\nN_A(t) = N_A0 e^{-λ_A t} = 2 e^{-λ_A t}\nN_B(t) = N_B0 e^{-λ_B t} = 1 e^{-λ_B t}\n\nSo N_A/N_B = 2 e^{-λ_A t} / e^{-λ_B t} = 2 e^{-λ_A t + λ_B t}\n\nSo N_A/N_B = 2 e^{(λ_B - λ_A) t}\n\nInitially (t = 0), N_A0/N_B0 = 2.\n\nAfter time t, N_A/N_B = 2 e^{(λ_B - λ_A) t}.\n\nWe want N_A/N_B = 1/2 (the reversed ratio).\n\nSo 2 e^{(λ_B - λ_A) t} = 1/2.\n\ne^{(λ_B - λ_A) t} = 1/4.\n\n(λ_B - λ_A) t = ln(1/4) = ln(4).\n\nλ_B - λ_A = ln(2)/6 - ln(2)/3 = -ln(2)/3.\n\nSo t = ln(4) / (-ln(2)/3) = -3 ln(4) / ln(2) = -3 * 1.386... wait, ln(4) / ln(2) = ln(4)/ln(2) = 1/1... wait, ln(4)/ln(2) = ln(4) / ln(2) = ln(4) / ln(2). Let me compute: ln(4) = 2 ln(2), so ln(4)/ln(2) = 2. So t = -3 * 2 = -6. That gives a negative time, which is wrong.\n\nI think I made a sign error. Let me redo.\n\nλ_A = ln(2)/3, λ_B = ln(2)/6.\n\nλ_B - λ_A = ln(2)/6 - ln(2)/3 = (ln(2)/6) - (ln(2)/3) = (ln(2)) (1/6 - 1/3) = (ln(2))(-1/6) = -ln(2)/6.\n\nWait, that's wrong. Let me redo.\n\nλ_B - λ_A = ln(2)/6 - ln(2)/3 = (ln(2)/6) - (ln(2)/3) = (ln(2))(1/6 - 1/3) = (ln(2))(1/6) = -ln(2)/3... no wait, 1/6 - 1/3 = 1/6 - 1/3 = -1/6, so (ln(2))(-1/6). So λ_B - λ_A = -ln(2)/6.\n\nHmm, wait, λ_B = ln(2)/6, λ_A = ln(2)/3. So λ_B - λ_A = ln(2)/6 - ln(2)/3 = (ln(2))(1/6 - 1/3) = (ln(2))(-1/6) = -ln(2)/3... no, wait, I should compute 1/6 - 1/3: 1/6 - 1/3 = (3/6) - (1/6) = 2/6 = 1/3. So 1/6 - 1/3 = 1/3? Wait, 1/6 = 1/6, 1/3 = 1/3. So 1/6 - 1/3 = (3 - 1)/6 = 2/6 = 1/3. So 1/6 - /3 = 1/3. So (ln(2))(1/3) = (ln(2))/3. So λ_B - λ_A = (ln(2))/3. Wait, that's λ_B - λ_A = (ln(2))/3, and (ln(2))/3 = 1/3, so λ_B - λ_A = 1/3.\n\nWait, let me redo. λ_B = ln(2)/6, λ_A = ln(2)/3. So λ_B - λ_A = ln(2)/6 - ln(2)/3 = (ln(2))(1/6 - 1/3) = (ln(2))(1/3) = (ln(2))/3.\n\nSo λ_B - λ_A = (ln(2))/3.\n\nNow, N_A/N_B = 2 e^{(λ_B - λ_A) t} = 2 e^{(ln(2))/3 * t}.\n\nWe want N_A/N_B = 1/2. So 2 e^{(ln(2))/3 * t} = 1/2.\n\ne^{(ln(2))/3 * t} = 1/4.\n\n(λ_B - λ_A) t = ln(1/4) = ln(4) - ln(1)... wait, e^{(ln(2))/3 * t} = 1/4, so ln(4)/3 * t = ln(4). Hmm, let's compute.\n\ne^{(ln(2))/3 * t} = 1/4.\n\nTaking the ln: ln(1/4) = -ln(4).\n\nSo (ln(2))/3 * t = ln(1/4) = -ln(4).\n\nt = -3 ln(4) / ln(2) = -3 (ln(4) / ln(2))... wait, ln(4) / ln(2) = 2, so t = -3 * 2 = -6. That gives t = -6, which is wrong.\n\nHmm, I think I'm making a sign error. Let me redo the calculation.\n\nN_A/N_B = 2 e^{(λ_B - λ_A) t}.\n\nWe want N_A/N_B = 1/2.\n\nSo 2 e^{(λ_B - λ_A) t} = 1/2.\n\ne^{(λ_B - λ_A) t} = 1/4.\n\n(λ_B - λ_A) t = ln(1/4) = -ln(4) = -ln(4).\n\nSo t = -ln(4) / (λ_B - λ_A).\n\nNow, λ_B - λ_A = (ln(2))/3 = 1/3 (computed above).\n\nSo t = -ln(4) / (1/3) = -ln(4) * 3 = -3 ln(4).\n\nBut wait, I made a sign error. Let me redo.\n\nN_A(t) = 2 e^{-λ_A t}, N_B(t) = 1 * e^{-λ_B t}.\n\nN_A/N_B = 2 e^{-λ_A t} / e^{-λ_B t} = 2 e^{-λ_A t} * e^{λ_B t} = 2 e^{-λ_A t + λ_B t}.\n\nInitially (t = 0), N_A/N_B = 2 e^{0} = 2.\n\nAfter time t, N_A/N_B = 2 e^{-λ_A t + λ_B t}.\n\nWe want N_A/N_B = 1/2.\n\nSo 2 e^{-λ_A t + λ_B t} = 1/2.\n\ne^{-λ_A t + λ_B t} = 1/4.\n\n-λ_A t + λ_B t = ln(1/4) = ln(1/4) = -ln(4).\n\nSo -λ_A t + λ_B t = -ln(4).\n\nt = -ln(4) / (λ_B - λ_A) = -ln(4) / (1/3) = -3 ln(4).\n\nWait, this gives t = -3 ln(4). But ln(4) is about 1.386, so t = -3 * 1.386 ≈ -4.16. That's a negative value, which can't be right.\n\nHmm, maybe I'm making a sign error somewhere. Let me redo the setup.\n\nWait, maybe I have the initial ratio wrong. Let me re-read.\n\n\"A radioactive sample contains two different isotopes, A and B. A has a half-life of 3 days, and B has a half-life of 6 days. Initially in the sample there are twice as many atoms of A as B.\"\n\nSo initially, N_A0/N_B0 = 2, i.e., N_A0/N_B0 = 2. So N_A0/N_B0 = 2.\n\n\"In how many days will the ratio of the number of atoms of A to B be reversed?\"\n\nSo we want the ratio N_A/N_B to be reversed, meaning N_A/N_B goes from 2 to 1/2 (or the same 2 is now 1/2). Wait, \"reversed\" means the ratio flips, so N_A/N_B = 1/2.\n\nBut I'm getting negative times. Let me think differently.\n\nMaybe the problem is set up such that the ratio is N_A/N_B, and initially it's 2, and we want the ratio to be reversed, meaning N_A/N_B = 1/2.\n\nBut wait, maybe the problem means: the ratio is reversed, i.e., N_A/N_B = 1 (the same value of A and B, which would be the same value at the reversal point). No, that doesn't make sense.\n\nLet me re-interpret. Maybe the problem means: initially, N_A/N_B = 2. The ratio is reversed, meaning N_A/N_B = 1/2. That is, the number of A and B are equal, but swapped. Hmm, but that would mean N_A/N_B = 1, not 1/2.\n\nWait, I think the problem is: initially, N_A/N_B = 2 (A is twice as many as B). The ratio is reversed, meaning N_A/N_B = 1/2 (B is twice as many as A). So the ratio flips from 2 to 1/2.\n\nLet me redo. Initially, N_A/N_B = 2. After some time, N_A/N_B = 1/2.\n\nSo N_A/N_B = 1/2.\n\nNow, N_A(t) = 2 e^{-λ_A t}, N_B(t) = 1 * e^{-λ_B t}.\n\nSo N_A/N_B = 2 e^{-λ_A t + λ_B t} = 1/2.\n\ne^{-λ_A t + λ_B t} = 1/4.\n\n-λ_A t + λ_B t = ln(1/4) = -ln(4).\n\nSo t = -ln(4) / (λ_A - λ_B) = -ln(4) / (1/3) = -3 ln(4).\n\nWait, that gives t = -3 ln(4). Hmm, ln(4) ≈ 1.386, so t ≈ -4.16. But the answer is supposed to be positive. Let me think.\n\nOh wait, I think the initial ratio is 2 (A is twice as many as B), and the ratio is reversed, meaning N_A/N_B = 1/2 (B is twice as many as A). But if A decays faster than B, then N_A decays faster than N_B, and at some point, N_A/N_B < 1, and the ratio flips. But the ratio should be N_A/N_B, not N_B/N_A.\n\nHmm, wait, maybe the problem is: initially N_A/N_B = 2, and we want N_A/N_B = 1/2, i.e., the ratio is reversed (flipped). So N_A/N_B = 1/2.\n\nLet me redo. N_A/N_B = 1/2.\n\nN_A(t) = 2 e^{-λ_A t}, N_B(t) = 1 * e^{-λ_B t}.\n\nSo N_A/N_B = 2 e^{-λ_A t + λ_B t} = 1/2.\n\ne^{-λ_A t + λ_B t} = 1/4.\n\n-λ_A t + λ_B t = ln(1/4) = -ln(4).\n\nNow, λ_A = ln(2)/3, λ_B = ln(2)/6.\n\nSo -λ_A t + λ_B t = -ln(4).\n\nt = -ln(4) / (λ_B - λ_A) = -ln(4) / (ln(2)/6 - ln(2)/3) = -ln(4) / (ln(2)/6 - ln(2)/3).\n\nCompute: ln(2)/6 - ln(2)/3 = (ln(2))(1/6 - 1/3) = (ln(2))(1/3) = ln(2)/3.\n\nWait, 1/6 - 1/3 = (3 - 1)/6 = 2/6 = 1/3. So 1/6 - 1/3 = 1/3. So (ln(2))(1/3) = ln(2)/3.\n\nSo λ_B - λ_A = ln(2)/3.\n\nNow, t = -ln(4) / (ln(2)/3) = -3 ln(4).\n\nSo t = -3 ln(4). ln(4) ≈ 1.386, so t ≈ -4.16.\n\nBut the answer is supposed to be positive. Wait, maybe the problem means: initially, N_A/N_B = 2, and after some time, the ratio is reversed, i.e., N_A/N_B = 1/2. But that doesn't make sense...\n\nOh, I think the problem means: initially, N_A/N_B = 2, and we want N_A/N_B = 1/2, i.e., the ratio is flipped. But maybe the problem is: initially, N_A/N_B = 2, and after some time, N_A/N_B = 1/2, i.e., the ratio is flipped. But that would mean N_A/N_B = 1/2, which is 1/2, not 2/...\n\nWait, I think the problem is: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_B = 1/2. But I'm getting a negative time. Let me redo.\n\nActually, maybe the problem means: the ratio N_A/N_B is reversed, i.e., N_A/N_B = 1/2 (the original 2 is now 1/2, i.e., the ratio is inverted). But I'm getting a negative time. Let me think differently.\n\nMaybe the problem means: initially, N_A/N_B = 2, and after some time, N_A/N_B = 1/2. But that doesn't make sense...\n\nLet me redo the setup. Initially, N_A/N_B = 2. After time t, N_A/N_B = 1/2.\n\nN_A(t) = 2 e^{-λ_A t}, N_B(t) = 1 * e^{-λ_B t}.\n\nSo N_A/N_B = 2 e^{-λ_A t + λ_B t} = 1/2.\n\ne^{-λ_A t + λ_B t} = 1/4.\n\n-λ_A t + λ_B t = ln(1/4) = -ln(4).\n\nNow, λ_A = ln(2)/3, λ_B = ln(2)/6.\n\nSo -λ_A t + λ_B t = -ln(4).\n\nt = -ln(4) / (λ_B - λ_A) = -ln(4) / (ln(2)/6 - ln(2)/3) = -ln(4) / (ln(2)/3) = -3 ln(4).\n\nHmm, that's t = -3 ln(4), which is negative. But wait, maybe the problem is: initially, N_A/N_B = 2, and after some time, N_A/N_B = 1/2. But the ratio is \"reversed\" meaning N_A/N_B = 1/2, i.e., the ratio flips. But I'm getting a negative time.\n\nWait, let me think. Maybe the problem is: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_B = 1/2. But maybe the problem means: initially, N_A/N_B = 2, and after some time, N_A/N_B = 1/2. But that's the same as what I've been doing.\n\nHmm, let me re-read the problem. \"A radioactive sample contains two different isotopes, A and B. A has a half-life of 3 days, and B has a half-life of 6 days. Initially in the sample there are twice as many atoms of A as B. In how many days will the ratio of the number of atoms of A to B be reversed?\"\n\nSo initially, N_A/N_B = 2 (A is twice as many as B). The ratio is reversed, meaning N_A/N_B = 1/2 (B is twice as many as A). So the ratio flips from 2 to 1/2.\n\nNow, N_A(t) = 2 e^{-λ_A t}, N_B(t) = 1 * e^{-λ_B t}.\n\nSo N_A/N_B = 2 e^{-λ_A t + λ_B t} = 1/2.\n\ne^{-λ_A t + λ_B t} = 1/4.\n\n-λ_A t + λ_B t = ln(1/4) = -ln(4).\n\nNow, λ_A = ln(2)/3, λ_B = ln(2)/6.\n\nSo -λ_A t + λ_B t = -ln(4).\n\nt = -ln(4) / (λ_B - λ_A) = -ln(4) / (ln(2)/6 - ln(2)/3) = -ln(4) / (ln(2)/3) = -3 ln(4).\n\nWait, but ln(4) ≈ 1.386, so t ≈ -4.16. But the answer is supposed to be positive. Let me think.\n\nOh, I think the problem means: initially, N_A/N_B = 2, and after some time, N_A/N_B = 1/2. But the ratio is \"reversed\" meaning N_A/N_B = 1/2. But I'm getting a negative time. Let me re-examine.\n\nHmm, maybe the problem is: initially, N_A/N_B = 2, and after some time, N_A/N_B = 1/2. But that doesn't make sense...\n\nWait, maybe the problem means: initially, N_A/N_B = 2, and after some time, N_A/N_B = 1/2, but that's the same as what I've been doing. Let me try a different approach.\n\nMaybe the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_B = 1/2. But that's the same thing. Let me think.\n\nActually, let me redo the calculation. Initially, N_A/N_B = 2, and we want N_A/N_B = 1/2.\n\nN_A(t) = 2 e^{-λ_A t}, N_B(t) = 1 * e^{-λ_B t}.\n\nSo N_A/N_B = 2 e^{-λ_A t + λ_B t} = 1/2.\n\ne^{-λ_A t + λ_B t} = 1/4.\n\n-λ_A t + λ_B t = ln(1/4) = -ln(4).\n\nNow, λ_A = ln(2)/3, λ_B = ln(2)/6.\n\nSo -λ_A t + λ_B t = -ln(4).\n\nt = -ln(4) / (λ_B - λ_A) = -ln(4) / (ln(2)/6 - ln(2)/3) = -ln(4) / (ln(2)/3) = -3 ln(4).\n\nWait, but I made a sign error. Let me redo.\n\n-λ_A t + λ_B t = -ln(4).\n\nSo t = -ln(4) / (λ_B - λ_A) = -ln(4) / (ln(2)/6 - ln(2)/3) = -ln(4) / (ln(2)/3) = -3 ln(4).\n\nBut wait, ln(4) ≈ 1.386, so t ≈ -4.16. That's a negative value. But the answer is supposed to be positive. Let me think.\n\nHmm, maybe I made a sign error. Let me redo.\n\nN_A/N_B = 2 e^{-λ_A t + λ_B t} = 1/2.\n\ne^{-λ_A t + λ_B t} = 1/4.\n\n-λ_A t + λ_B t = ln(1/4) = -ln(4).\n\nNow, λ_A = ln(2)/3, λ_B = ln(2)/6.\n\nSo -λ_A t + λ_B t = -ln(4).\n\nWait, λ_B - λ_A = ln(2)/6 - ln(2)/3 = (ln(2))(1/6 - 1/3) = (ln(2))(1/3) = ln(2)/3.\n\nSo λ_B - λ_A = ln(2)/3.\n\nThus, -λ_A t + λ_B t = -ln(4) => t = -ln(4) / (λ_B - λ_A) = -ln(4) / (ln(2)/3) = -3 ln(4).\n\nBut wait, ln(4) ≈ 1.386, so t ≈ -4.16. That's negative.\n\nOh! I think I made a sign error. Let me redo.\n\nActually, maybe the initial ratio is N_A/N_B = 2, and after some time, N_A/N_B = 1/2. But the ratio is \"reversed\" meaning N_A/N_B = 1/2.\n\nWait, but that's the same thing. Let me think.\n\nActually, maybe the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_B = 1/2. But I'm getting a negative time. Let me think.\n\nHmm, let me try a different approach. Suppose the problem means: initially, N_A/N_B = 2, and after some time, N_A/N_B = 1/2. But that's the same as what I've been doing.\n\nWait, maybe the problem means: initially, N_A/N_B = 2, and after some time, N_A/N_B = 1/2, but that's the same thing.\n\nLet me redo the setup. Initially, N_A/N_B = 2. After some time, N_A/N_B = 1/2.\n\nN_A(t) = 2 e^{-λ_A t}, N_B(t) = 1 * e^{-λ_B t}.\n\nSo N_A/N_B = 2 e^{-λ_A t + λ_B t} = 1/2.\n\ne^{-λ_A t + λ_B t} = 1/4.\n\n-λ_A t + λ_B t = ln(1/4) = -ln(4).\n\nNow, λ_A = ln(2)/3, λ_B = ln(2)/6.\n\nSo -λ_A t + λ_B t = -ln(4).\n\nt = -ln(4) / (λ_B - λ_A) = -ln(4) / (ln(2)/3) = -3 ln(4).\n\nBut wait, ln(4) ≈ 1.386, so t ≈ -4.16. But the answer is supposed to be positive.\n\nOh, I think the problem is: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_B = 1/2. But that's the same as what I've been doing.\n\nWait, let me think. Maybe the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_B = 1/2. But that's the same thing.\n\nHmm, let me try a different approach. Suppose the problem means: initially, N_A/N_B = 2, and after some time, N_A/N_B = 1/2. But that's the same thing.\n\nWait, let me think. If initially N_A/N_B = 2, and after some time N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_B = 1/2. But that's the same thing.\n\nLet me redo the calculation. Initially, N_A/N_B = 2, and after some time, N_A/N_B = 1/2.\n\nN_A(t) = 2 e^{-λ_A t}, N_B(t) = 1 * e^{-λ_B t}.\n\nSo N_A/N_B = 2 e^{-λ_A t + λ_B t} = 1/2.\n\ne^{-λ_A t + λ_B t} = 1/4.\n\n-λ_A t + λ_B t = ln(1/4) = -ln(4).\n\nNow, λ_A = ln(2)/3, λ_B = ln(2)/6.\n\nSo -λ_A t + λ_B t = -ln(4).\n\nt = -ln(4) / (λ_B - λ_A) = -ln(4) / (ln(2)/3) = -3 ln(4).\n\nBut wait, ln(4) ≈ 1.386, so t ≈ -4.16. But the answer is supposed to be positive.\n\nHmm, let me think. Maybe the problem means: initially, N_A/N_B = 2, and after some time, N_A/N_B = 1/2. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_B = 1/2. But that's the same thing.\n\nLet me think. If the ratio is N_A/N_B, and initially it's 2, and after some time it's 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. Maybe the problem means: initially, N_A/N_B = 2, and after some time, N_A/N_B = 1/2. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If the ratio is N_A/N_B, and initially it's 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. Maybe the problem means: initially, N_A/N_B = 2, and after some time, N_A/N_B = 1/2. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. Maybe the problem means: initially, N_A/N_B = 2, and after some time, N_A/N_B = 1/2. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. Maybe the problem means: initially, N_A/N_B = 2, and after some time, N_A/N_B = 1/2. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nWait, I think the problem means: initially, N_A/N_B = 2, and the ratio is reversed, meaning N_A/N_N_B = 1/2. But that's the same thing.\n\nLet me think. If initially N_A/N_B = 2, and after some time, N_A/N_B = 1/2, then the ratio is reversed. But that's the same thing.\n\nActually, let me think. If initially N_A/N_B = 2, and after some",
+        "reasoning_chars": 2,
+        "completion_tokens": 17011
+      }
+    },
+    {
+      "question_id": 10459,
+      "category": "computer science",
+      "question": "A packet filter firewall filters at the",
+      "options": {
+        "A": "Network or transport layer",
+        "B": "Application layer only",
+        "C": "Physical Layer",
+        "D": "Data link layer",
+        "E": "Application or transport",
+        "F": "Session layer",
+        "G": "Transport layer only",
+        "H": "Network interface layer",
+        "I": "All layers of the OSI model",
+        "J": "Presentation layer"
+      },
+      "correct_answer": "A",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "A",
+        "correct": true,
+        "response": "\n\nA packet filter firewall inspects and makes decisions based on IP addresses, ports, and sometimes protocol information. Since IP addresses and ports relate to the network and transport layers of the OSI model, packet filtering operates at those layers.\n\nThe answer is (A).",
+        "reasoning_chars": 1238,
+        "completion_tokens": 296
+      },
+      "weight_only": {
+        "answer_extracted": "G",
+        "correct": false,
+        "response": "\n\nWe have to determine the OSI layer at which the packet filter filter firewall filters at. A packet filter firewall filters at the transport layer (Layer 4). The answer is (G).",
+        "reasoning_chars": 0,
+        "completion_tokens": 40
+      }
+    },
+    {
+      "question_id": 10492,
+      "category": "computer science",
+      "question": "Suppose you are given an EM algorithm that finds maximum likelihood estimates for a model with latent variables. You are asked to modify the algorithm so that it finds MAP estimates instead. Which step or steps do you need to modify?",
+      "options": {
+        "A": "Only the final iteration",
+        "B": "Expectation and Maximization",
+        "C": "The likelihood function only",
+        "D": "Initialization",
+        "E": "No modification necessary",
+        "F": "Maximization",
+        "G": "Both",
+        "H": "Convergence Criteria",
+        "I": "Expectation",
+        "J": "The algorithm cannot be modified to find MAP estimates"
+      },
+      "correct_answer": "F",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "F",
+        "correct": true,
+        "response": "\n\nIn the EM algorithm for **Maximum Likelihood**, the two main steps are:\n- **E-step**: Compute Q(θ) = Σ_j q_j(θ) · log p(x|θ, z^j) — the expected log-likelihood given the current estimates of latent variables.\n- **M-step**: Maximize Q(θ) with respect to θ.\n\nTo find the **MAP** estimate, the objective changes from:\n$$\\arg\\max_\\theta \\quad Q(\\theta)$$\nto:\n$$\\arg\\max_\\theta \\left[ Q(\\theta) + \\log \\pi(\\theta) \\right]$$\nwhere π(θ) is the prior distribution over the parameters.\n\n**The E-step stays the same** — it still computes the same Q(θ), which is the expected log-likelihood under the model. The likelihood model is unchanged.\n\n**Only the M-step** needs to be modified to include the log-prior term in the optimization.\n\nSince the M-step is the \"Maximization\" step, the only step that needs modification is the Maximization step.\n\nThe answer is (F).",
+        "reasoning_chars": 2278,
+        "completion_tokens": 930
+      },
+      "weight_only": {
+        "answer_extracted": "C",
+        "correct": false,
+        "response": "\n\nI need to explain how EM works, then reason about MAP vs ML. The ML (maximum likelihood) estimates correspond to maximizing the likelihood function over all possible values, i.e., the parameters that maximize the likelihood. MAP (maximum a posteriori) estimation is Bayesian, maximizing the posterior probability (or MAP estimates) — i.e., maximize over the posterior distribution. EM algorithm: E step: estimate the likelihood function (likelihood function) for the model; M step: maximum likelihood estimate for parameters. The final iteration is convergence criteria? Hmm, the question: \"Suppose you are given an EM algorithm that finds maximum likelihood estimates for a model with latent variables. You are asked to modify the algorithm so that it finds MAP estimates instead. Which step or steps do you need to modify?\"\n\nThis question is about the EM (expectation-maximization) algorithm. In a general EM, for ML you need to maximize the likelihood function. For MAP estimates, you need to maximize over a MAP distribution (max a posteriori). The question may be referring to \"MAP estimates\" as opposed to ML estimates. The answer is not A/B... Let's reason.\n\nIn EM, to find maximum likelihood estimates: need to estimate the likelihood function, then maximize over the likelihood function to get maximum likelihood estimate. If we want MAP, we need to modify the likelihood function (or the distribution?) The question asks: which step(s) do you need to modify? \"The likelihood function only\" (option C), \"Initialization\" (option D), \"Expectation and Maximization\" (option B), \"Both\" (option G), \"The algorithm can't be modified to find MAP estimates\" (option J), etc. Let's inspect.\n\nEM algorithm:\n- E step (expectation step): estimate the likelihood function.\n- M step (maximization step): find maximum likelihood estimates.\n\nFor MAP, we want to find MAP estimates: maximum a posteriori. The MAP estimation requires the posterior distribution (posterior probability distribution), which is a function of likelihood and prior (Bayesian). So MAP estimates depend on prior and posterior. The question likely is: To modify from ML to MAP estimates, you only need to modify the likelihood function (for posterior probability). Hmm, let's recall: In a Bayesian setting, MAP estimates are found by maximizing a posterior distribution (posterior). The EM algorithm uses a likelihood function for MAP: we need to compute the posterior distribution, which involves the likelihood function and the prior (prior) distribution. If we have a likelihood function for MAP, you need to modify the likelihood function (maybe the likelihood function for MAP?).\n\nBut the question: \"Suppose you are given an EM algorithm that finds maximum likelihood estimates for a model with latent variables. You are asked to modify the algorithm so that it finds MAP estimates instead. Which step or steps do you need to modify?\" In EM, to find MAP, you need to change the likelihood function used, i.e., the likelihood function is not just ML but MAP (posterior). Which step or steps? Option C says \"The likelihood function only\". But EM also needs convergence criteria? Hmm.\n\nLet's check the options:\n- A: Only the final iteration\n- B: Expectation and Maximization\n- C: The likelihood function only\n- D: Initialization\n- E: No modification necessary\n- F: Maximization\n- G: Both\n- H: Convergence Criteria\n- I: Expectation\n- J: The algorithm cannot be modified to find MAP estimates\n\nThe question: EM algorithm finds maximum likelihood estimates. If we need to modify algorithm so that it finds MAP estimates instead, what do we need to modify? We can think: EM uses a likelihood function. To find MAP, we need to modify the likelihood function to incorporate the prior (i.e., the likelihood function for MAP). The EM algorithm's final iteration? The algorithm's steps: Expectation, Maximization, Convergence? For ML estimates, the algorithm is maximum likelihood estimation (maximization) and expectation (likelihood function). For MAP, we need to modify the likelihood function (for MAP) (the likelihood function for MAP? hmm). I need to recall.\n\nLet's parse the question: \"Suppose you are given an EM algorithm that finds maximum likelihood estimates for a model with latent variables. You are asked to modify the algorithm so that it finds MAP estimates instead. Which step or steps do you need to modify?\" In EM, the likelihood function is used to find maximum likelihood estimates. To find MAP estimates, the likelihood function must be changed to find MAP estimates (posterior distribution). So the step that needs to be modified is the likelihood function (option C). So we don't need to modify the expectation and maximization steps. That means we only need to modify the likelihood function. So answer: C.\n\n\nI need to reason about this EM vs MAP question. Let me analyze the options:\n\nEM (Expectation-Maximization) is a general algorithm that estimates the likelihood function. In maximum likelihood estimation (MLE), the likelihood function is the likelihood function. For MAP estimation, we need to modify the likelihood function to incorporate the prior (prior) distribution, i.e., a posterior probability distribution (which is the MAP). So the step that needs to be modified is the likelihood function. The question asks which step(s) need to be modified. If we want to modify from maximum likelihood estimation (MLE) to MAP estimation, we need to modify the likelihood function (option C) to incorporate the prior (posterior) distribution. The other steps (Expectation and Maximization) don't need modification.\n\nSo the answer is (C).",
+        "reasoning_chars": 0,
+        "completion_tokens": 1168
+      }
+    },
+    {
+      "question_id": 10494,
+      "category": "computer science",
+      "question": "Which of the following is false?",
+      "options": {
+        "A": "The loss $\\log \\sigma(x)= -\\log(1+e^{-x})$ is concave",
+        "B": "Leaky ReLU $\\max\\{0.01x,x\\}$ is convex.",
+        "C": "The following fully connected network without activation functions is linear: $g_3(g_2(g_1(x)))$, where $g_i(x) = W_i x$ and $W_i$ are matrices.",
+        "D": "A combination of ReLUs such as $ReLU(x) - ReLU(x-1)$ is convex."
+      },
+      "correct_answer": "D",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "D",
+        "correct": true,
+        "response": "\n\nWe can check each statement:\n\n- A: \\(-\\log(1+e^{-x})\\) is a concave function (its second derivative is negative).  \n- B: The Leaky ReLU is the maximum of two affine functions, so it is convex.  \n- C: A composition of linear transformations is linear, so the network remains linear.  \n- D: \\(ReLU(x)-ReLU(x-1)\\) is not convex; for example, at \\(x=-1\\) and \\(x=1\\), the convexity inequality fails.\n\nTherefore, the false statement is D.\n\nThe answer is (D).",
+        "reasoning_chars": 18464,
+        "completion_tokens": 6816
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "\n\nWe have to evaluate the given options:\nOption A. $\\log \\sigma(x) = -\\log(1+e^{-x})$ is concave, i.e., the function is not convex. However, since the function is a composition of two functions, the function is convex. Thus, the statement is true.\nOption B. Leaky ReLU $\\max\\{0.01x,x\\}$ is convex. In fact, this function is a convex function. The answer is true.\nOption C. A fully connected network without activation functions is linear: $g_3(g_2(g_1(x)))$, where $g_i(x)=W_i x$ and $W_i$ are matrices. In fact, this is a composition of linear functions, and the composition is linear. The answer is true.\nOption D. A combination of ReLUs such as $ReLU(x) - ReLU(x - 1)$ is convex. Since this is a combination of ReLUs, the function is a convex function. The answer is true.",
+        "reasoning_chars": 0,
+        "completion_tokens": 224
+      }
+    },
+    {
+      "question_id": 10584,
+      "category": "computer science",
+      "question": "The following procedure is intended to return the number of times the value val appears in the list myList. The procedure does not work as intended.\n Line 1: PROCEDURE countNumOccurences(myList, val)\n Line 2: {\n Line 3: FOR EACH item IN myList\n Line 4: {\n Line 5: count 0\n Line 6: IF(item = val)\n Line 7: {\n Line 8: count count + 1\n Line 9: }\n Line 10: }\n Line 11: RETURN(count)\n Line 12:}\n Which of the following changes can be made so that the procedure will work as intended?",
+      "options": {
+        "A": "Moving the statement in line 8 so that it appears between lines 9 and 10",
+        "B": "Changing line 1 to PROCEDURE countNumOccurences(val, myList)",
+        "C": "Changing line 6 to IF(item = count)",
+        "D": "Adding a new line after line 6 that states count = 0",
+        "E": "Moving the statement in line 5 so that it appears between lines 2 and 3",
+        "F": "Changing line 5 to count = 1",
+        "G": "Changing line 6 to IF(myList[item] = val)",
+        "H": "Moving the statement in line 11 so that it appears between lines 9 and 10",
+        "I": "Changing line 8 to count = count + val",
+        "J": "Changing line 8 to count = val + 1"
+      },
+      "correct_answer": "E",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "E",
+        "correct": true,
+        "response": "\n\nThe bug is that `count 0` (initializing count to 0) appears inside the loop, so it resets the counter every iteration. Moving that initialization before the loop — that is, between lines 2 and 3 — ensures the counter is initialized once at the start. Then the loop correctly increments it for each matching item, and `count` can be returned properly.\n\nthe answer is (E).",
+        "reasoning_chars": 1745,
+        "completion_tokens": 562
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "",
+        "reasoning_chars": 42088,
+        "completion_tokens": 14023
+      }
+    },
+    {
+      "question_id": 11104,
+      "category": "philosophy",
+      "question": "All things that are spoiled are inedible. Timothy is spoiled. So, Timothy is inedible.",
+      "options": {
+        "A": "Equivocation",
+        "B": "Attacking the Person (ad hominem)",
+        "C": "Fallacy of Division",
+        "D": "Questionable Cause"
+      },
+      "correct_answer": "A",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "A",
+        "correct": true,
+        "response": "\n\nWe refer to Wikipedia articles on philosophy for help. The argument uses the word “spoiled” in two different senses: in the first premise it refers to spoiled *things* (such as food), while in the second premise it is used to describe Timothy personally. Because the key term changes meaning and leads to an unsupported conclusion that Timothy is “inedible,” this is an equivocation. The answer is (A).",
+        "reasoning_chars": 1565,
+        "completion_tokens": 455
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "",
+        "reasoning_chars": 65481,
+        "completion_tokens": 16479
+      }
+    },
+    {
+      "question_id": 11161,
+      "category": "philosophy",
+      "question": " Select the best translation into predicate logic. Some firefighters rescue victims from danger. (Dx: x is danger; Fx: x is a firefighter; Vx: x is a victim; Rxyz: x rescues y from z)",
+      "options": {
+        "A": "(∀x){Fx ⊃ (∃y)[Vy . (∃z)(Dz • Rxyz)]}",
+        "B": "(∃x){Fx • (∀y)[Dy ⊃ (∃z)(Vz • Rxyz)]}",
+        "C": "(∀x){Fx ⊃ (∃y)[Dy . (∃z)(Vz • Rxyz)]}",
+        "D": "(∃x){Fx • (∀y)[Vy ⊃ (∀z)(Dz • Rxyz)]}",
+        "E": "(∃x){Fx • (∀y)[Vy ⊃ (∃z)(Dz • Rxyz)]}",
+        "F": "(∀x){Fx ⊃ (∀y)[Vy ⊃ (∃z)(Dz • Rxyz)]}",
+        "G": "(∃x){Fx • (∃y)[Dy • (∃z)(Vz • Rzxy)]}",
+        "H": "(∃x){Fx • (∃y)[Vy • (∃z)(Dz • Rxyz)]}",
+        "I": "(∃x){Fx • (∃y)[Dy • (∃z)(Vz • Rxyz)]}",
+        "J": "(∃x){Fx • (∃y)(∃z)[(Vy • Dz) • Rxzy]}"
+      },
+      "correct_answer": "H",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "H",
+        "correct": true,
+        "response": "\n\nThe statement “Some firefighters rescue victims from danger” says that there exists at least one firefighter who rescues at least one victim from at least one danger.\n\nLet:\n- Fx: x is a firefighter\n- Vy: y is a victim\n- Dz: z is danger\n- Rxyz: x rescues y from z\n\nSo we need:\n∃x [Fx • ∃y [Vy • ∃z [Dz • Rxyz]]]\n\nThis matches:\nH. (∃x){Fx • (∃y)[Vy • (∃z)(Dz • Rxyz)]}\n\nthe answer is (H).",
+        "reasoning_chars": 1004,
+        "completion_tokens": 484
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "",
+        "reasoning_chars": 4614,
+        "completion_tokens": 1799
+      }
+    },
+    {
+      "question_id": 11214,
+      "category": "philosophy",
+      "question": "Nussbaum claims that the specification of particular virtues:",
+      "options": {
+        "A": "can only be determined by religious institutions.",
+        "B": "is strictly based on personal belief systems.",
+        "C": "can be universally agreed upon without cultural differences.",
+        "D": "can be settled in such a way as to be no longer revisable.",
+        "E": "might sometimes turn out to be a disjunction.",
+        "F": "will always be consistent across all societies.",
+        "G": "is influenced solely by an individual's personal experiences.",
+        "H": "is always subject to change and cannot be finalized.",
+        "I": "will always consist of a single answer.",
+        "J": "is necessarily relative to a culture."
+      },
+      "correct_answer": "E",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "E",
+        "correct": true,
+        "response": "\n\nBased on the work of Martha Nussbaum in the field of moral philosophy, specifically her arguments regarding the nature of virtue ethics, she posits that the specification of a particular virtue is not always rigidly tied to a single, inflexible rule. Instead, the specification might sometimes take the form of a **disjunction**. This means that a virtue could be satisfied by a range of actions, where performing either of several specified actions counts as fulfilling the virtue, rather than requiring a single, identical action in all cases. Nussbaum explicitly rejects the notion that a single, uniquely specific \"single answer\" (Option I) is the only valid way to define a virtue, favoring a more flexible, disjunctive definition where appropriate.\n\nTherefore, the correct claim among the options is that the specification of particular virtues might sometimes turn out to be a disjunction.\n\nThe answer is (E).",
+        "reasoning_chars": 2415,
+        "completion_tokens": 734
+      },
+      "weight_only": {
+        "answer_extracted": "J",
+        "correct": false,
+        "response": "\n\nThe question asks about Nussbaum's claim regarding the specification of particular virtues.\n\nLooking at the options:\n- Option J: \"is necessarily relative to a culture\" — this suggests that the specification of virtues is determined by cultural context.\n- Option D: \"can be settled in such a way as to be no longer revisable\" — this suggests a fixed, non-revisable determination.\n\nNussbaum, in her philosophical work on virtue, emphasizes that the specification of particular virtues is necessarily relative to a culture — meaning that what counts as a virtue depends on the cultural framework within which it is articulated. This makes the specification culturally embedded and not something that can be universally fixed across all contexts without revisability.\n\nTherefore, the best answer is:\n\nThe answer is (J).",
+        "reasoning_chars": 1627,
+        "completion_tokens": 507
+      }
+    },
+    {
+      "question_id": 11437,
+      "category": "engineering",
+      "question": "A 0.1 m diameter, 0.1 m high solid copper cylinder is initially at 180°C. It is then placed in a room and is allowed to cool to a final temperature of 30°C. Assuming copper to have a density of 8954 kJ/kg - °K, calculate the heat transfer and the irreversibility of the process if the temperature of the surroundings (T_0) is 25°C.",
+      "options": {
+        "A": "Heat Transfer: - 421.74 kJ, Irreversibility: 84.79 kJ",
+        "B": "Heat Transfer: - 440 kJ, Irreversibility: 88 kJ",
+        "C": "Heat Transfer: - 480 kJ, Irreversibility: 96 kJ",
+        "D": "Heat Transfer: - 400 kJ, Irreversibility: 85 kJ",
+        "E": "Heat Transfer: - 390 kJ, Irreversibility: 78 kJ",
+        "F": "Heat Transfer: - 350 kJ, Irreversibility: 70 kJ",
+        "G": "Heat Transfer: - 500 kJ, Irreversibility: 80 kJ",
+        "H": "Heat Transfer: - 375 kJ, Irreversibility: 75 kJ",
+        "I": "Heat Transfer: - 450 kJ, Irreversibility: 90 kJ",
+        "J": "Heat Transfer: - 410 kJ, Irreversibility: 82 kJ"
+      },
+      "correct_answer": "A",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "A",
+        "correct": true,
+        "response": "\n\nFor a **lap-wound** DC machine, the number of parallel paths equals the number of poles.\n\n- Number of poles \\(P = 2\\)\n- Total conductors \\(Z = 100\\)\n- Conductors per path = \\(Z/P = 100/2 = 50\\)\n- Each path has 50 conductors in series, so path resistance is \\(50 \\times 2\\,\\Omega = 100\\,\\Omega\\)\n- The two lap paths are in parallel, so total resistance is \\(100\\,\\Omega / 2 = 50\\,\\Omega\\)\n\nSo the total resistance is **50 Ω**.\n\n**the answer is (A)**",
+        "reasoning_chars": 24912,
+        "completion_tokens": 10244
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "",
+        "reasoning_chars": 19531,
+        "completion_tokens": 8882
+      }
+    },
+    {
+      "question_id": 11525,
+      "category": "engineering",
+      "question": "Using the definition of the bilateral z transform F (z) = ^\\infty\\sum_n=-\\infty f[n] z^-n, find the z - transform of f[n] = 3\\delta [n+2] + 4\\delta [n-1] + 2\\delta [n-3].",
+      "options": {
+        "A": "3z^-2 + 4z^-1 + 2z^3",
+        "B": "3z^2+ 4z^-1 + 2z^-3",
+        "C": "2z^3 + 4z^-2 + 3z^-1",
+        "D": "4z^2+ 3z^-1 + 2z^-3",
+        "E": "4z^-3 + 3z^-2 + 2z^-1",
+        "F": "3z^2+ 2z^-1 + 4z^-3",
+        "G": "2z^2+ 4z^-1 + 3z^-3",
+        "H": "3z^3 + 4z + 2z^-2",
+        "I": "4z^3 + 2z + 3z^-2",
+        "J": "2z^-1 + 3z^-3 + 4z^2"
+      },
+      "correct_answer": "B",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "B",
+        "correct": true,
+        "response": "\n\nThe bilateral z transform is F(z) = \\sum_{n} f[n] z^{-n}.\nEach impulse term δ[n − m] contributes z^{−m}:\n\n- 3 δ[n + 2] = 3 δ[n − (−2)] → 3 z^{2}\n- 4 δ[n − 1] → 4 z^{−1}\n- 2 δ[n − 3] → 2 z^{−3}\n\nSo F(z) = 3 z² + 4 z^{−1} + 2 z^{−3}.\n\nThe answer is (B).",
+        "reasoning_chars": 842,
+        "completion_tokens": 476
+      },
+      "weight_only": {
+        "answer_extracted": "A",
+        "correct": false,
+        "response": "\n\nThe bilateral z-transform is the sum over all integers n of f(n) z^{-n}. For f(n) = 3δ(n + 2) + 4δ(n - 1) + 2δ(n - 3), the Kronecker deltas correspond to three shifts, giving f(n) as a shifted sequence with 3 at n=-2, 4 at n=1, and 2 at n=3. Thus, F(z) = 3z^{-2} + 4z^{-1} + 2z^3, matching option A. The answer is (A).",
+        "reasoning_chars": 7904,
+        "completion_tokens": 3576
+      }
+    },
+    {
+      "question_id": 11852,
+      "category": "engineering",
+      "question": "Find the partial-fraction expansion of F(s) = [(8s + 2) / (s^2 + 3s + 2)]",
+      "options": {
+        "A": "F(s) = [(-2) / (s + 1)] + [(-8) / (s + 2)]",
+        "B": "F(s) = [(8) / (s + 1)] + [(- 10) / (s + 2)]",
+        "C": "F(s) = [(8) / (s + 2)] + [(2) / (s + 1)]",
+        "D": "F(s) = [(-8) / (s + 1)] + [(-2) / (s + 2)]",
+        "E": "F(s) = [(6) / (s + 2)] + [(-14) / (s + 1)]",
+        "F": "F(s) = [(- 6) / (s + 1)] + [(-14) / (s + 2)]",
+        "G": "F(s) = [(- 6) / (s + 2)] + [14 / (s + 1)]",
+        "H": "F(s) = [(- 6) / (s + 1)] + [14 / (s + 2)]",
+        "I": "F(s) = [(6) / (s + 1)] + [14 / (s + 2)]",
+        "J": "F(s) = [(2) / (s + 1)] + [(6) / (s + 2)]"
+      },
+      "correct_answer": "H",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "H",
+        "correct": true,
+        "response": "\n\nGiven  \n\\[\nF(s)=\\frac{8s+2}{s^2+3s+2}=\\frac{8s+2}{(s+1)(s+2)}\n\\]\n\nWrite the partial-fraction form as\n\\[\nF(s)=\\frac{A}{s+1}+\\frac{B}{s+2}\n\\]\n\nMultiply both sides by \\((s+1)(s+2)\\):\n\\[\n8s+2=A(s+2)+B(s+1)\n\\]\n\nMatch coefficients:\n\n- Coefficient of \\(s\\): \\(A+B=8\\)\n- Constant term: \\(2A+B=2\\)\n\nSolving gives:\n\\(A=-6,\\; B=14\\)\n\nTherefore:\n\\[\nF(s)=\\frac{-6}{s+1}+\\frac{14}{s+2}\n\\]\n\nThis matches option H.\n\nthe answer is (H)",
+        "reasoning_chars": 9503,
+        "completion_tokens": 4492
+      },
+      "weight_only": {
+        "answer_extracted": null,
+        "correct": false,
+        "response": "",
+        "reasoning_chars": 10344,
+        "completion_tokens": 4835
+      }
+    },
+    {
+      "question_id": 12235,
+      "category": "engineering",
+      "question": "Consider an air stream flowing over a solid naphthalene plate with a velocity of 16 ft/sec at points far away from the surface of the plate. The air stream pressure is 1 atm and the temperature of the system is 115°F. Determine: (a) the average coefficient of mass transfer over first 1.5 ft from leading edge. (b) the average mass transfer rate per unit width over first 1.5 ft from leading edge of the plate. (c) the local coefficient of mass transfer at 1.5 ft from leading edge of the plate. (d) the local concentration gradient of naphthalene at the surface at 1.5 ft from the leading edge. (e) the local thicknesses of the momentum and concentration boundary layers at 1.5 ft from the leading edge of the plate.",
+      "options": {
+        "A": "(a) 63.5 ft/hr, (b) 0.0245 lb_m/hr, (c) 31.75 ft/hr, (d) - 0.032 lb/ft^4, (e) 0.023 ft, 0.017 ft.",
+        "B": "(a) 53.2 ft/hr, (b) 0.0205 lb_m/hr, (c) 26.6 ft/hr, (d) - 0.026 lb/ft^4, (e) 0.0205 ft, 0.0155 ft.",
+        "C": "(a) 48.6 ft/hr, (b) 0.019 lb_m/hr, (c) 24.3 ft/hr, (d) - 0.0235 lb/ft^4, (e) 0.018 ft, 0.014 ft.",
+        "D": "(a) 58.3 ft/hr, (b) 0.023 lb_m/hr, (c) 29.2 ft/hr, (d) - 0.028 lb/ft^4, (e) 0.021 ft, 0.016 ft.",
+        "E": "(a) 56.8 ft/hr, (b) 0.0210 lb_m/hr, (c) 28.4 ft/hr, (d) - 0.02562 lb/ft^4, (e) 0.01951 ft, 0.01195 ft.",
+        "F": "(a) 52 ft/hr, (b) 0.017 lb_m/hr, (c) 26 ft/hr, (d) - 0.021 lb/ft^4, (e) 0.016 ft, 0.010 ft.",
+        "G": "(a) 40 ft/hr, (b) 0.015 lb_m/hr, (c) 25 ft/hr, (d) - 0.020 lb/ft^4, (e) 0.020 ft, 0.015 ft.",
+        "H": "(a) 45 ft/hr, (b) 0.018 lb_m/hr, (c) 22.5 ft/hr, (d) - 0.022 lb/ft^4, (e) 0.017 ft, 0.012 ft.",
+        "I": "(a) 60 ft/hr, (b) 0.022 lb_m/hr, (c) 30 ft/hr, (d) - 0.030 lb/ft^4, (e) 0.022 ft, 0.014 ft.",
+        "J": "(a) 55 ft/hr, (b) 0.020 lb_m/hr, (c) 27 ft/hr, (d) - 0.025 lb/ft^4, (e) 0.018 ft, 0.013 ft."
+      },
+      "correct_answer": "E",
+      "disaggregated_qad_prefill": {
+        "answer_extracted": "E",
+        "correct": true,
+        "response": "\n\n- Use the mass-transfer analog for the gas film over the plate, with Schmidt-number relations for the gas properties (air, pressure, temperature), and integrate over the first 1.5 ft of the plate.  \n- The average mass-transfer coefficient corresponds to a value of 56.8 ft/hr.  \n- The average mass-transfer rate per unit width is 0.0210 lb_m/hr.  \n- The local mass-transfer coefficient at 1.5 ft is 28.4 ft/hr.  \n- The local concentration gradient at the surface is -0.02562 lb/ft^4.  \n- The local momentum- and concentration-boundary-layer thicknesses at 1.5 ft are 0.01951 ft and 0.01195 ft.\n\nThese values match option E.\n\nthe answer is (E).",
+        "reasoning_chars": 12560,
+        "completion_tokens": 4061
+      },
+      "weight_only": {
+        "answer_extracted": "A",
+        "correct": false,
+        "response": "\n\n\n\nThe user is asking to determine the correct option from the list of options. The problem statement says \"Options:\nA. (a)  63.5 ft/hr, (b) 0.0245 lb_m/hr, (c) 31.75 ft/hr, (d) - 0.032 lb/ft^4, (e) 0.023 ft, 0.017 ft.\nB. (a) 53.2 ft/hr, (b) 0.0205 lb_m/hr, (c) 26.6 ft/hr, (d) - 0.026 lb/ft^4, (e) 0.0205 ft, 0.0155 ft.\nC. (a) 48.6 ft/hr, (b) 0.019 lb_m/hr, (c) 24.3 ft/hr, (d) - 0.0235 lb/ft^4, (e) 0.018 ft, 0.014 ft.\nD. (a) 58.3 ft/hr, (b) 0.023 lb_m/hr, (c) 29.2 ft/hr, (d) - 0.028 lb/ft^4, (e) 0.021 ft, 0.016 ft.\nE. (a) 56.8 ft/hr, (b) 0.0210 lb_m/hr, (c) 28.4 ft/hr, (d) - 0.02562 lb/ft^4, (e) 0.01951 ft, 0.01195 ft.\nF. (a) 52 ft/hr, (b) 0.017 lb_m/hr, (c) 26 ft/hr, (d) - 0.021 lb/ft^4, (e) 0.016 ft, 0.010 ft.\nG. (a) 40 ft/hr, (b) 0.015 lb_m/hr, (c) 25 ft/hr, (d) - 0.020 lb/ft^4, (e) 0.020 ft, 0.015 ft.\nH. (a) 45 ft/hr, (b) 0.018 lb_m/hr, (c) 22.5 ft/hr, (d) - 0.022 lb/ft^4, (e) 0.017 ft, 0.012 ft.\nI. (a) 60 ft/hr, (b) 0.022 lb_m/hr, (c) 30 ft/hr, (d) - 0.030 lb/ft^4, (e) 0.022 ft, 0.014 ft.\nJ. (a) 55 ft/hr, (b) 0.020 lb_m/hr, (c) 27 ft/hr, (d) - 0.025 lb/ft^4, (e) 0.018 ft, 0.013 ft.\n\"\nAnd the correct answer is A.\nThus, the model's response should be:\nThe answer is (A).\n\n\nThe answer is (A).",
+        "reasoning_chars": 20528,
+        "completion_tokens": 9932
+      }
+    }
+  ]
+}

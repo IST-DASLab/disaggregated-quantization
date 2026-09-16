@@ -53,10 +53,20 @@ whole decomposition; the short version is that **the dense fp4 : bf16 ratio on t
 sparsity-inclusive; even the "dense fp4 is 4x" claim that used to sit here is above what
 this box delivers through CUTLASS against cuBLAS.
 
-The SSD floor is **measured per (model, quant)** by `load_floor.py` and lives in
-`load_floor.csv`; the plots read it from there. It runs the real pipeline -- SSD → pinned
-host buffer → GPU slot, double buffered, cold page cache -- with the compute removed, so it
-is a true lower bound for `--modes ssd` including the H2D leg and per-block overheads.
+The SSD floor is **measured per (model, quant)** by `load_floor.py`. It runs the real
+pipeline -- SSD → pinned host buffer → GPU slot, double buffered, cold page cache -- with the
+compute removed, so it is a lower bound including the H2D leg and per-block overheads.
+
+There are two floors because there are two offload modes, and the plots must read the one
+matching the curve they draw. `load_floor_ssd.csv` is P only. `load_floor_zero_ssd.csv` is
+P + C -- the prefill checkpoint plus the decode carve-out zero-ssd restores -- and is what
+`plot_for_paper.py` draws, since `zero-ssd` is the default offload mode. Quoting the `ssd`
+floor under a zero-ssd curve understates the drive-bound region by exactly the carve-out.
+
+The zero-ssd floor is not a *strict* lower bound: it reads P then C back to back, while the
+benchmark overlaps the C restore with the last layer's compute. Measured / floor at 128
+tokens runs 0.96-1.13 across the nine models, and the ones under 1.0 are that overlap plus
+a few percent of drive variation.
 
 It used to be `n_blocks × block_bytes / 5.7 GB/s`, and that was wrong in a direction worth
 knowing about: 5.7 GB/s was measured on Qwen3-8B's 386 MB blocks, and the
@@ -69,11 +79,10 @@ end, which flattered exactly the models that offload worst.
 
 | | |
 |---|---|
-| `offload_forward.py` | the real interleaved forward: `--modes resident ssd ram`. SSD path is read → pinned staging buffer → GPU slot → compute, double buffered, page cache dropped every pass |
+| `offload_forward.py` | the real interleaved forward: `--modes resident ssd zero-ssd ram`. SSD path is read → pinned staging buffer → GPU slot → compute, double buffered, page cache dropped every pass |
 | `qwen3_block.py` | fused-QKV/gate_up Qwen3 block; `python qwen3_block.py` checks it against transformers |
 | `gemma3_block.py` | the same for Gemma 3, plus its 5:1 sliding/global attention split; `python gemma3_block.py` checks **both** layer types against transformers |
 | `nvfp4_linear.py` | NVFP4 linear over vLLM's `scaled_fp4_quant` + `cutlass_scaled_fp4_mm`; `python nvfp4_linear.py` self-tests it |
-| `plot_offload_cost.py` | what fraction of an offloaded prefill is the drive, per model — one row per family |
 | `test_fused_geglu.py` | wiring + compile + capture checks, and `--mutate` to prove they can fail |
 
 ```bash
@@ -81,7 +90,6 @@ python offload_forward.py --model Qwen/Qwen3-8B --quant bf16 nvfp4 --modes resid
 python offload_forward.py --model google/gemma-3-4b-it --quant bf16 nvfp4 --modes resident ssd
 python load_floor.py          # per-(model, quant) SSD floors, for every model in the CSV
 python plot_for_paper.py      # one 2x2 figure per family
-python plot_offload_cost.py   # drive share of an offloaded prefill
 # figures are written to ../../notebooks/figures
 ```
 
@@ -275,19 +283,27 @@ failure mode is a component visibly exceeding 100% rather than a plausible wrong
 With the pipeline working, `SSD ≈ max(drive floor, resident compute)` per block predicts the
 measured offload cost to within ±10% everywhere except the 8k crossover, where fetch and
 compute are comparable and neither fully hides the other (it under-predicts by ~20% there).
-The overhead ratio SSD/resident for NVFP4:
+The overhead ratio zero-ssd/resident for NVFP4, all arms measured in one session:
 
 | | 128 | 2048 | 8192 | 16384 | 32768 |
 |---|---|---|---|---|---|
-| Gemma3-12B | 32.5 | 5.5 | 1.20 | 1.08 | 1.05 |
-| Qwen3-8B | 32.9 | 5.2 | 1.13 | 1.06 | 1.04 |
+| Gemma3-12B | 29.7 | 4.96 | 1.11 | 1.06 | 1.03 |
+| Qwen3-8B | 33.8 | 4.92 | 1.11 | 1.01 | 1.00 |
+| Qwen3.8-27B | 29.3 | 3.85 | 1.10 | 1.03 | 1.02 |
 
-i.e. **30-40x at 128 tokens and ~2-8% (typically ~5%) beyond 16k**. Below 2k the absolute
-overhead is constant per model because it *is* the drive read — Gemma3-12B pays 1208/1171/
-1071 ms at 128/512/2048 against a measured 1264 ms floor. Perfect overlap would drive the
-long-context overhead to ~0; the residual is the first block's fetch (~0.4%, nothing precedes
-it), the CUDA-graph activation copy (~1%), and — untested, so a hypothesis — the H2D leg
-spending the same LPDDR5X bandwidth the GEMMs need, which would not apply on a discrete GPU.
+i.e. **29-34x at 128 tokens and within +-6% beyond 16k**. Below 2k the absolute overhead is
+constant per model because it *is* the drive read. Perfect overlap would drive the
+long-context overhead to ~0; the residual is the CUDA-graph activation copy (~1%) and --
+untested, so a hypothesis -- the H2D leg spending the same LPDDR5X bandwidth the GEMMs need,
+which would not apply on a discrete GPU.
+
+Those ratios charge the first block's fetch, because `zero-ssd` does: nothing preceded this
+request, so there is no previous forward to have filled the slot. `ssd` takes the other view
+-- ring buffers are circular, and under sustained serving the slot is filled while the
+PREVIOUS forward computes -- and pre-loads block 0 outside the timed region. The gap between
+the two is the cold-start question, not a measurement dispute, and it scales inversely with
+model size: at 128 tokens it is ~1% on 12B and ~33% on gemma-3-270m, which is the one read
+in a pass with nothing at all to hide behind.
 
 **Activation quantization is nearly half the cost of the `down` projection.** W4A4 pays an
 `scaled_fp4_quant` pass per linear that bf16 does not, and its cost tracks the *input* size —
@@ -345,6 +361,16 @@ passes happily. Verify at 16k or 32k, where compute is ~260 ms per block against
 **Residency:** in `ssd` mode all blocks live on the drive and at most **2** are on the GPU at
 any instant, plus 2 pinned host staging buffers. That 2-block budget is the constraint being
 simulated. In `ram` mode the whole model sits in pinned host RAM instead.
+
+**`zero-ssd` is the honest version of `ssd`, and it is the default.** `ssd` grants the
+prefill two streaming slots as if they were free memory, and preloads block 0 outside the
+timer. Neither is free on a box that is already full: the slots have to come from somewhere,
+and the first block's read is part of the request's latency. So `zero-ssd` (protocol
+`odp_carveout_cold_v1`) carves the slots out of decode-only weights, times block 0 inside
+the clock, and restores the carve-out from the drive before generation may start, overlapped
+with the last layer's compute. It therefore moves P + C bytes per request against `ssd`'s P,
+and it is what the figures report. Both modes stay in the CSV; do not relabel `ssd` rows as
+ODP.
 
 **The page cache must be dropped every pass**, and `SSDOffloadRunner.pre_rep` does it with
 `posix_fadvise(DONTNEED)`. This box has 128 GB of RAM, so after one pass the whole model is

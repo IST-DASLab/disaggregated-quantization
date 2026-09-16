@@ -41,8 +41,15 @@ MUTATIONS = {
                         "bs = (amax * gs / 6.0 * 1.02).to(tl.float8e4nv)", True),
     "nibble order swapped": ("packed = (lo | (hi << 4)).to(tl.uint8)",
                              "packed = (hi | (lo << 4)).to(tl.uint8)", True),
-    "gelu -> silu": ("y = 0.5 * gate * (1.0 + libdevice.tanh(inner)) * up",
-                     "y = gate * tl.sigmoid(gate) * up", True),
+    # Anchored on the ACT == 0 branch, not on a fused one-liner: when the kernel gained its
+    # `ACT` constexpr (GeLU for Gemma, SiLU for Qwen3) the single expression
+    # `y = 0.5 * gate * (...) * up` became `act = ...` followed by `y = act * up`, and this
+    # anchor stopped matching. Since the loop asserted on a missing anchor, the suite died
+    # here and the last two mutations silently stopped running -- including this one, which
+    # exists because an early wiring test reported "bitwise identical" for a kernel that
+    # computed SiLU instead of GeLU.
+    "gelu -> silu": ("act = 0.5 * gate * (1.0 + libdevice.tanh(inner))",
+                     "act = gate * tl.sigmoid(gate)", True),
     "skip bf16 rounding": ("    y = y.to(tl.bfloat16).to(tl.float32)", "    pass", True),
 }
 
@@ -128,7 +135,16 @@ def run_mutations() -> bool:
     print(f"{'mutation':<24}{'kernel selftest':>17}{'wiring':>9}   verdict")
     try:
         for name, (anchor, repl, should_catch) in MUTATIONS.items():
-            assert anchor in orig, f"mutation anchor missing, update this test: {anchor}"
+            # A stale anchor is a failure of THIS mutation, not a reason to abandon the
+            # ones after it. Asserting here meant a kernel edit that moved one line
+            # disabled every later mutation without ever saying so -- the suite printed
+            # three green rows and a traceback, which reads like a crash rather than like
+            # lost coverage.
+            if anchor not in orig:
+                print(f"{name:<24}{'-':>17}{'-':>9}   "
+                      f"*** ANCHOR MISSING, update this test: {anchor[:40]}... ***")
+                all_good = False
+                continue
             SRC.write_text(orig.replace(anchor, repl))
             st = subprocess.run([sys.executable, "-c", check], capture_output=True,
                                 text=True, cwd=HERE)

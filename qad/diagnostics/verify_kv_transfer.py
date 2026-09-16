@@ -36,7 +36,12 @@ import sys
 import time
 from pathlib import Path
 
-_QAD = Path(__file__).resolve().parent
+# parent.parent, not parent: this file lives in qad/diagnostics/, so .parent is
+# diagnostics/ -- but the driver it shells out to is qad/eval/eval_disagg.py. It used to
+# sit beside this file and the reference was never updated when it moved, so the gate
+# died with "can't open file .../diagnostics/eval_disagg.py" before running any stack.
+_QAD = Path(__file__).resolve().parent.parent
+_EVAL_DISAGG = _QAD / "eval" / "eval_disagg.py"
 _T0 = time.time()
 
 
@@ -48,7 +53,7 @@ def collect(prefill: Path, decode: Path, tokenizer: str, out: Path,
             port_base: int, label: str) -> list:
     """Run one stack via eval_disagg.py --probe and return its completions."""
     log(f"=== stack {label}: prefill={prefill.name} decode={decode.name} ===")
-    cmd = [sys.executable, str(_QAD / "eval_disagg.py"),
+    cmd = [sys.executable, str(_EVAL_DISAGG),
            "--prefill-model", str(prefill), "--decode-model", str(decode),
            "--tokenizer", tokenizer, "--probe", str(out),
            "--port-base", str(port_base),

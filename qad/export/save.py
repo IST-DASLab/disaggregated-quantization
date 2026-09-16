@@ -75,6 +75,71 @@ def _quant_layers(model: nn.Module) -> dict:
             if isinstance(m, (QuantizedLinear, DualParamModule))}
 
 
+def _ignore_list_from_state(state: dict) -> list[str]:
+    """`quantization_config.ignore`, derived from the TENSORS ABOUT TO BE WRITTEN.
+
+    Must not be derived from the live model under pipeline parallelism. Each stage holds
+    only its half of the layers, so a list built from rank 0's modules names only stage
+    0's -- layers 0..31 of 64, which is 24 of the 48 GDN blocks, EXACTLY HALF. The
+    tensors are fine (merge_export_state stitches both halves before writing); it is only
+    the config that was written from one stage's view, so vLLM then built quantized
+    layers for every GDN block in the second half whose weights are plain `.weight`.
+
+    The merged state dict has all 64 layers by construction, which is the whole point of
+    passing it in. A module is quantized iff it shipped a `weight_packed`; unquantized
+    Linears are the 2-D `.weight` tensors that are not packed. 2-D also matches an
+    EMBEDDING, so those are excluded by name -- they are not Linears and `targets` is
+    ["Linear"].
+
+    Plus the non-Linear PARENT of any MIXED module (holding both a quantized and an
+    unquantized Linear) and that parent's norm: at 27B the 48 linear_attn blocks, each
+    with a quantized out_proj beside its ignored in_proj_a/b. With those entries this
+    reproduces the reference nvfp4 config for this model EXACTLY -- set-equal, 303
+    entries, zero difference either way.
+    """
+    packed = {k[: -len(".weight_packed")] for k in state if k.endswith(".weight_packed")}
+
+    def is_embedding(mod: str) -> bool:
+        return "embed" in mod.rpartition(".")[2]
+
+    names = {
+        k[: -len(".weight")] for k, v in state.items()
+        if k.endswith(".weight") and getattr(v, "ndim", 0) == 2
+        and k[: -len(".weight")] not in packed
+        and ".inner." not in k and not is_embedding(k[: -len(".weight")])
+    }
+
+    def parent(n: str) -> str:
+        return n.rpartition(".")[0]
+
+    mixed = {parent(p) for p in packed} & {parent(n) for n in names}
+    return sorted(names | mixed | {f"{m}.norm" for m in mixed})
+
+
+def _owned_by_quant(key: str, quant: dict) -> bool:
+    """Is `key` inside a module that decides its own export?
+
+    ANY ancestor, not just the immediate parent. The old test was
+    `key.rpartition(".")[0] in quant`, which holds only when the layer keeps its tensors
+    as direct children -- true for every layer that existed when it was written.
+    FrozenDecodeNorm wraps the original module as `.inner` so it can delegate the norm
+    maths instead of reimplementing it, and `...input_layernorm.inner.weight` has parent
+    `...input_layernorm.inner`, which is NOT in `quant`. So the fp32 training master
+    shipped alongside the bf16 tensor the wrapper exports -- 208 duplicate tensors at
+    27B, and vLLM refuses the checkpoint outright:
+
+        ValueError: There is no module or parameter named
+          'layers.0.input_layernorm.inner' in Qwen3_5Model
+
+    Walking ancestors fixes it for any nesting depth, not just this one.
+    """
+    parts = key.split(".")
+    for i in range(len(parts) - 1, 0, -1):
+        if ".".join(parts[:i]) in quant:
+            return True
+    return False
+
+
 def build_state_dict(model: nn.Module, variant=None) -> dict[str, Tensor]:
     """Assemble the full tensor dict for one checkpoint variant."""
     quant = _quant_layers(model)
@@ -84,8 +149,7 @@ def build_state_dict(model: nn.Module, variant=None) -> dict[str, Tensor]:
     # of itself is worth serializing, and it is never the training-time internals.
     seen: set[int] = set()
     for key, tensor in model.state_dict().items():
-        parent, _, _ = key.rpartition(".")
-        if parent in quant:
+        if _owned_by_quant(key, quant):
             continue
         t = tensor.detach().cpu()
         # Tied weights (every Gemma-3 size, and Qwen3 below 8B) are ONE storage under
@@ -238,6 +302,8 @@ def save_checkpoint(model: nn.Module, out_dir: Path, variant=None, step: int = 0
     cfg_path = out_dir / "config.json"
     cfg = json.loads(cfg_path.read_text())
     if qcfg is not None:
+        # From `state`, never from `model`: under PP the local model is half the layers.
+        qcfg = {**qcfg, "ignore": _ignore_list_from_state(state)}
         cfg["quantization_config"] = qcfg
     fix_serving_fields(cfg)
     if arch is not None:

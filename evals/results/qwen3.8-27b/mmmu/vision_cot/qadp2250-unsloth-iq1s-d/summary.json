@@ -1,0 +1,130 @@
+{
+  "dir": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/prefill-decode-shenanigans/evals/results/qwen3.8-27b/mmmu/vision_cot/qadp2250-unsloth-iq1s-d",
+  "n_scored": 1730,
+  "accuracy": 0.27341040462427746,
+  "truncated": 29,
+  "empty_content": 1293,
+  "unparsed": 1293,
+  "per_subdomain": {
+    "Accounting": {
+      "acc": 0.43103448275862066,
+      "n": 58
+    },
+    "Agriculture": {
+      "acc": 0.2,
+      "n": 60
+    },
+    "Architecture_and_Engineering": {
+      "acc": 0.18333333333333332,
+      "n": 60
+    },
+    "Art": {
+      "acc": 0.20754716981132076,
+      "n": 53
+    },
+    "Art_Theory": {
+      "acc": 0.34545454545454546,
+      "n": 55
+    },
+    "Basic_Medical_Science": {
+      "acc": 0.28846153846153844,
+      "n": 52
+    },
+    "Biology": {
+      "acc": 0.2711864406779661,
+      "n": 59
+    },
+    "Chemistry": {
+      "acc": 0.3,
+      "n": 60
+    },
+    "Clinical_Medicine": {
+      "acc": 0.2033898305084746,
+      "n": 59
+    },
+    "Computer_Science": {
+      "acc": 0.2833333333333333,
+      "n": 60
+    },
+    "Design": {
+      "acc": 0.25,
+      "n": 60
+    },
+    "Diagnostics_and_Laboratory_Medicine": {
+      "acc": 0.13333333333333333,
+      "n": 60
+    },
+    "Economics": {
+      "acc": 0.423728813559322,
+      "n": 59
+    },
+    "Electronics": {
+      "acc": 0.16666666666666666,
+      "n": 60
+    },
+    "Energy_and_Power": {
+      "acc": 0.1724137931034483,
+      "n": 58
+    },
+    "Finance": {
+      "acc": 0.23333333333333334,
+      "n": 60
+    },
+    "Geography": {
+      "acc": 0.34615384615384615,
+      "n": 52
+    },
+    "History": {
+      "acc": 0.25,
+      "n": 56
+    },
+    "Literature": {
+      "acc": 0.36538461538461536,
+      "n": 52
+    },
+    "Manage": {
+      "acc": 0.32,
+      "n": 50
+    },
+    "Marketing": {
+      "acc": 0.23728813559322035,
+      "n": 59
+    },
+    "Materials": {
+      "acc": 0.3,
+      "n": 60
+    },
+    "Math": {
+      "acc": 0.3,
+      "n": 60
+    },
+    "Mechanical_Engineering": {
+      "acc": 0.2711864406779661,
+      "n": 59
+    },
+    "Music": {
+      "acc": 0.26666666666666666,
+      "n": 60
+    },
+    "Pharmacy": {
+      "acc": 0.45614035087719296,
+      "n": 57
+    },
+    "Physics": {
+      "acc": 0.23333333333333334,
+      "n": 60
+    },
+    "Psychology": {
+      "acc": 0.35,
+      "n": 60
+    },
+    "Public_Health": {
+      "acc": 0.22413793103448276,
+      "n": 58
+    },
+    "Sociology": {
+      "acc": 0.2222222222222222,
+      "n": 54
+    }
+  }
+}

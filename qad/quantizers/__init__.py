@@ -27,6 +27,8 @@ from .dual import (apply_nvfp4prefill, apply_nvfp4decode,
                    apply_nvfp4nvr2bitupcast, apply_nvfp4nvr2bitsplit,
                    apply_nvfp4pdshared, apply_nvfp4pdsplit,
                    prefill_mask_from_labels, quant_phase)
+from .frozen_decode import (apply_nvfp4frozendec, load_frozen_decode,
+                            NVFP4FrozenDecodeLinear, SKIP_LINEARS)
 from .lloyd import apply_lloyd21, apply_lloyd3bit, apply_lloyd43
 from .nvfp4 import apply_nvfp4, apply_nvfp4a16, calibrate_nvfp4
 from .nvr2bit import apply_nvr2bit, post_update_nvr2bit
@@ -122,6 +124,27 @@ REGISTRY: dict = {
         "defaults":     {"block_size": 16},
         "export":       "compressed_tensors",
         "variants":     ["prefill", "decode"],
+    },
+    "nvfp4frozendec": {
+        # NVFP4 W4A4 prefill trained against a FROZEN EXTERNAL decode checkpoint.
+        #
+        # Unlike nvfp4pdsplit, the decode half is not a second master: it is a black box
+        # someone else quantized (the dequantized GSQ-RCO `*-bf16` models), loaded as-is,
+        # never updated, never exported. So this costs 2x linear FLOPs like a split
+        # format but only 1x master/optimizer memory, and the exported checkpoint is the
+        # prefill half alone -- `variants` is ["prefill"], not the usual pair.
+        #
+        # `decode_model` is in defaults and therefore md5'd into the checkpoint tag, so
+        # runs against different black boxes (IQ2_S vs IQ3_S ...) cannot collide. It has
+        # no default value on purpose: there is no sensible one, and silently training
+        # against the wrong decode model is the expensive mistake here.
+        "apply":        apply_nvfp4frozendec,
+        "param_groups": None,
+        "post_update":  post_update_all,
+        "defaults":     {"block_size": 16, "decode_model": "",
+                         "skip_linears": SKIP_LINEARS},
+        "export":       "compressed_tensors",
+        "variants":     ["prefill"],
     },
     "nvfp4decode": {
         # PHASE-ISOLATION ABLATION. BF16 prefill, NVFP4 (W4A4) decode: one shared

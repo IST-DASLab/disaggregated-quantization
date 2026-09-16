@@ -4,7 +4,17 @@ from torch import Tensor
 
 from .base import QuantizedLinear
 from .blocked import GroupScaled, replace_linears, ste
-from .luts_backend import NUM_PROBES, _recover_scales, nvr2bit_quantize  # noqa: F401
+
+try:
+    from .luts_backend import NUM_PROBES, _recover_scales, nvr2bit_quantize  # noqa: F401
+except ImportError:
+    NUM_PROBES = 8
+
+    def _unavailable(*_args, **_kwargs):
+        raise ImportError("psx-luts is not built/on PYTHONPATH; nvr2bit/nvfp4nvr2bit* "
+                           "formats are unavailable. See qad/bin/README.md #4.")
+    _recover_scales = _unavailable
+    nvr2bit_quantize = _unavailable
 
 __all__ = ["NVR2BitLinear", "post_update_nvr2bit", "apply_nvr2bit",
            "nvr2bit_quantize", "_recover_scales", "NUM_PROBES"]

@@ -10,7 +10,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-os.environ.setdefault("HF_HOME", "/lustre/fsw/portfolios/adlr/users/apanferov/hf_cache")
+os.environ.setdefault("HF_HOME", "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/hf_cache")
 
 import torch
 

@@ -1,0 +1,386 @@
+{
+  "hyper": {
+    "provenance": "Recorded manuscript metadata; edit this source when the setup changes.",
+    "columns": "ll",
+    "rows": [
+      {
+        "rule": "\\toprule"
+      },
+      {
+        "cells": [
+          "Objective",
+          "$\\mathrm{KL}(p_\\text{teacher}\\|p_\\text{student})$, teacher frozen in BF16"
+        ]
+      },
+      {
+        "cells": [
+          "Corpus",
+          "T\\\"{u}lu 3 SFT, 100M non-padding tokens, mean sequence length 638"
+        ]
+      },
+      {
+        "cells": [
+          "Sequence length",
+          "2048"
+        ]
+      },
+      {
+        "cells": [
+          "Global batch size",
+          "64 sequences"
+        ]
+      },
+      {
+        "cells": [
+          "Steps",
+          "$\\approx$2450"
+        ]
+      },
+      {
+        "cells": [
+          "Optimizer",
+          "AdamW, $\\beta=(0.9,0.95)$, $\\epsilon=10^{-8}$"
+        ]
+      },
+      {
+        "cells": [
+          "Learning rate",
+          "$3\\times10^{-6}$, constant"
+        ]
+      },
+      {
+        "cells": [
+          "Warmup",
+          "100 steps"
+        ]
+      },
+      {
+        "cells": [
+          "Weight decay",
+          "0.1"
+        ]
+      },
+      {
+        "cells": [
+          "Gradient clipping",
+          "1.0, per-DDP-rank"
+        ]
+      },
+      {
+        "cells": [
+          "Master weights",
+          "FP32; straight-through estimator to the quantized weight"
+        ]
+      },
+      {
+        "cells": [
+          "Compute precision",
+          "BF16 autocast; FP32 residual stream"
+        ]
+      },
+      {
+        "cells": [
+          "Parallelism",
+          "DDP, ZeRO-2, pipeline parallelism"
+        ]
+      },
+      {
+        "rule": "\\bottomrule"
+      }
+    ]
+  },
+  "parallel": {
+    "provenance": "Recorded manuscript metadata; edit this source when the setup changes.",
+    "columns": "lccccc",
+    "rows": [
+      {
+        "rule": "\\toprule"
+      },
+      {
+        "cells": [
+          "Model / format",
+          "B200 GPUs",
+          "PP",
+          "DP",
+          "Micro-batch",
+          "Accum."
+        ]
+      },
+      {
+        "rule": "\\midrule"
+      },
+      {
+        "cells": [
+          "Qwen 3 0.6B / 1.7B / 4B, all formats",
+          "8",
+          "1",
+          "8",
+          "8",
+          "1"
+        ]
+      },
+      {
+        "cells": [
+          "Qwen3-8B, single-master formats",
+          "8",
+          "1",
+          "8",
+          "8",
+          "1"
+        ]
+      },
+      {
+        "cells": [
+          "Qwen3-8B, fully-disaggregated formats",
+          "16",
+          "2",
+          "8",
+          "8",
+          "1"
+        ]
+      },
+      {
+        "cells": [
+          "Gemma 3 270m / 1b / 4b, all formats",
+          "8",
+          "1",
+          "8",
+          "8",
+          "1"
+        ]
+      },
+      {
+        "cells": [
+          "Gemma-3-12b, single-master formats",
+          "16",
+          "1",
+          "16",
+          "4",
+          "1"
+        ]
+      },
+      {
+        "cells": [
+          "Gemma-3-12b, fully-disaggregated formats",
+          "32",
+          "2",
+          "16",
+          "4",
+          "1"
+        ]
+      },
+      {
+        "cells": [
+          "Qwen3.8-27B, frozen-decode disaggregation",
+          "64",
+          "2",
+          "32",
+          "1",
+          "1"
+        ]
+      },
+      {
+        "rule": "\\bottomrule"
+      }
+    ]
+  },
+  "models": {
+    "provenance": "Recorded manuscript metadata; edit this source when the setup changes.",
+    "columns": "lccccc",
+    "rows": [
+      {
+        "rule": "\\toprule"
+      },
+      {
+        "cells": [
+          "Model",
+          "Layers",
+          "$d_\\text{model}$",
+          "$d_\\text{ffn}$",
+          "Vocabulary",
+          "Tied embeddings"
+        ]
+      },
+      {
+        "rule": "\\midrule"
+      },
+      {
+        "cells": [
+          "Qwen3-0.6B",
+          "28",
+          "1024",
+          "3072",
+          "151936",
+          "yes"
+        ]
+      },
+      {
+        "cells": [
+          "Qwen3-1.7B",
+          "28",
+          "2048",
+          "6144",
+          "151936",
+          "yes"
+        ]
+      },
+      {
+        "cells": [
+          "Qwen3-4B",
+          "36",
+          "2560",
+          "9728",
+          "151936",
+          "yes"
+        ]
+      },
+      {
+        "cells": [
+          "Qwen3-8B",
+          "36",
+          "4096",
+          "12288",
+          "151936",
+          "no  \\"
+        ],
+        "after": "hline"
+      },
+      {
+        "cells": [
+          "Gemma-3-270m",
+          "18",
+          "640",
+          "2048",
+          "262208",
+          "yes"
+        ]
+      },
+      {
+        "cells": [
+          "Gemma-3-1b",
+          "26",
+          "1152",
+          "6912",
+          "262208",
+          "yes"
+        ]
+      },
+      {
+        "cells": [
+          "Gemma-3-4b",
+          "34",
+          "2560",
+          "10240",
+          "262208",
+          "yes"
+        ]
+      },
+      {
+        "cells": [
+          "Gemma-3-12b",
+          "48",
+          "3840",
+          "15360",
+          "262208",
+          "yes \\"
+        ],
+        "after": "hline"
+      },
+      {
+        "cells": [
+          "Qwen3.8-27B",
+          "64",
+          "5120",
+          "17408",
+          "248320",
+          "no"
+        ]
+      },
+      {
+        "rule": "\\bottomrule"
+      }
+    ]
+  },
+  "attn-backend": {
+    "provenance": "Historical measured milliseconds transcribed from the manuscript. Raw attention microbenchmark output is not tracked; these are NOT regenerated measurements.",
+    "columns": "lrrl",
+    "rows": [
+      {
+        "rule": "\\toprule"
+      },
+      {
+        "cells": [
+          "Backend",
+          "$S{=}8192$",
+          "$S{=}32768$",
+          "Used for"
+        ]
+      },
+      {
+        "rule": "\\midrule"
+      },
+      {
+        "cells": [
+          "SDPA, \\texttt{is\\_causal}",
+          "\\textbf{3.14}",
+          "\\textbf{50.6}",
+          "global layers"
+        ]
+      },
+      {
+        "cells": [
+          "FA2 varlen, full causal",
+          "3.75",
+          "53.0",
+          "-"
+        ]
+      },
+      {
+        "cells": [
+          "FA4 (\\texttt{flash\\_attn.cute})",
+          "3.06",
+          "49.8",
+          "-"
+        ]
+      },
+      {
+        "cells": [
+          "FlexAttention, causal mask",
+          "-",
+          "123.2",
+          "-"
+        ]
+      },
+      {
+        "rule": "\\midrule"
+      },
+      {
+        "cells": [
+          "FlexAttention, sliding block mask",
+          "2.03",
+          "8.7",
+          "-"
+        ]
+      },
+      {
+        "cells": [
+          "FA4, native \\texttt{window\\_size}",
+          "3.02",
+          "49.0",
+          "-"
+        ]
+      },
+      {
+        "cells": [
+          "FA2 varlen, native window",
+          "\\textbf{1.47}",
+          "\\textbf{6.0}",
+          "local layers"
+        ]
+      },
+      {
+        "rule": "\\bottomrule"
+      }
+    ]
+  }
+}

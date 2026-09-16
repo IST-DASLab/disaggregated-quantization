@@ -21,7 +21,7 @@ from .format import (Format, LLOYD43, BLOCK, GROUP, LUT, format_for_packed,
                      lut_for)
 
 __all__ = ["gemv_lloyd43_cuda", "dequant_cuda", "gemv_op", "linear_op",
-           "load_extension", "is_available", "CUDA_CONFIGS", "auto_config",
+           "load_extension", "is_available", "CUDA_CONFIGS", "auto_config", "act_quant_barrier",
            "CUDA_SHAPE_TABLES"]
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -237,6 +237,39 @@ def auto_config(N: int, K: int, fmt: Format | None = None
     name = (fmt or LLOYD43).name
     table = CUDA_SHAPE_TABLES.get(name, _TABLE_LLOYD43)
     return table.get((N, K)) or _TABLE_LLOYD43.get((N, K)) or _heuristic(N, K)
+
+
+@torch.library.custom_op("lloyd43::act_quant_barrier", mutates_args={"x"})
+def act_quant_barrier(x: Tensor, global_scale: Tensor) -> None:
+    """Pay the activation-quantization cost, discard the result, touch nothing.
+
+    For reporting a LUT format WITHOUT format disaggregation. The GEMV consumes bf16
+    activations, so quantizing them buys this kernel nothing -- but a non-disaggregated
+    deployment of a W*A4 format pays for it anyway, and at batch 1 that cost is almost
+    entirely per-launch: four linears x L layers is 144 extra kernels per token on
+    Qwen3-8B, which is percent-level against a ~22 ms ITL even inside a CUDA graph.
+
+    THE OP MUST NOT BE ELIMINABLE, AND MUST ORDER BEFORE THE GEMV -- while costing nothing
+    beyond the quantization itself. It is declared to MUTATE x though it does not: a
+    mutation is a side effect, so no DCE pass may drop the call, and every later read of x
+    (the GEMV's) is ordered after it. Declaring a mutation that does not happen is safe in
+    the direction that matters -- it over-constrains the scheduler and under-claims purity.
+
+    The alternative, returning a clone for the GEMV to consume, also works but bills the
+    arm for a copy the format would never perform. Here functionalization introduces that
+    clone only if inductor's reinplacing pass fails to remove it, which test_act_barrier.py
+    checks for directly rather than assuming.
+
+    Numerics are untouched: the quantized value is discarded and x is never written.
+    """
+    import vllm._custom_ops as ops
+    x2d = x.reshape(-1, x.shape[-1])
+    ops.scaled_fp4_quant(x2d, global_scale, is_sf_swizzled_layout=True, backend="cutlass")
+
+
+@act_quant_barrier.register_fake
+def _(x, global_scale):
+    return None
 
 
 def gemv_lloyd43_cuda(x: Tensor, packed: Tensor, block_scale: Tensor,

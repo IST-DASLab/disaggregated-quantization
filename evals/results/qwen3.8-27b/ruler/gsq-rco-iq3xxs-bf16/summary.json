@@ -1,0 +1,250 @@
+{
+  "benchmark": "ruler",
+  "per_length": {
+    "8192": {
+      "score": 96.05,
+      "n_tasks": 13,
+      "n_docs": 6500,
+      "empty_predictions": 7,
+      "truncated": 58,
+      "per_task": {
+        "cwe": {
+          "score": 97.84,
+          "n": 500
+        },
+        "fwe": {
+          "score": 95.13,
+          "n": 500
+        },
+        "niah_multikey_1": {
+          "score": 100.0,
+          "n": 500
+        },
+        "niah_multikey_2": {
+          "score": 100.0,
+          "n": 500
+        },
+        "niah_multikey_3": {
+          "score": 100.0,
+          "n": 500
+        },
+        "niah_multiquery": {
+          "score": 99.9,
+          "n": 500
+        },
+        "niah_multivalue": {
+          "score": 99.95,
+          "n": 500
+        },
+        "niah_single_1": {
+          "score": 100.0,
+          "n": 500
+        },
+        "niah_single_2": {
+          "score": 100.0,
+          "n": 500
+        },
+        "niah_single_3": {
+          "score": 100.0,
+          "n": 500
+        },
+        "qa_1": {
+          "score": 85.8,
+          "n": 500
+        },
+        "qa_2": {
+          "score": 70.0,
+          "n": 500
+        },
+        "vt": {
+          "score": 100.0,
+          "n": 500
+        }
+      }
+    },
+    "16384": {
+      "score": 96.18,
+      "n_tasks": 13,
+      "n_docs": 6500,
+      "empty_predictions": 4,
+      "truncated": 67,
+      "per_task": {
+        "cwe": {
+          "score": 98.18,
+          "n": 500
+        },
+        "fwe": {
+          "score": 97.67,
+          "n": 500
+        },
+        "niah_multikey_1": {
+          "score": 100.0,
+          "n": 500
+        },
+        "niah_multikey_2": {
+          "score": 99.8,
+          "n": 500
+        },
+        "niah_multikey_3": {
+          "score": 100.0,
+          "n": 500
+        },
+        "niah_multiquery": {
+          "score": 100.0,
+          "n": 500
+        },
+        "niah_multivalue": {
+          "score": 99.85,
+          "n": 500
+        },
+        "niah_single_1": {
+          "score": 100.0,
+          "n": 500
+        },
+        "niah_single_2": {
+          "score": 100.0,
+          "n": 500
+        },
+        "niah_single_3": {
+          "score": 100.0,
+          "n": 500
+        },
+        "qa_1": {
+          "score": 86.0,
+          "n": 500
+        },
+        "qa_2": {
+          "score": 69.0,
+          "n": 500
+        },
+        "vt": {
+          "score": 99.88,
+          "n": 500
+        }
+      }
+    },
+    "32768": {
+      "score": 96.13,
+      "n_tasks": 13,
+      "n_docs": 6500,
+      "empty_predictions": 3,
+      "truncated": 48,
+      "per_task": {
+        "cwe": {
+          "score": 98.9,
+          "n": 500
+        },
+        "fwe": {
+          "score": 98.33,
+          "n": 500
+        },
+        "niah_multikey_1": {
+          "score": 100.0,
+          "n": 500
+        },
+        "niah_multikey_2": {
+          "score": 100.0,
+          "n": 500
+        },
+        "niah_multikey_3": {
+          "score": 100.0,
+          "n": 500
+        },
+        "niah_multiquery": {
+          "score": 100.0,
+          "n": 500
+        },
+        "niah_multivalue": {
+          "score": 99.85,
+          "n": 500
+        },
+        "niah_single_1": {
+          "score": 100.0,
+          "n": 500
+        },
+        "niah_single_2": {
+          "score": 100.0,
+          "n": 500
+        },
+        "niah_single_3": {
+          "score": 100.0,
+          "n": 500
+        },
+        "qa_1": {
+          "score": 83.6,
+          "n": 500
+        },
+        "qa_2": {
+          "score": 69.0,
+          "n": 500
+        },
+        "vt": {
+          "score": 100.0,
+          "n": 500
+        }
+      }
+    },
+    "65536": {
+      "score": 95.86,
+      "n_tasks": 13,
+      "n_docs": 6500,
+      "empty_predictions": 0,
+      "truncated": 49,
+      "per_task": {
+        "cwe": {
+          "score": 98.88,
+          "n": 500
+        },
+        "fwe": {
+          "score": 94.2,
+          "n": 500
+        },
+        "niah_multikey_1": {
+          "score": 100.0,
+          "n": 500
+        },
+        "niah_multikey_2": {
+          "score": 100.0,
+          "n": 500
+        },
+        "niah_multikey_3": {
+          "score": 100.0,
+          "n": 500
+        },
+        "niah_multiquery": {
+          "score": 100.0,
+          "n": 500
+        },
+        "niah_multivalue": {
+          "score": 99.85,
+          "n": 500
+        },
+        "niah_single_1": {
+          "score": 100.0,
+          "n": 500
+        },
+        "niah_single_2": {
+          "score": 100.0,
+          "n": 500
+        },
+        "niah_single_3": {
+          "score": 100.0,
+          "n": 500
+        },
+        "qa_1": {
+          "score": 85.8,
+          "n": 500
+        },
+        "qa_2": {
+          "score": 67.4,
+          "n": 500
+        },
+        "vt": {
+          "score": 100.0,
+          "n": 500
+        }
+      }
+    }
+  },
+  "average": 96.06
+}

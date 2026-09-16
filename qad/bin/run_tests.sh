@@ -11,12 +11,15 @@
 # everything else runs single-process.
 set -uo pipefail
 
-CONTAINER=/lustre/fsw/portfolios/adlr/users/apanferov/containers/nemo:26.02.nemotron_3_super_luts_v2.sqsh
-ACCOUNT=adlr_psx_numerics
+CONTAINER=${CONTAINER:-/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/containers/nemo-26.02.sqsh}
+ACCOUNT=coreai_psx_qad
 TIME=${TIME:-00:30:00}
 
 # tests/ and the importable packages live in the qad root, one level up from bin/.
-cd "$(dirname "$(dirname "$(realpath "$0")")")" || exit 1
+# cd+pwd (bash builtins, no -P) rather than realpath: realpath calls getcwd(), which
+# resolves the /lustre->/scratch symlink -- see MIGRATION.md and run_qad.sh's SELF_DIR.
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$(dirname "$SELF_DIR")" || exit 1
 
 VERBOSE=0
 TESTS=()
@@ -31,8 +34,10 @@ if [ ${#TESTS[@]} -eq 0 ]; then
     for f in tests/test_*.py; do TESTS+=("$(basename "${f%.py}")"); done
 fi
 
-# Only the distributed test needs the full node.
-GPUS=1
+# Only the distributed test needs the full node. MIN_GPUS is what the scheduler must be
+# ASKED for -- every QOS on this cluster carries MinTRES gres/gpu=4, so a 1-GPU request
+# is refused at submit with QOSMinGRES (see evals/bin/run_quantize.sh for the same knob).
+GPUS=${MIN_GPUS:-1}
 for t in "${TESTS[@]}"; do
     case "$t" in
         *checkpoint*) GPUS=8 ;;
@@ -59,8 +64,8 @@ CMD='cd "$PWD"; export PYTHONPATH="$PWD"; set -o pipefail; failed=""'
 for t in "${TESTS[@]}"; do
     f="tests/${t#test_}"; f="tests/test_${t#test_}.py"
     case "$t" in
-        *checkpoint*|*pipeline*) run="torchrun --nproc_per_node=$GPUS $f" ;;
-        *)                   run="python $f" ;;
+        *checkpoint*|*pipeline*|*flat_shard*) run="torchrun --nproc_per_node=$GPUS $f" ;;
+        *)                   run="python3 $f" ;;
     esac
     CMD="$CMD; echo; echo \"=== $f ===\"; $run 2>&1 | grep -viE 'futurewarning|pynvml|^  import' || failed=\"\$failed $f\""
 done
@@ -70,7 +75,7 @@ echo "tests: ${TESTS[*]}  (gpus=$GPUS)"
 OUT=$(srun --account="$ACCOUNT" --partition=batch --qos=interactive --time="$TIME" \
     --nodes=1 --ntasks=1 --gpus-per-node="$GPUS" \
     --container-image="$CONTAINER" --no-container-mount-home \
-    --container-mounts=/lustre:/lustre \
+    --container-mounts=/scratch:/scratch,/lustre:/lustre \
     bash -c "PWD=$PWD; $CMD" 2>&1)
 rc=$?
 

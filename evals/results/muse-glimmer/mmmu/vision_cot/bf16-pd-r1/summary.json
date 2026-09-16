@@ -1,0 +1,130 @@
+{
+  "dir": "../results/mmmu/vision_cot/bf16-pd-r1/",
+  "n_scored": 1730,
+  "accuracy": 0.7283236994219653,
+  "truncated": 11,
+  "empty_content": 11,
+  "unparsed": 11,
+  "per_subdomain": {
+    "Accounting": {
+      "acc": 0.896551724137931,
+      "n": 58
+    },
+    "Agriculture": {
+      "acc": 0.5,
+      "n": 60
+    },
+    "Architecture_and_Engineering": {
+      "acc": 0.75,
+      "n": 60
+    },
+    "Art": {
+      "acc": 0.7547169811320755,
+      "n": 53
+    },
+    "Art_Theory": {
+      "acc": 0.8727272727272727,
+      "n": 55
+    },
+    "Basic_Medical_Science": {
+      "acc": 0.7115384615384616,
+      "n": 52
+    },
+    "Biology": {
+      "acc": 0.6101694915254238,
+      "n": 59
+    },
+    "Chemistry": {
+      "acc": 0.7333333333333333,
+      "n": 60
+    },
+    "Clinical_Medicine": {
+      "acc": 0.6440677966101694,
+      "n": 59
+    },
+    "Computer_Science": {
+      "acc": 0.7666666666666667,
+      "n": 60
+    },
+    "Design": {
+      "acc": 0.75,
+      "n": 60
+    },
+    "Diagnostics_and_Laboratory_Medicine": {
+      "acc": 0.45,
+      "n": 60
+    },
+    "Economics": {
+      "acc": 0.8813559322033898,
+      "n": 59
+    },
+    "Electronics": {
+      "acc": 0.95,
+      "n": 60
+    },
+    "Energy_and_Power": {
+      "acc": 0.7931034482758621,
+      "n": 58
+    },
+    "Finance": {
+      "acc": 0.9166666666666666,
+      "n": 60
+    },
+    "Geography": {
+      "acc": 0.6730769230769231,
+      "n": 52
+    },
+    "History": {
+      "acc": 0.6428571428571429,
+      "n": 56
+    },
+    "Literature": {
+      "acc": 0.8076923076923077,
+      "n": 52
+    },
+    "Manage": {
+      "acc": 0.72,
+      "n": 50
+    },
+    "Marketing": {
+      "acc": 0.847457627118644,
+      "n": 59
+    },
+    "Materials": {
+      "acc": 0.7166666666666667,
+      "n": 60
+    },
+    "Math": {
+      "acc": 0.8166666666666667,
+      "n": 60
+    },
+    "Mechanical_Engineering": {
+      "acc": 0.6101694915254238,
+      "n": 59
+    },
+    "Music": {
+      "acc": 0.4166666666666667,
+      "n": 60
+    },
+    "Pharmacy": {
+      "acc": 0.7368421052631579,
+      "n": 57
+    },
+    "Physics": {
+      "acc": 0.8,
+      "n": 60
+    },
+    "Psychology": {
+      "acc": 0.6333333333333333,
+      "n": 60
+    },
+    "Public_Health": {
+      "acc": 0.7931034482758621,
+      "n": 58
+    },
+    "Sociology": {
+      "acc": 0.6666666666666666,
+      "n": 54
+    }
+  }
+}

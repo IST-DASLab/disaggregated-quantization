@@ -12,7 +12,7 @@ directories captured BEFORE the refactor; this compares key sets and tensor VALU
 import json, os, sys, tempfile
 from pathlib import Path
 
-os.environ.setdefault("HF_HOME", "/lustre/fsw/portfolios/adlr/users/apanferov/hf_cache")
+os.environ.setdefault("HF_HOME", "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/hf_cache")
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

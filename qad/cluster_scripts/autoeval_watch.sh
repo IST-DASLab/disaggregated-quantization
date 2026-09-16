@@ -31,7 +31,15 @@
 # empty. Either alone is a trap -- gaps are empty early on simply because nothing has
 # exported yet, and training ending does not mean the last steps were submitted.
 set -uo pipefail
-cd "$(dirname "$(realpath "$0")")/.."
+# cd+pwd (bash builtins, no -P) rather than realpath: realpath calls getcwd(), which
+# resolves the /lustre->/scratch symlink -- see run_qad.sh's SELF_DIR for the full
+# story. Poisons everything downstream too: submit_missing_evals.py's ROOT is
+# os.path.abspath(__file__) relative to THIS process's cwd, so a /scratch cwd here
+# makes it build a /scratch-rooted run_eval_disagg_sweep.sh path, which propagates
+# into run_eval_disagg.sh's own self-location and finally into the sbatch script the
+# container tries to bash -- invisible there, since only /lustre is mounted.
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SELF_DIR/.."
 INTERVAL=${INTERVAL:-120}
 GRACE=${GRACE:-2}            # consecutive empty scans required after training ends
 say() { printf '%s  %s\n' "$(date +%H:%M:%S)" "$*"; }
@@ -43,7 +51,12 @@ say() { printf '%s  %s\n' "$(date +%H:%M:%S)" "$*"; }
 # training jobs -- the loop would then see "training finished" and exit in the middle of a
 # live sweep, while simultaneously counting those same jobs as eval jobs in the `-vc`.
 # Keep this list in sync with the #SBATCH --job-name lines in bin/run_eval*.sh.
-EVAL_JOBS='^qad-(eval|dual-eval|disagg|vllm)$'
+# `ruler` IS on this list: run_eval_ruler.sh submits --job-name=qad-ruler, and it was
+# added after this regex was written. While it was missing, every running RULER job was
+# counted as a TRAINING job by the `grep -vE` below -- so `train` never reached 0 and the
+# watcher would never exit, while also under-counting eval_jobs. Exactly the drift this
+# comment warns about.
+EVAL_JOBS='^qad-(eval|dual-eval|disagg|vllm|ruler)$'
 
 # EVERY family is scanned unless the caller names one. The job counts above are
 # family-agnostic while submit_missing_evals.py takes a single --family defaulting to
@@ -57,21 +70,51 @@ case " $* " in
 esac
 [ -n "$FAMILIES" ] && say "families: $(echo "$FAMILIES" | tr '\n' ' ')"
 
+# RULER-ONLY, by default. `--formats` with NO values hands argparse an empty list, so
+# submit_missing_evals.py's DISAGG loop iterates nothing -- a HARD guarantee, rather than
+# relying on "no other format has checkpoints on disk". That was only accidentally true:
+# the disagg default format list is every LABELS entry minus the excluded ones, so the
+# moment any of those finishes training the watcher would start submitting
+# gsm8k/math500/mmlu_pro jobs nobody asked for. RULER selection is unaffected -- it has
+# its own --ruler-formats list. Set RULER_ONLY=0 to restore the disagg sweep.
+# Placed BEFORE "$@" so an explicit caller --formats still wins (argparse: last wins).
+RULER_ONLY=${RULER_ONLY:-1}
+ONLY_ARGS=()
+if [ "$RULER_ONLY" = 1 ]; then
+    ONLY_ARGS=(--formats)
+    say "RULER-ONLY mode (set RULER_ONLY=0 to also sweep disagg)"
+fi
+
 say "watching; polling every ${INTERVAL}s. detach with ctrl-b d"
 empty=0
 while :; do
+    # Checkpoints land on the nextgen quota but are DISCOVERED through qad/checkpoints,
+    # and run_qad.sh does not create that back-link (the tag ends in a hash computed in
+    # qad.py, not reconstructible there). Without this, a newly launched run is invisible
+    # to the gap scan: it trains and exports while the watcher cheerfully reports nothing
+    # to do. Eight nvfp4a16 runs reached step 1500 that way. Re-run every poll, not once
+    # at startup, so runs launched mid-watch are picked up too.
+    ./cluster_scripts/link_checkpoints.sh 2>/dev/null | grep '^linked ' | sed 's/^/  /'
+
     train=$(squeue -u "$(whoami)" -h -o "%j" 2>/dev/null \
             | grep '^qad-' | grep -cvE "$EVAL_JOBS" || true)
     sent=0; covering=0
     for fam in ${FAMILIES:-__caller__}; do
         if [ "$fam" = "__caller__" ]; then
-            out=$(python3 cluster_scripts/submit_missing_evals.py --apply "$@" 2>&1)
+            out=$(python3 cluster_scripts/submit_missing_evals.py --apply ${ONLY_ARGS[@]+"${ONLY_ARGS[@]}"} "$@" 2>&1)
         else
-            out=$(python3 cluster_scripts/submit_missing_evals.py --apply --family "$fam" "$@" 2>&1)
+            out=$(python3 cluster_scripts/submit_missing_evals.py --apply --family "$fam" ${ONLY_ARGS[@]+"${ONLY_ARGS[@]}"} "$@" 2>&1)
         fi
         s=$(printf '%s' "$out" | grep -c '^  SENT' || true)
         c=$(printf '%s' "$out" | grep -oE 'covering [0-9]+' | head -1 | awk '{print $2}')
         [ "${s:-0}" -gt 0 ] && printf '%s' "$out" | grep '^  SENT' | sed "s/^/  [$fam]/"
+        # FAIL/REFUSING (and anything else, e.g. a traceback) were previously swallowed
+        # entirely -- a watcher stuck on the bootstrap guard, or crashing every poll,
+        # printed "submitted=0" forever with no way to tell why from this log.
+        printf '%s' "$out" | grep -E '^  FAIL|^  REFUSING' | sed "s/^/  [$fam]/"
+        if [ "${s:-0}" -eq 0 ] && ! printf '%s' "$out" | grep -qE '^  (GAP|would submit|submitted) '; then
+            printf '%s' "$out" | sed "s/^/  [$fam][unexpected] /"
+        fi
         sent=$((sent + ${s:-0}))
         covering=$((covering + ${c:-0}))
     done

@@ -1,0 +1,86 @@
+{
+  "benchmark": "mmlu_pro",
+  "accuracy": 0.8116688829787234,
+  "n_scored": 12032,
+  "unparsed": 160,
+  "per_category": {
+    "biology": {
+      "correct": 659,
+      "total": 717,
+      "accuracy": 0.9191073919107392
+    },
+    "business": {
+      "correct": 688,
+      "total": 789,
+      "accuracy": 0.8719898605830165
+    },
+    "chemistry": {
+      "correct": 1012,
+      "total": 1132,
+      "accuracy": 0.8939929328621908
+    },
+    "computer science": {
+      "correct": 350,
+      "total": 410,
+      "accuracy": 0.8536585365853658
+    },
+    "economics": {
+      "correct": 729,
+      "total": 844,
+      "accuracy": 0.8637440758293838
+    },
+    "engineering": {
+      "correct": 731,
+      "total": 969,
+      "accuracy": 0.7543859649122807
+    },
+    "health": {
+      "correct": 610,
+      "total": 818,
+      "accuracy": 0.7457212713936431
+    },
+    "history": {
+      "correct": 266,
+      "total": 381,
+      "accuracy": 0.6981627296587927
+    },
+    "law": {
+      "correct": 630,
+      "total": 1101,
+      "accuracy": 0.5722070844686649
+    },
+    "math": {
+      "correct": 1259,
+      "total": 1351,
+      "accuracy": 0.9319022945965951
+    },
+    "other": {
+      "correct": 663,
+      "total": 924,
+      "accuracy": 0.7175324675324676
+    },
+    "philosophy": {
+      "correct": 355,
+      "total": 499,
+      "accuracy": 0.7114228456913828
+    },
+    "physics": {
+      "correct": 1171,
+      "total": 1299,
+      "accuracy": 0.9014626635873749
+    },
+    "psychology": {
+      "correct": 643,
+      "total": 798,
+      "accuracy": 0.8057644110275689
+    }
+  },
+  "generation": {
+    "n": 12032,
+    "truncated": 125,
+    "empty_content": 156,
+    "tokens_p50": 715,
+    "tokens_p95": 11126,
+    "tokens_max": 32768
+  }
+}

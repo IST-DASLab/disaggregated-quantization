@@ -1,0 +1,10 @@
+model,quant,n_blocks,block_mb,total_gib,load_ms,gb_s,threads
+Qwen/Qwen3-0.6B,nvfp4,28,8.4,0.246,89.619,2.95,16
+Qwen/Qwen3-1.7B,nvfp4,28,27.0,0.791,190.851,4.45,16
+Qwen/Qwen3-4B,nvfp4,36,54.2,2.011,433.943,4.98,16
+Qwen/Qwen3-8B,nvfp4,36,103.5,3.841,762.493,5.41,16
+Qwen/Qwen3.8-27B,nvfp4,64,204.7,13.587,2645.159,5.52,16
+google/gemma-3-12b-it,nvfp4,48,120.3,5.874,1148.716,5.49,16
+google/gemma-3-1b-it,nvfp4,26,14.4,0.394,110.637,3.82,16
+google/gemma-3-270m,nvfp4,18,3.0,0.059,31.595,1.99,16
+google/gemma-3-4b-it,nvfp4,34,50.6,1.779,396.05,4.82,16

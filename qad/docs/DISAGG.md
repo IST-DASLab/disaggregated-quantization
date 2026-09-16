@@ -45,6 +45,21 @@ Two **non-default** settings are required here, both deliberate:
 `kv_load_failure_policy: "fail"` is set so a *failed* load raises instead of falling
 back to local recompute.
 
+> **2026-09-09 update, b300/GB300 cluster.** The `kv_buffer_device=cpu` row above is
+> a finding from the b200 cluster's `nemo:26.02.nemotron_3_super_luts_v2` container
+> specifically, not a NIXL/UCX property in general. On b300, with a plain
+> `nvcr.io/nvidia/nemo:26.02` pulled fresh from NGC, this container's UCX *does* have
+> CUDA support: `kv_buffer_device=cuda` registers cleanly on every worker
+> (`use_host_buffer: False`, no `NIXL_ERR_BACKEND`), and a disaggregated gsm8k canary
+> completed end to end on it. `run_nixl_server.sh`'s default is now `cuda` on this
+> cluster. `cpu`-staging turned out to be actively worse here too, not just slower:
+> under `--tensor-parallel-size 2` each TP worker mirrors its own
+> `--gpu-memory-utilization`-sized KV budget into host RAM, and four workers' worth
+> exceeded the node's available memory (SLURM cgroup OOM). Re-check against the
+> engine log (`NIXL_ERR_BACKEND` at `register_kv_caches` means `cpu` is still
+> required) before assuming either default on a container/cluster combination this
+> hasn't been measured on.
+
 ### Why the compatibility hash rejects our pair, and why overriding it is sound
 
 A heterogeneous pair is refused at handshake:

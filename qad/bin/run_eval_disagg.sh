@@ -27,16 +27,20 @@
 #SBATCH --job-name=qad-disagg
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --gpus-per-node=2
+# Only 2 GPUs are used (prefill=0, decode=1), but every QOS on this cluster carries
+# MinTRES gres/gpu=4, so a --gpus-per-node=2 request is refused at submit with
+# QOSMinGRES. Ask for the floor; the extra 2 sit idle. See evals/bin/run_quantize.sh
+# for the same MIN_GPUS convention.
+#SBATCH --gpus-per-node=4
 #SBATCH --partition=batch
 #SBATCH --qos=normal
 #SBATCH --time=04:00:00
 #SBATCH --mem=0
-#SBATCH --account=adlr_psx_numerics
+#SBATCH --account=coreai_psx_qad
 
-CONTAINER=${CONTAINER:-/lustre/fsw/portfolios/adlr/users/apanferov/containers/nemo:26.02.nemotron_3_super_luts_v2.sqsh}
-HF_CACHE=${HF_CACHE:-/lustre/fsw/portfolios/adlr/users/apanferov/hf_cache}
-LM_EVAL_OVERLAY=${LM_EVAL_OVERLAY:-/lustre/fsw/portfolios/adlr/users/apanferov/prefill-decode/lm_eval_overlay}
+CONTAINER=${CONTAINER:-/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/containers/vllm-nightly.sqsh}
+HF_CACHE=${HF_CACHE:-/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/hf_cache}
+LM_EVAL_OVERLAY=${LM_EVAL_OVERLAY:-/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/lm_eval_overlay_vllm}
 
 MODEL=${MODEL:-Qwen/Qwen3-0.6B}
 QUANTIZER=${QUANTIZER:-nvfp4pdshared}
@@ -157,7 +161,7 @@ if command -v scontrol &>/dev/null && [ -z "${DISAGG_IN_CONTAINER:-}" ]; then
     export QAD_DIR=$(dirname "$SCRIPT_DIR")       # qad -- anchors checkpoints/ and imports
     export DISAGG_IN_CONTAINER=1
     srun --ntasks=1 --container-image="$CONTAINER" --no-container-mount-home \
-        --container-mounts="/lustre:/lustre,$HOME/.netrc:/root/.netrc" --export=ALL \
+        --container-mounts="/scratch:/scratch,/lustre:/lustre,$HOME/.netrc:/root/.netrc" --export=ALL \
         bash "$SCRIPT_PATH"
     exit $?
 fi
@@ -221,7 +225,7 @@ if [ "$UNQUANT" = 1 ]; then
 else
     echo "[disagg-eval] model=$MODEL quantizer=$QUANTIZER iter=$ITER think=$THINK tasks=$TASKS"
 fi
-python "$QAD_DIR/eval/eval_disagg.py" "${ARGS[@]}"; rc=$?
+python3 "$QAD_DIR/eval/eval_disagg.py" "${ARGS[@]}"; rc=$?
 # Sentinel for reap_stalled.sh: printed ONLY after all work is done, so a job hung in
 # vLLM teardown is distinguishable from one still generating.
 echo "JOB_COMPLETE rc=$rc"

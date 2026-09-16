@@ -50,6 +50,12 @@ NVFP4_DIR = os.environ.get("NVFP4_DIR", str(Path.home() / ".nvfp4_checkpoints"))
 NVFP4_SCHEME = {"nvfp4": "NVFP4", "nvfp4a16": "NVFP4A16"}
 
 
+# The *aq variants are the same weights and the same kernel as their plain counterpart,
+# plus one discarded fp4 activation quantization per linear -- what a LUT format costs when
+# it is NOT format-disaggregated. See lloyd43.cuda_gemv.act_quant_barrier.
+LLOYD_ARMS = ("lloyd43", "lloyd21", "lloyd43aq", "lloyd21aq")
+
+
 def _nvfp4_path(model: str, quant: str) -> str | None:
     """The converted checkpoint for this (model, scheme), or None if this is not an NVFP4 arm."""
     scheme = NVFP4_SCHEME.get(quant)
@@ -67,8 +73,9 @@ def run_child(args):
     import torch  # noqa: F401
     from vllm import LLM, SamplingParams
 
-    if args.quant in ("lloyd43", "lloyd21"):
-        # One import registers both; the flag below picks which grid.
+    if args.quant in LLOYD_ARMS:
+        # One import registers all four; the flag below picks grid and whether the arm is
+        # charged for activation quantization it cannot use (the *aq arms).
         import lloyd43.vllm_plugin  # noqa: F401
 
 
@@ -83,8 +90,17 @@ def run_child(args):
               # Off on purpose: with it on the repeat runs hit the prefix cache and the
               # prefill we are trying to measure never happens.
               enable_prefix_caching=False)
-    if args.quant in ("lloyd43", "lloyd21"):
+    if args.quant in LLOYD_ARMS:
         kw["quantization"] = args.quant
+    if args.linear_backend != "auto":
+        # vLLM picks NVFP4 GEMM kernels by a fixed priority list, not by measurement.
+        # At DECODE its defaults are right -- batch 1 is a bandwidth-bound GEMV, so kernel
+        # quality at large M does not transfer, and measured here neither alternative
+        # helped: flashinfer_cudnn 2.84x -> 2.78x on NVFP4, humming 2.90x -> 2.76x on
+        # NVFP4A16. The flag exists because that is worth being able to re-check on
+        # another box rather than assumed, and because the same choice matters a great
+        # deal at prefill, where the defaults are NOT right.
+        kw["kernel_config"] = {"linear_backend": args.linear_backend}
 
 
     t_load = time.perf_counter()
@@ -129,7 +145,12 @@ def main():
     ap.add_argument("--enforce-eager", action="store_true",
                     help="skip CUDA graph capture (shows what graphs are worth)")
     ap.add_argument("--quant", nargs="+", default=["none", "lloyd43"],
-                    help="none | lloyd43 | lloyd21 | nvfp4 | nvfp4a16")
+                    help="none | lloyd43 | lloyd21 | lloyd43aq | lloyd21aq | nvfp4 | "
+                         "nvfp4a16 (the *aq arms are the LUT formats charged for the "
+                         "activation quantization a non-disaggregated deployment pays)")
+    ap.add_argument("--linear-backend", default="auto",
+                    help="vLLM NVFP4 GEMM backend: auto | humming | flashinfer_cudnn | "
+                         "marlin | cutlass | flashinfer_cutlass | flashinfer_b12x")
     ap.add_argument("--out", default="benchmarks/vllm_decode.csv",
                     help="CSV to merge results into, keyed on (model, quant)")
     ap.add_argument(CHILD, dest="_child", default=None)
@@ -151,7 +172,8 @@ def main():
         cmd = [sys.executable, __file__, "--model", args.model,
                "--out-len", str(args.out_len), "--short-len", str(args.short_len),
                "--max-len", str(args.max_len),
-               "--reps", str(args.reps), "--gpu-util", str(args.gpu_util), CHILD, q]
+               "--reps", str(args.reps), "--gpu-util", str(args.gpu_util),
+               "--linear-backend", args.linear_backend, CHILD, q]
         if args.enforce_eager:
             cmd.append("--enforce-eager")
         print(f"--- {args.model}  quant={q} ---", flush=True)

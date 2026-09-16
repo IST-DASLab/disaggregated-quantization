@@ -59,6 +59,15 @@ __all__ = ["load_model", "text_stack", "TextStack", "is_multimodal_wrapper",
 # failure mode this module exists to prevent.
 _TEXT_PATHS: dict[str, tuple[str, str]] = {
     "Gemma3ForConditionalGeneration": ("model.language_model", "lm_head"),
+    # Qwen3.8-27B. Same layout as Gemma3, but the reason the mapping MUST exist here is
+    # sharper: this checkpoint has TWO nn.Embeddings, and the vision one comes first in
+    # module order -- model.visual.pos_embed (2304x1152) before
+    # model.language_model.embed_tokens (248320x5120). Anything that walks the whole
+    # model and takes "the embedding" gets the vision position table. The model also
+    # carries an mtp.* multi-token-prediction head (15 tensors) and a 110-Linear vision
+    # tower + merger adapter, none of which is text and none of which should be
+    # quantized -- but all of which must survive to the export.
+    "Qwen3_5ForConditionalGeneration": ("model.language_model", "lm_head"),
 }
 _PLAIN = ("model", "lm_head")
 

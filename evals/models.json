@@ -1,0 +1,876 @@
+{
+  "_comment": [
+    "The only place that knows anything model-specific. Read by run_eval.sh (via a",
+    "python3 one-liner) and by the drivers directly, so bash and python cannot drift",
+    "apart -- which they would if the serve flags lived in a case statement here and a",
+    "dict there.",
+    "",
+    "serve_flags is the difference between 'serves' and 'does not serve'. Muse-Glimmer",
+    "emits channel-scoped messages and needs BOTH its parsers or every turn mis-parses;",
+    "Qwen3.5 needs its reasoning parser or the chain of thought lands in `content` and",
+    "gets scored as the answer. Neither is optional and neither is discoverable from the",
+    "config, so both are written down.",
+    "",
+    "quantize.ignore / quantize.expect drive bin/quantize_rtn.py: what to leave in bf16,",
+    "and a regex the resolved target set must match exactly. expect is checked against",
+    "the result rather than used to build it, so a change in either the model layout or",
+    "llm-compressor's pattern expansion is caught before any GPU time is spent.",
+    "",
+    "kv_buffer_device is cuda on EVERY model. It registers the KV blocks with NIXL",
+    "directly in VRAM instead of staging them through host memory.",
+    "",
+    "It used to be per model, and that was a mistake left standing too long. cuda was set",
+    "only where it was FORCED -- the hybrid SSM models, whose host staging buffers are",
+    "built for attention layers only, so a Mamba layer's descriptors point into VRAM while",
+    "a cpu-staged agent registers as DRAM and the handshake fails with NIXL_ERR_NOT_FOUND.",
+    "The attention-only models kept cpu because that is what muse-glimmer's published",
+    "numbers were measured with, which is a reason to record a number, not a reason to",
+    "serve every later model that way.",
+    "",
+    "What that cost: gemma-4-26b-a4b-it, an MoE, disaggregated through host staging and",
+    "produced corrupted output on OCRBench -- 138 truncations against 22 single-engine on",
+    "bf16-pd, 182 against 35 on nvfp4pd, decode-side `invalid prefix detokenization`",
+    "errors, and token-level garbage in the outputs. The dense gemma-4-31b-it, same",
+    "sliding_window and same cpu setting, shows none of it. Whether cuda fixes the MoE",
+    "case is being measured rather than assumed.",
+    "",
+    "report.baseline / report.arms are what compare_arms.py uses when not told",
+    "otherwise. The baseline must be an arm with REPEATS: a single-pass arm has no",
+    "spread to build an interval from, so every comparison against it comes out",
+    "single-engine bf16 is the baseline on every model, so the reference is the same serving",
+    "models bf16-pd is a one-pass sanity check that disaggregation serves this",
+    "topology everywhere and bf16-pd is a reported arm measuring what disaggregation itself costs.",
+    "as an arm whose interval will honestly read as unresolved.",
+    "",
+    "nvfp4-gptq is the third-party GPTQ W4A4 checkpoint from daslab-testing, listed as",
+    "an arm so it is scored and tested like any other. It is only an ALGORITHM",
+    "comparison against `nvfp4` because both quantize the same module set -- verified",
+    "per model, and the reason Qwen's ignore list now excludes the DeltaNet gates.",
+    "",
+    "The baseline is single-engine bf16 on EVERY model. It is the one reference that",
+    "exists with 4 passes everywhere, so the three models are compared against the same",
+    "kind of thing by construction rather than by argument. bf16-pd was the baseline on",
+    "muse-glimmer while it was the only model with 4 passes of it; that made muse's",
+    "quantized arms measured against a disaggregated reference while the others were",
+    "measured against a single-engine one, an inconsistency resting on the null result",
+    "that disaggregation is accuracy-neutral rather than on the design. bf16-pd is now",
+    "an arm on all three, where its own comparison against bf16 is the thing that",
+    "reports that null instead of assuming it.",
+    "",
+    "nemotron-3-omni-30b has no GPTQ arms: daslab-testing has published no checkpoint",
+    "for it, so nvfp4-gptq and lut3-nvfp4-gptq simply do not exist here. Its arms are",
+    "the ones this repo produces itself.",
+    "",
+    "lut3-nvfp4-gptq is the phase-disaggregated pair built from the two GPTQ",
+    "checkpoints: NVFP4 (W4A4) on prefill, LUT3 on decode. Both are PSEUDO-QUANTIZED",
+    "for LUT3 -- the lloyd43 checkpoints are full bf16 (55 GB, same size as the base)",
+    "whose values already lie on the 3-bit Lloyd grid -- so they are served by vanilla",
+    "vLLM with no --quantization flag and no packing plugin. The kernels in",
+    "qad/kernels/lloyd43 are NOT involved and must not be, since re-packing would",
+    "change what is being measured."
+  ],
+  "muse-glimmer": {
+    "path": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/models/Muse-Glimmer-30B",
+    "served_name": "muse-glimmer",
+    "serve_flags": [
+      "--enable-auto-tool-choice",
+      "--tool-call-parser",
+      "muse_glimmer",
+      "--reasoning-parser",
+      "muse_glimmer"
+    ],
+    "max_model_len": 65536,
+    "max_tokens": 32768,
+    "sampling": {
+      "temperature": 1.0,
+      "top_p": 0.95,
+      "top_k": 64
+    },
+    "quantize": {
+      "ignore": [
+        "lm_head",
+        "re:.*vision_tower.*",
+        "re:.*vision_adapter.*",
+        "re:.*vision_projection.*"
+      ],
+      "expect": "^model\\.language_model\\.layers\\.\\d+\\.(self_attn\\.(q|k|v|o|gate)_proj|mlp\\.(gate|up|down)_proj)$",
+      "per_layer": 8
+    },
+    "kv_buffer_device": "cuda",
+    "report": {
+      "baseline": "bf16",
+      "arms": [
+        "nvfp4a16",
+        "nvfp4",
+        "nvfp4pd"
+      ]
+    },
+    "weights": {
+      "nvfp4-gptq": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/models/muse-glimmer-nvfp4a4",
+      "lut3-gptq": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/models/muse-glimmer-lloyd43-GPTQ"
+    }
+  },
+  "qwen3.8-27b": {
+    "path": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/models/Qwen3.8-27B",
+    "served_name": "qwen3.8-27b",
+    "serve_flags": [
+      "--reasoning-parser",
+      "qwen3"
+    ],
+    "max_model_len": 65536,
+    "max_tokens": 32768,
+    "sampling": {
+      "temperature": 1.0,
+      "top_p": 0.95,
+      "top_k": 20
+    },
+    "notes": [
+      "Thinking is ON by default and the vendor's thinking-mode settings are exactly",
+      "what generation_config.json carries (temperature 1.0 / top_p 0.95 / top_k 20),",
+      "so --generation-config auto gives the recommended configuration with no extra",
+      "flags. The non-thinking preset differs (0.7 / 0.80 / 20 / presence_penalty 1.5)",
+      "and is NOT what is measured here.",
+      "",
+      "Hybrid architecture: 48 Gated-DeltaNet linear-attention layers interleaved with",
+      "16 gated-attention layers, plus MTP weights. Disaggregated serving DOES work --",
+      "NixlConnector transfers the recurrent SSM state alongside KV -- but it needs two",
+      "things this model would not otherwise get: VLLM_SSM_CONV_STATE_LAYOUT=DS (set in",
+      "evals/serving/run_nixl_server.sh) and kv_buffer_device=cuda, because host staging",
+      "buffers are built for attention layers only.",
+      "a --disagg arm on this model; MMMU single-engine does not depend on it.",
+      "",
+      "No published MMMU or MMMU-Pro score. GPQA-Diamond is reported as 89.2.",
+      "",
+      "DO NOT QUANTIZE linear_attn.in_proj_a / in_proj_b. They are the Gated DeltaNet",
+      "gating projections that set the recurrent state decay: 96 modules, 11.8M of 12.2G",
+      "quantized weight elements (0.097%), so quantizing them saves nothing measurable",
+      "while putting 4-bit noise directly on the state-decay path. The reference NVFP4",
+      "checkpoints from daslab-testing leave them in bf16, and Qwen is also the model",
+      "that lost the most to W4A4 (-5.09 against Gemma's -2.02), so the earlier recipe",
+      "was plausibly paying for it. 400 quantized linears, not 496."
+    ],
+    "quantize": {
+      "ignore": [
+        "lm_head",
+        "re:.*visual.*",
+        "re:.*mtp.*",
+        "re:.*in_proj_a.*",
+        "re:.*in_proj_b.*"
+      ],
+      "expect": "^model\\.language_model\\.layers\\.\\d+\\.(self_attn\\.(q|k|v|o)_proj|linear_attn\\.(in_proj_(qkv|z)|out_proj)|mlp\\.(gate|up|down)_proj)$",
+      "per_layer": null
+    },
+    "kv_buffer_device": "cuda",
+    "report": {
+      "baseline": "bf16",
+      "arms": [
+        "nvfp4a16",
+        "nvfp4",
+        "nvfp4pd"
+      ]
+    },
+    "weights": {
+      "nvfp4-gptq": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/models/qwen3.8b-nvfp4a4-GPTQ",
+      "lut3-gptq": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/models/qwen3.8b-lloyd43-GPTQ"
+    }
+  },
+  "gemma-4-31b-it": {
+    "path": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/models/gemma-4-31B-it",
+    "served_name": "gemma-4-31b-it",
+    "serve_flags": [
+      "--reasoning-parser",
+      "gemma4"
+    ],
+    "max_model_len": 65536,
+    "max_tokens": 32768,
+    "sampling": {
+      "temperature": 1.0,
+      "top_p": 0.95,
+      "top_k": 64
+    },
+    "kv_buffer_device": "cuda",
+    "notes": [
+      "Gemma4ForConditionalGeneration, dense (enable_moe_block=false), 60 decoder",
+      "layers, vision tower present and audio_config null despite the audio token ids.",
+      "Ordinary attention throughout, so the SSM machinery Qwen needs does not apply",
+      "and kv_buffer_device can stay cpu.",
+      "",
+      "TIED EMBEDDINGS: there is no lm_head tensor in the checkpoint at all. It stays",
+      "in the ignore list regardless, because compressed-tensors names the module and",
+      "not the tensor -- dropping it would be relying on the absence of a weight to",
+      "protect the output projection.",
+      "",
+      "attention_k_eq_v: v_proj exists in only 50 of the 60 layers -- ten layers share",
+      "K and V. So per_layer is null and the expected count is 410, not 60*7=420. A",
+      "uniform-layer assumption would fail the count check on a correct model.",
+      "",
+      "The vision tower nests its linears one level deeper as `q_proj.linear.weight`,",
+      "which the `.*vision_tower.*` pattern still covers. `embed_vision` is the",
+      "projection into the text stream and is ignored for the same reason the",
+      "projector is on every other model here."
+    ],
+    "quantize": {
+      "ignore": [
+        "lm_head",
+        "re:.*vision_tower.*",
+        "re:.*embed_vision.*"
+      ],
+      "expect": "^model\\.language_model\\.layers\\.\\d+\\.(self_attn\\.(q|k|v|o)_proj|mlp\\.(gate|up|down)_proj)$",
+      "per_layer": null
+    },
+    "report": {
+      "baseline": "bf16",
+      "arms": [
+        "nvfp4a16",
+        "nvfp4",
+        "nvfp4pd"
+      ]
+    },
+    "weights": {
+      "nvfp4-gptq": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/models/gemma4-31b-it-nvfp4a4-GPTQ",
+      "lut3-gptq": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/models/gemma4-31b-it-lloyd43-GPTQ"
+    }
+  },
+  "nemotron-3-omni-30b": {
+    "path": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/models/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16",
+    "served_name": "nemotron-3-omni-30b",
+    "serve_flags": [
+      "--trust-remote-code",
+      "--reasoning-parser",
+      "nemotron_v3"
+    ],
+    "max_model_len": 65536,
+    "max_tokens": 20480,
+    "request_extra_body": {
+      "thinking_token_budget": 17408,
+      "chat_template_kwargs": {
+        "enable_thinking": true,
+        "reasoning_budget": 16384
+      }
+    },
+    "sampling": {
+      "temperature": 0.6,
+      "top_p": 0.95
+    },
+    "notes": [
+      "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16, 62 GiB. Hybrid Nemotron-H:",
+      "52 layers on the pattern MEMEM*EMEMEM*... -- 23 Mamba2 (M), 23 MoE (E, 128",
+      "routed experts top-6 plus one shared expert), 6 attention (*). Vision tower is",
+      "RADIO, and there is a sound encoder plus projector this benchmark never exercises.",
+      "vLLM registers NemotronH_Nano_Omni_Reasoning_V3 natively, so the architecture is",
+      "not coming from the repo's remote code even though --trust-remote-code is passed;",
+      "the flag is there because the config's auto_map still points at configuration.py.",
+      "",
+      "NO TOOL PARSER. The model card asks for --tool-call-parser qwen3_coder, and this",
+      "container's vLLM has no such parser -- vllm/tool_parsers ships qwen3_engine, not",
+      "qwen3_coder. Nothing here sends tools, so tool calling is not configured rather",
+      "than configured wrongly. Add it before running anything that does use tools.",
+      "",
+      "kv_buffer_device is cuda for the same reason as Qwen3.8: 23 of the 52 layers are",
+      "Mamba2, host staging buffers are built for attention layers only, and a cpu-staged",
+      "agent fails registration with NIXL_ERR_NOT_FOUND. Disaggregated arms also need",
+      "VLLM_SSM_CONV_STATE_LAYOUT=DS, which evals/serving/run_nixl_server.sh already sets.",
+      "",
+      "QUANTIZE TARGETS: ALL MLP AND ATTENTION, NOT MAMBA AND NOT THE ROUTER. 5958",
+      "linears -- 5888 routed-expert up/down, 46 shared-expert up/down, 24 attention",
+      "q/k/v/o. That is 90.8% of the 33.02B parameters and 39.4% of the 5.02B active per",
+      "token. Adding the mamba in/out projections would reach 93.5% of total for 2.0 GiB",
+      "more on a 61.5 GiB checkpoint -- 3% -- while putting 4-bit on the state-decay path,",
+      "which is not a trade worth making. The router is 0.02% of weights and 4-bit noise",
+      "there changes WHICH experts run rather than perturbing an output.",
+      "",
+      "NVIDIA's own NVFP4 build is MIXED_PRECISION and differs: FP4 on the routed experts",
+      "only, FP8 on mamba in/out, shared experts and o_proj, BF16 on q/k/v. Their FP8 tier",
+      "is a coverage trick -- it reaches ~55% of ACTIVE parameters, which is what decode",
+      "bandwidth actually reads, without spending 4 bits on mamba. A single-precision",
+      "recipe is used here so nvfp4 / nvfp4a16 / nvfp4pd stay a clean A4-vs-A16 contrast",
+      "on one module set, the way they are on the other three models.",
+      "",
+      "The router (mixer.gate, 23 modules) is ignored. It picks 6 of 128 experts from a",
+      "2688-wide logit, it is 0.005% of the weights, and 4-bit noise on it changes WHICH",
+      "experts run rather than perturbing an output. conv1d is Conv1d and llm-compressor",
+      "targets Linear, so it needs no entry.",
+      "",
+      "THINKING HAS NO FORCED END WITHOUT `thinking_token_budget`. It is a request-body",
+      "field, not a generation_config one, so no server-side setting supplies it and the",
+      "no-client-side-sampling rule cannot cover it. Without it 989 of 6920 MMMU items",
+      "(14%) and 971 of 7400 OCRBench items ran to the token cap and returned EMPTY",
+      "content -- against 2 and 7 for Gemma -- and bf16 read 52.90 where the other three",
+      "models sit at 66-75. Quantized arms are hit far harder: every one of 8 smoke items",
+      "truncated, on NVIDIA's own A4 module set as much as on ours, because a slightly",
+      "degraded model thinks longer and falls into the runaway regime more often. No",
+      "conclusion about W4A4 on this model is available from a run without this set.",
+      "",
+      "max_tokens is the vendor's 20480 rather than the 32768 the other models use, since",
+      "thinking stops at 16384 + 1024 grace and the rest is the answer. generation_config",
+      "supplies temperature 0.6 / top_p 0.95 and no top_k.",
+      "",
+      "NO W4A4 ARM. Every NVFP4 variant built for this model is degenerate: it never stops",
+      "generating and returns empty content on every item. Measured with the vendor's",
+      "thinking budget enforced, 16/16 smoke items empty at the token cap, on THREE",
+      "different module sets -- all MLP+attention (5958 linears), that minus mamba, and",
+      "NVIDIA's own FP4 set of routed experts only (5888). The abandoned runs are on disk",
+      "as evidence: 128/128 empty on mmmu/nvfp4 and mmmu/nvfp4pd.",
+      "",
+      "The weights are not the problem. NVFP4A16 quantizes the SAME modules to 4 bits and",
+      "is healthy (0/16 truncated, p50 2832 tokens), so it is the 4-bit ACTIVATIONS, and it",
+      "does not depend on where they are applied. Since NVIDIA ships a working NVFP4 build",
+      "on a module set that fails here, the suspect is this repo's calibration rather than",
+      "the format -- unproven, and deliberately not chased.",
+      "",
+      "nvfp4 and nvfp4pd are therefore OUT of report.arms: leaving them in would print",
+      "'still generating' forever for runs that were stopped on purpose. The finding is",
+      "that W4A4 is not measurable on this model with this pipeline, not that it scored 0.",
+      "",
+      "nvfp4-nv IS NVIDIA'S OWN CHECKPOINT, not this repo's RTN output, and is NOT the same",
+      "format as `nvfp4` on the other models. Theirs is MIXED_PRECISION: NVFP4 W4A4 on the",
+      "5888 routed-expert projections, FP8 W8A8 on mamba in/out, the shared experts and",
+      "attention o_proj, BF16 on q/k/v, and an FP8 KV cache. This repo's `nvfp4` means W4A4",
+      "on every language-model linear. Do not read nvfp4-nv against another model's nvfp4",
+      "column as a like-for-like comparison -- the cross-model contrasts use `nvfp4`, and",
+      "nemotron correctly reports no data there.",
+      "",
+      "It also WORKS, where every checkpoint this repo's pipeline produced was degenerate on",
+      "all three module sets tried. That points at the calibration here rather than at the",
+      "format or the architecture, and is left as an observation rather than chased.",
+      "",
+      "nvfp4-nv-pd is that checkpoint disaggregated with ACTIVATION QUANTIZATION DISABLED ON",
+      "DECODE and no other change: the 5888 routed-expert entries in quantized_layers are",
+      "relabelled NVFP4 -> W4A16_NVFP4, which vLLM supports natively with identical packing",
+      "and group size. Weights are byte-identical -- the decode directory symlinks the same",
+      "safetensors and differs only in config.json.",
+      "",
+      "Two things it deliberately does not change. The 98 FP8 layers stay W8A8: vLLM offers",
+      "FP8 / FP8_PER_CHANNEL_PER_TOKEN / FP8_PB_WO and none is a per-tensor weight-only",
+      "match for this checkpoint's scales, so disabling their activation quantization would",
+      "need re-quantization. And kv_cache_scheme stays FP8 on both engines, because it is",
+      "the KV cache dtype rather than an activation and a disaggregated pair must agree on",
+      "it or the transferred cache is uninterpretable.",
+      "",
+      "config_groups/input_activations is NOT the control. vLLM's MIXED_PRECISION path never",
+      "reads that field -- editing it changed nothing and the first attempt at this arm was",
+      "a no-op that still served. quantized_layers is what it reads. Confirm the relabel took",
+      "effect by the MoE backend in the server log: FLASHINFER_TRTLLM for W4A4, MARLIN for",
+      "weight-only."
+    ],
+    "quantize": {
+      "auto_class": "AutoModelForCausalLM",
+      "trust_remote_code": true,
+      "attn_implementation": "eager",
+      "calib_forward": "language_model",
+      "ignore": [
+        "re:.*lm_head$",
+        "re:.*vision_model.*",
+        "re:.*sound_encoder.*",
+        "re:.*sound_projection.*",
+        "re:.*mlp1.*",
+        "re:.*mixer\\.gate$",
+        "re:.*mixer\\.(in|out)_proj$"
+      ],
+      "expect": "^language_model\\.backbone\\.layers\\.\\d+\\.mixer\\.((q|k|v|o)_proj|(experts\\.\\d+|shared_experts)\\.(up|down)_proj)$",
+      "per_layer": null
+    },
+    "kv_buffer_device": "cuda",
+    "report": {
+      "baseline": "bf16",
+      "arms": [
+        "bf16-pd",
+        "nvfp4a16",
+        "nvfp4-nv",
+        "nvfp4-nv-pd"
+      ]
+    },
+    "weights": {
+      "nvfp4-nv": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/models/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4",
+      "nvfp4-nv-decode": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/models/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4-noactquant"
+    }
+  },
+  "gemma-4-26b-a4b-it": {
+    "path": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/models/gemma-4-26B-A4B-it",
+    "served_name": "gemma-4-26b-a4b-it",
+    "serve_flags": [
+      "--reasoning-parser",
+      "gemma4"
+    ],
+    "max_model_len": 65536,
+    "max_tokens": 32768,
+    "sampling": {
+      "temperature": 1.0,
+      "top_p": 0.95,
+      "top_k": 64
+    },
+    "notes": [
+      "google/gemma-4-26B-A4B-it, 51.6 GB. SAME ARCHITECTURE CLASS as gemma-4-31b-it --",
+      "Gemma4ForConditionalGeneration, model_type gemma4, gemma4_vision tower -- but with",
+      "enable_moe_block true: 128 experts, top-8, moe_intermediate_size 704. 30 layers,",
+      "25 sliding_attention (window 1024) plus 5 full_attention. So the serve flags are the",
+      "31B's and no --trust-remote-code is needed; vLLM registers the architecture natively.",
+      "",
+      "generation_config is identical to the 31B's (temperature 1.0 / top_p 0.95 /",
+      "top_k 64), so --generation-config auto gives the vendor's settings and the",
+      "launcher's sampling guard covers it. No thinking_token_budget equivalent: unlike",
+      "Nemotron, reasoning ends on a stop token, so request_extra_body is not needed.",
+      "",
+      "THE EXPERTS ARE FUSED 3-D TENSORS, not per-expert modules: 1013 tensors in the",
+      "checkpoint where 30 layers x 128 experts x 3 projections would be ~11,500. They",
+      "appear as mlp.gate_proj / up_proj / down_proj once per layer. Whether",
+      "llm-compressor's targets=Linear reaches them is a question the dry run answers --",
+      "a fused expert bank is typically an nn.Parameter inside a custom module rather than",
+      "an nn.Linear, in which case only the 120 attention projections resolve and the arm",
+      "would quantize ~none of the model. Do not launch a quantize job before checking the",
+      "resolved count.",
+      "",
+      "The router is model.language_model.layers.N.router.proj and is ignored, as on",
+      "nemotron: 4-bit noise on it changes WHICH experts run rather than perturbing an",
+      "output, for a negligible share of the weights.",
+      "",
+      "MoE CONCURRENCY, the lesson from nemotron: top-8 of 128 means (1 - 8/128)^B of",
+      "experts go untouched at batch B, so batch 32 reads ~87% of the expert weights for",
+      "32 tokens and the A4B sparsity buys almost nothing. Run this model with",
+      "--workers 512 --max-num-seqs 512 like nemotron, not the 32 default."
+    ],
+    "quantize": {
+      "linearize_moe": true,
+      "ignore": [
+        "re:.*lm_head$",
+        "re:.*vision_tower.*",
+        "re:.*embed_vision.*",
+        "re:.*router\\.proj$"
+      ],
+      "expect": "^model\\.language_model\\.layers\\.\\d+\\.(self_attn\\.(q|k|v|o)_proj|mlp\\.(gate|up|down)_proj|experts\\.(\\d+\\.)?(gate_up_proj|gate_proj|up_proj|down_proj))$",
+      "per_layer": null
+    },
+    "kv_buffer_device": "cuda",
+    "report": {
+      "baseline": "bf16",
+      "arms": [
+        "nvfp4a16",
+        "nvfp4",
+        "nvfp4pd"
+      ]
+    }
+  },
+  "qwen3.8-2.4t": {
+    "path": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/models/Qwen3.8-2.4T-A95B",
+    "served_name": "qwen3.8-2.4t",
+    "serve_flags": [
+      "--reasoning-parser",
+      "qwen3"
+    ],
+    "max_model_len": 65536,
+    "max_tokens": 32768,
+    "nnodes": 4,
+    "tensor_parallel_size": 16,
+    "notes": [
+      "2.4T total / 95B active, 512 experts top-10, 92 layers of which 69 are",
+      "Gated-DeltaNet linear attention and 23 full attention. TEXT ONLY",
+      "(Qwen3_5MoeForCausalLM, model_type qwen3_5_moe_text): there is no vision tower and",
+      "no preprocessor in the repo, so MMMU-Pro cannot be run on it at all. MMLU-Pro is",
+      "the only benchmark here that applies.",
+      "",
+      "nnodes/tensor_parallel_size are sized for the LARGEST arm, fp8 at 2.50 TB: 16 GPUs",
+      "over 4 trays is 4.08 TB at 0.90 utilisation. TP must divide the 64 attention heads,",
+      "so 16 is the next legal size above 8 -- and 8 GPUs is 2.04 TB, which does not hold",
+      "fp8 at all. The 4-bit arms are ~1.25 TB and fit TP=8 on 2 nodes; pass --nnodes 2",
+      "--tp 8 for those. One value per model cannot express a per-arm topology, and the",
+      "flag is the honest way to say it rather than a schema that pretends otherwise.",
+      "",
+      "The vendor recipe also passes --enable-auto-tool-choice --tool-call-parser",
+      "qwen3_coder. Omitted: no benchmark here calls tools, and an unused tool parser is",
+      "one more thing that can mis-parse a turn. --reasoning-parser qwen3 is NOT optional,",
+      "for the same reason it is not on qwen3.8-27b: without it the chain of thought lands",
+      "in `content` and gets scored as the answer.",
+      "",
+      "BASELINE IS fp8, NOT bf16. bf16 is 4.89 TB -- TP=32 over 8 nodes for the reference",
+      "arm alone, four times over for the repeats. Every delta reported for this model is",
+      "therefore the cost of 4-bit RELATIVE TO FP8, which is not the same quantity as the",
+      "bf16-baselined numbers on the other models in this repo. Do not put them in one",
+      "column without saying so.",
+      "",
+      "Hybrid, so the same two requirements as qwen3.8-27b: VLLM_SSM_CONV_STATE_LAYOUT=DS",
+      "and kv_buffer_device=cuda. 69 of 92 layers are linear attention here against 48 of",
+      "64 there, so it matters more, not less.",
+      "",
+      "THE EXPERTS ARE FUSED: mlp.experts.gate_up_proj and mlp.experts.down_proj are single",
+      "stacked tensors covering all 512 experts, not 512 separate modules. That is the one",
+      "structural difference from every model already quantized here, and quantize.expect",
+      "below is written against it rather than against per-expert names.",
+      "",
+      "shared_expert_gate stays bf16, like the routers on the other MoE models here: it selects whether the shared expert contributes, so 4-bit noise on it moves a routing decision rather than a value, and it is 92 vectors."
+    ],
+    "quantize": {
+      "auto_class": "AutoModelForCausalLM",
+      "linearize_moe": true,
+      "ignore": [
+        "lm_head",
+        "re:.*mtp.*",
+        "re:.*in_proj_a.*",
+        "re:.*in_proj_b.*",
+        "re:.*shared_expert_gate$"
+      ],
+      "expect": "^model\\.layers\\.\\d+\\.(self_attn\\.(q|k|v|o)_proj|linear_attn\\.(in_proj_(qkv|z)|out_proj)|mlp\\.(experts\\.(\\d+\\.)?(gate_up_proj|gate_proj|up_proj|down_proj)|shared_expert\\.(gate|up|down)_proj))$",
+      "per_layer": null,
+      "sequential": true,
+      "sequential_offload_device": "cuda:1",
+      "offload_extra_cpu_mem_gb": 700
+    },
+    "kv_buffer_device": "cuda",
+    "report": {
+      "baseline": "fp8",
+      "arms": [
+        "nvfp4a16",
+        "nvfp4",
+        "nvfp4pd"
+      ]
+    },
+    "weights": {
+      "fp8": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/models/Qwen3.8-2.4T-A95B-FP8",
+      "nvfp4a16": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/models/Qwen3.8-2.4T-A95B-NVFP4A16",
+      "nvfp4": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/models/Qwen3.8-2.4T-A95B-NVFP4"
+    }
+  },
+  "kimi-k3": {
+    "path": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/models/Kimi-K3",
+    "served_name": "kimi-k3",
+    "serve_flags": [
+      "--trust-remote-code",
+      "--reasoning-parser",
+      "kimi_k3"
+    ],
+    "max_model_len": 65536,
+    "max_tokens": 32768,
+    "nnodes": 2,
+    "tensor_parallel_size": 8,
+    "notes": [
+      "1.56 TB of MXFP4 weights as released: compressed-tensors mxfp4-pack-quantized,",
+      "per-expert 2D weight_packed/weight_scale, 247,296 quantized modules over 93 layers",
+      "(24 full attention, 69 linear) and 896 experts. Multimodal, so unlike",
+      "qwen3.8-2.4t this one CAN run MMMU-Pro.",
+      "",
+      "mxfp4a16 IS the released checkpoint -- input_activations is null in its own config,",
+      "so what ships is weight-only. The mxfp4 arm is the same weight FILES by symlink with",
+      "input_activations added; MXFP4 activations are dynamic (observer=None), so there is",
+      "no calibration, no extra tensor and no repack. Kimi-K3-a4 is 106 KB on disk.",
+      "",
+      "That is the difference from gpt-oss-120b, which ships quant_method=mxfp4 with fused",
+      "3D *_blocks/*_scales and cannot express W4A4 at all in its native vLLM path -- it",
+      "needs bin/repack_mxfp4.py first. Same format name, different checkpoints.",
+      "",
+      "96 attention heads AND 96 KV heads (MHA, not GQA) across the 24 full-attention",
+      "layers, so KV per token is large. tensor_parallel_size is 8 over 2 nodes for the",
+      "1.56 TB of weights; if the KV pool comes up short, the fix is more nodes rather",
+      "than fewer sequences.",
+      "",
+      "sampling_guard=false: generation_config.json is {max_length, eos_token_id} with no",
+      "temperature/top_p/top_k, so vLLM logs no override and the guard would abort a healthy",
+      "server after 60s. Measured with vLLM's own sampling defaults.",
+      "",
+      "The mxfp4 variant copies the remote-code .py files rather than symlinking them: with",
+      "symlinks, transformers' dynamic module loader fails on the relative import inside",
+      "media_utils with ModuleNotFoundError on transformers_modules.<dir>.<hash>. Only the",
+      "1.5 TB of safetensors is symlinked.",
+      "",
+      "mxfp4pd is the repo's mixed arm in MXFP4 form: W4A4 prefill feeding W4A16 decode, the",
+      "same direction as nvfp4pd everywhere else. Both engines load the SAME weight files --",
+      "Kimi-K3-a4 and Kimi-K3 differ only in input_activations -- so the pair isolates where",
+      "activation quantization is applied, with nothing else varying. NixlConnector's compat",
+      "hash covers the model path string, so NIXL_ENFORCE_COMPAT=0 opens automatically.",
+      "",
+      "REASONING_EFFORT high, NOT max. Kimi's renderer accepts exactly four values --",
+      "vllm/renderers/kimi_k3.py matches ['high','low','max','none'] and there is no",
+      "'medium', so high IS the middle setting for this model. Moonshot's published numbers",
+      "use max; these do not, and are therefore not comparable to the model card.",
+      "",
+      "top_p 0.95 is a DELIBERATE EXCEPTION to the no-client-side-sampling rule. Every other",
+      "model here lets --generation-config auto apply the vendor's values, but Kimi's",
+      "generation_config.json is {max_length, eos_token_id} with no sampling at all -- which",
+      "is why sampling_guard is false -- so the server has nothing to apply and would fall",
+      "back to vLLM's top_p 1.0. The vendor asks for 0.95 on non-agentic tasks. temperature",
+      "is NOT sent: vLLM's default is already the vendor's 1.0.",
+      "",
+      "The -nothink arms were measured before any of this, with reasoning_parser='' and no",
+      "effort field. Kimi always thinks, so the channel markers leaked into content on",
+      "12025/12032 rows and the think channel opened and closed empty. Those runs are kept",
+      "under the -nothink suffix rather than deleted: they are the thinking-off baseline,",
+      "and the delta against the thinking arms is worth having."
+    ],
+    "kv_buffer_device": "cuda",
+    "report": {
+      "baseline": "mxfp4a16",
+      "arms": [
+        "mxfp4",
+        "mxfp4pd"
+      ]
+    },
+    "weights": {
+      "mxfp4a16": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/models/Kimi-K3",
+      "mxfp4": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/models/Kimi-K3-a4"
+    },
+    "sampling_guard": false,
+    "request_extra_body": {
+      "reasoning_effort": "high",
+      "top_p": 0.95
+    }
+  },
+  "nemotron-3-super-120b": {
+    "path": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/models/Nemotron-3-Super-120B-A12B-BF16",
+    "served_name": "nemotron-3-super-120b",
+    "serve_flags": [
+      "--trust-remote-code",
+      "--reasoning-parser",
+      "nemotron_v3"
+    ],
+    "max_model_len": 65536,
+    "max_tokens": 32768,
+    "nnodes": 1,
+    "tensor_parallel_size": 4,
+    "notes": [
+      "BF16 SOURCE, so this model gets NVFP4 like every other model here -- MXFP4 is only",
+      "for checkpoints that ship it natively (kimi-k3). 247 GB over 50 shards, ungated.",
+      "",
+      "88 backbone layers: 40 mamba, 40 MoE, 8 attention. 512 experts top-22, stored",
+      "PER-EXPERT 2D (experts.N.up_proj / down_proj), so linearize_moe is not needed --",
+      "unlike gemma-4-26b-a4b-it, whose experts arrive fused.",
+      "",
+      "NO BIASES on anything quantized: attention_bias, mlp_bias and mamba_proj_bias are",
+      "all false and the checkpoint has zero expert or attention bias tensors. That is what",
+      "makes it servable through compressed-tensors at all; gpt-oss-120b was dropped",
+      "precisely because its experts carry biases that vLLM's compressed-tensors MoE never",
+      "registers, so no repack of it could load.",
+      "",
+      "What stays bf16, following nemotron-3-omni-30b: the router (mixer.gate), the mamba",
+      "in_proj/out_proj, the MTP tower, and lm_head. The mamba projections are the",
+      "recurrent path, and 4-bit noise there is the same hazard as Qwen's DeltaNet gates.",
+      "fc1/fc2_latent_proj are left bf16 too -- 40 modules against 20,480 experts, so they",
+      "cost nothing to skip and are not what 'experts and attention' means."
+    ],
+    "quantize": {
+      "auto_class": "AutoModelForCausalLM",
+      "trust_remote_code": true,
+      "attn_implementation": "eager",
+      "sequential": true,
+      "offload_extra_cpu_mem_gb": 300,
+      "sequential_offload_device": "cuda:1",
+      "ignore": [
+        "re:.*lm_head$",
+        "re:.*mtp\\..*",
+        "re:.*mixer\\.gate$",
+        "re:.*mixer\\.(in|out)_proj$",
+        "re:.*fc[12]_latent_proj$"
+      ],
+      "expect": "^(?:backbone|model)\\.layers\\.\\d+\\.mixer\\.((q|k|v|o)_proj|(experts\\.\\d+|shared_experts)\\.(up|down)_proj)$",
+      "per_layer": null
+    },
+    "kv_buffer_device": "cuda",
+    "report": {
+      "baseline": "bf16",
+      "arms": [
+        "nvfp4a16",
+        "nvfp4",
+        "nvfp4pd"
+      ]
+    },
+    "weights": {},
+    "server_pythonpath": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/muse-mambadeps"
+  },
+  "nemotron-3.5-lightning-30b": {
+    "path": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/models/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16",
+    "served_name": "nemotron-3.5-lightning-30b",
+    "serve_flags": [
+      "--reasoning-parser",
+      "nemotron_v3"
+    ],
+    "max_model_len": 65536,
+    "max_tokens": 32768,
+    "nnodes": 1,
+    "tensor_parallel_size": 4,
+    "notes": [
+      "NemotronHForCausalLM with NO remote code -- no auto_map, no .py files -- so it needs",
+      "neither --trust-remote-code nor mamba-ssm. That is what makes it usable where the",
+      "Super 120B is not: the Super's shipped modeling file hard-raises",
+      "'mamba-ssm is required by the Mamba model but cannot be imported', and mamba-ssm is",
+      "sdist-only with no aarch64 wheels.",
+      "",
+      "nemotron_v3, matching the vendor's own serve line. The earlier deepseek_r1 setting",
+      "rested on the claim that nemotron_v3 is an engine-token parser with no <think>",
+      "markers. That is false. vllm/parser/nemotron_v3.py says outright: \"The Nemotron 3",
+      "Super model uses the same tool call and reasoning format as Qwen3 (<think>/</think>",
+      "+ <tool_call> XML)\", and NemotronV3Parser subclasses Qwen3Parser reusing qwen3_config.",
+      "It is token-id based rather than string based, but the tokens ARE <think>/</think>,",
+      "so it keys on exactly what this chat template emits.",
+      "",
+      "deepseek_r1 did work -- it is not a broken setting, and bf16/nvfp4a16-nv measured",
+      "under it are internally consistent. It fails only on truncated generations: the",
+      "template pre-opens <think> at line 186, so the model emits only the CLOSING tag, and",
+      "when the token cap arrives first there is no </think>, deepseek_r1 puts the entire",
+      "output in reasoning and returns EMPTY content. That is 38 rows of the bf16 run,",
+      "exactly matching its 38 finish_reason=length rows. NVIDIA wrote",
+      "super_v3_reasoning_parser.py, a DeepSeekR1ReasoningParser subclass, to patch this",
+      "same failure -- which is evidence the family's format is <think>-based, but not",
+      "evidence that deepseek_r1 is the parser to use unpatched.",
+      "",
+      "force_nonempty_content is what actually fixes those rows. NemotronV3Parser swaps",
+      "reasoning into content when content comes back empty, but ONLY when",
+      "chat_template_kwargs carries enable_thinking=False or force_nonempty_content=True.",
+      "Neither is sent by default, so the parser alone would leave the 38 rows empty. It is",
+      "a chat_template_kwargs key this template never reads, so it is inert in the jinja and",
+      "read only by the parser, and the swap is gated on content being empty -- untruncated",
+      "rows are untouched.",
+      "",
+      "The sampling guard STAYS ON here: generation_config.json carries temperature 1.0 and",
+      "top_p 0.95, so vLLM does log the override and there is something real to assert --",
+      "unlike kimi-k3 and the dropped gpt-oss-120b, whose configs carry no sampling at all.",
+      "",
+      "nvfp4-nv is NVIDIA's released checkpoint and is WEIGHT-ONLY despite the name: its",
+      "quantization_config has two groups -- group_1 is 5,935 NVFP4 modules with",
+      "input_activations null, and group_0 is 46 mamba in_proj/out_proj already at FP8 W8A8.",
+      "So it is a W4A16 arm plus a little FP8, not W4A4.",
+      "",
+      "The planned nvfp4 arm calibrates activation scales ON TOP of those 4-bit weights",
+      "rather than requantizing from bf16: NVFP4 activations are not dynamic (observer",
+      "static_minmax), and vLLM's modelopt path takes static input_scale only -- it says",
+      "outright that dynamic support 'might be added'. So a config edit cannot work here the",
+      "way it does for kimi-k3's MXFP4.",
+      "",
+      "The released checkpoint is tagged nvfp4a16-nv, NOT nvfp4-nv. It is weight-only, and",
+      "on nemotron-3-omni-30b the tag nvfp4-nv already means NVIDIA's W4A4 checkpoint -- one",
+      "tag meaning W4A4 on one model and W4A16 on another is how a cross-model table ends up",
+      "comparing unlike arms. The -nv suffix marks the vendor's checkpoint; the a16 says what",
+      "it actually is."
+    ],
+    "kv_buffer_device": "cuda",
+    "report": {
+      "baseline": "bf16",
+      "arms": [
+        "nvfp4a16-nv",
+        "my",
+        "nvfp4a16-it1250",
+        "nvfp4-amax",
+        "amax-nohead",
+        "amax-nohead-pd",
+        "nvfp4-nohead-it2000"
+      ]
+    },
+    "weights": {
+      "bf16": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/models/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16",
+      "nvfp4a16-nv": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/models/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4"
+    },
+    "request_extra_body": {
+      "chat_template_kwargs": {
+        "force_nonempty_content": true
+      }
+    },
+    "quantize": {
+      "auto_class": "AutoModelForCausalLM",
+      "trust_remote_code": false,
+      "attn_implementation": "eager",
+      "sequential": true,
+      "offload_extra_cpu_mem_gb": 200,
+      "sequential_offload_device": "cuda:1",
+      "ignore": [
+        "re:.*lm_head$",
+        "re:.*mtp\\..*",
+        "re:.*mixer\\.gate$",
+        "re:.*mixer\\.(in|out)_proj$",
+        "re:.*fc[12]_latent_proj$"
+      ],
+      "expect": "^(?:backbone|model)\\.layers\\.\\d+\\.mixer\\.((q|k|v|o)_proj|(experts\\.\\d+|shared_experts)\\.(up|down)_proj)$",
+      "linearize_moe": true,
+      "per_layer": null
+    }
+  },
+  "nemotron-3-ultra-550b": {
+    "path": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/models/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16",
+    "served_name": "nemotron-3-ultra-550b",
+    "serve_flags": [
+      "--trust-remote-code",
+      "--reasoning-parser",
+      "nemotron_v3"
+    ],
+    "server_pythonpath": "/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/muse-mambadeps",
+    "request_extra_body": {
+      "chat_template_kwargs": {
+        "force_nonempty_content": true
+      }
+    },
+    "max_model_len": 65536,
+    "max_tokens": 32768,
+    "nnodes": 2,
+    "tensor_parallel_size": 8,
+    "kv_buffer_device": "cuda",
+    "notes": [
+      "NemotronHForCausalLM, 550B total / 55B active. 512 routed experts top-22 plus one",
+      "shared expert, hidden 8192, moe_latent_size 2048, 64 attention heads / 2 KV heads,",
+      "mamba_num_heads 256. Same nemotron_h family as the Super and the 3.5 Lightning.",
+      "",
+      "nnodes 2 / tp 8 follows the vendor's own --tensor-parallel-size 8. 1.1 TB of bf16",
+      "weights against 8 x 288 GB at 0.90 utilisation is 2.07 TB, leaving ~0.9 TB for KV.",
+      "TP must divide the 64 attention heads, which 8 does.",
+      "",
+      "server_pythonpath is the muse-mambadeps overlay for the same reason as the Super:",
+      "the nemotron_h remote code hard-raises if mamba_ssm cannot be imported, and the",
+      "container ships neither mamba-ssm nor causal-conv1d (sdist-only, no aarch64 wheels,",
+      "so both were built from source).",
+      "",
+      "reasoning parser nemotron_v3 and force_nonempty_content for the same reasons as",
+      "nemotron-3.5-lightning-30b -- see that entry. The sampling guard STAYS ON: this",
+      "generation_config.json carries temperature 1.0 and top_p 0.95, so there is a real",
+      "override for the guard to assert.",
+      "",
+      "eos_token_id is a LIST, [2, 11], unlike every other model here. Nothing in the",
+      "harness depends on that, but it is the sort of thing that breaks a stop condition.",
+      "",
+      "TWO QUANTIZATION STACKS, deliberately. The -nv arms are NVIDIA's released ModelOpt",
+      "MIXED_PRECISION checkpoint (192 FP8 + 49,152 NVFP4, lm_head NOT quantized at all);",
+      "the un-suffixed arms are this repo's compressed-tensors RTN from bf16 (49,296",
+      "linears). Same model, same benchmark, two independent paths -- which is the point,",
+      "since nemotron-3.5-lightning-30b loses 10 points at W4A4 on the ModelOpt path while",
+      "nemotron-3-super-120b loses 0.2 on compressed-tensors, and Ultra is the case that",
+      "separates 'the ModelOpt path is broken' from 'that checkpoint is broken'.",
+      "",
+      "nvfp4a16-nv is the SAME WEIGHTS as nvfp4-nv with all 49,152 modules relabelled",
+      "NVFP4 -> W4A16_NVFP4 and the shards symlinked, so the pair differs only in whether",
+      "activations are quantized. Its input_scale tensors are left in place: on the ModelOpt",
+      "path ModelOptNvFp4W4A16LinearMethod registers input_scale and ignores it. That is NOT",
+      "true of compressed-tensors, where a leftover input_global_scale is a hard load error",
+      "-- which is why the nvfp4pd decode side uses the separately-built NVFP4A16 checkpoint",
+      "rather than a relabelled copy.",
+      "",
+      "RTN needed two fixes this model exposed. moe_latent_size 2048 routes experts through",
+      "a latent bottleneck, so an expert up_proj consumes 2048 and not hidden_size 8192;",
+      "llm-compressor's MoEConfig derived hidden_dim from hidden_size unconditionally and",
+      "asserted while linearizing. And linearize_moe must be set, or targets resolve against",
+      "the fused 3D expert parameters before linearization and only 144 of 49,296 modules",
+      "are found."
+    ],
+    "report": {
+      "baseline": "bf16",
+      "arms": [
+        "nvfp4a16",
+        "nvfp4",
+        "nvfp4pd",
+        "nvfp4a16-nv",
+        "nvfp4-nv",
+        "nvfp4-nv-pd"
+      ]
+    },
+    "quantize": {
+      "auto_class": "AutoModelForCausalLM",
+      "trust_remote_code": true,
+      "attn_implementation": "eager",
+      "sequential": true,
+      "offload_extra_cpu_mem_gb": 700,
+      "sequential_offload_device": "cuda:1",
+      "ignore": [
+        "re:.*lm_head$",
+        "re:.*mtp\\..*",
+        "re:.*mixer\\.gate$",
+        "re:.*mixer\\.(in|out)_proj$",
+        "re:.*fc[12]_latent_proj$"
+      ],
+      "expect": "^(?:backbone|model)\\.layers\\.\\d+\\.mixer\\.((q|k|v|o)_proj|(experts\\.\\d+|shared_experts)\\.(up|down)_proj)$",
+      "per_layer": null,
+      "linearize_moe": true
+    }
+  }
+}

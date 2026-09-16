@@ -111,6 +111,65 @@ def resolve_pair(ckpt_dir: Path, ckpt_tag: str, step: int):
         f"No checkpoint at {root} (looked for model.safetensors, or prefill/+decode/)")
 
 
+def free_port_base(tries: int = 200) -> int:
+    """A PORT_BASE whose WHOLE block (+0,+1,+2,+100,+200) is bindable right now.
+
+    Nothing outside this process ever has to predict these ports: Stack picks the base,
+    passes it to run_nixl_server.sh, and hands the proxy port to the lm-eval client
+    itself, while the decode engine reaches prefill through VLLM_NIXL_SIDE_CHANNEL_*,
+    which that same script sets. So the base only has to be FREE HERE -- it never has to
+    be reproducible, which makes deriving it from a job id a liability, not a feature.
+
+    The previous default was
+        8500 + 10 * (SLURM_ARRAY_TASK_ID % 200)
+    but run_eval_ruler.sh submits ONE JOB PER POINT, not an array, so
+    SLURM_ARRAY_TASK_ID is never set, the expression collapsed to 0, and EVERY RULER job
+    used base 8500. Two stacks sharing a node -- co-scheduled, or one inheriting a
+    leftover proxy from a killed job -- then died with
+        proxy: ERROR [Errno 98] Address already in use
+    AFTER paying the full model-load cost.
+
+    Binds INADDR_ANY, not loopback, so a port held on any interface reads as busy, and
+    does NOT set SO_REUSEADDR: a socket in TIME_WAIT must count as busy here, because
+    vLLM is about to want it for real. Probe-then-release leaves a small race, but a
+    ~4000-wide search against a few stacks per node is a different regime from a
+    constant.
+    """
+    import random
+    import socket
+
+    # Stay BELOW the kernel's ephemeral range. Probing only proves a port is free NOW;
+    # inside ip_local_port_range the kernel can still hand that exact port to an outgoing
+    # connection between the probe and vLLM's bind, which is unfixable from here. This
+    # cluster's range is an unusually wide 9000-65000, so a "high random port" would sit
+    # entirely inside it -- the old 8500 was below it, and that part was correct. Read the
+    # bound rather than hardcoding, since it differs per cluster.
+    lo_ephemeral = 32768
+    try:
+        with open("/proc/sys/net/ipv4/ip_local_port_range") as fh:
+            lo_ephemeral = int(fh.read().split()[0])
+    except Exception:
+        pass
+    hi = max(2100, lo_ephemeral - 300)          # room for the +200 offset, and a margin
+
+    offsets = (0, 1, 2, 100, 200)
+    for _ in range(tries):
+        base = random.randrange(2000, hi, 10)
+        socks = []
+        try:
+            for off in offsets:
+                sk = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sk.bind(("", base + off))
+                socks.append(sk)
+        except OSError:
+            continue
+        finally:
+            for sk in socks:
+                sk.close()
+        return base
+    raise SystemExit(f"no free port block found in {tries} tries")
+
+
 class Stack:
     """Runs run_nixl_server.sh and tears the whole process group down after."""
 
@@ -222,8 +281,15 @@ def probe(port: int, tokenizer_id: str, out_path: Path, max_tokens: int = 64,
 API_TIMEOUT = 3600
 
 
-def run_lm_eval(port: int, args) -> dict:
-    from lm_eval import evaluator
+def build_client(port: int, tokenizer: str, concurrency: int, max_gen_toks: int,
+                 max_model_len: int, think: bool):
+    """Construct lm-eval's LocalCompletionsAPI client against the proxy at `port`.
+
+    Shared by run_lm_eval (gsm8k/mmlu_pro/...) and eval_ruler.py: the timeout fix,
+    tokenized_requests requirement, and --no-think patch below are all hard-won (see
+    the comments in each), and duplicating them risks one copy silently drifting from
+    the other's bugfixes.
+    """
     from lm_eval.models.openai_completions import LocalCompletionsAPI
 
     # lm-eval's max_length must cover prompt + generation, and it defaults to 2048
@@ -236,20 +302,23 @@ def run_lm_eval(port: int, args) -> dict:
     # Tie it to the served context window instead, and refuse the impossible case up
     # front rather than emitting empty prompts.
     # NOTE: this guards the CLI value; per-task YAML budgets are neutralised by the
-    # gen_kwargs override below, which is what actually keeps max_context_len positive.
-    if args.max_gen_toks >= args.max_model_len:
+    # gen_kwargs override in run_lm_eval, which is what actually keeps
+    # max_context_len positive there. eval_ruler.py does NOT override gen_kwargs (its
+    # tasks' own 128-token budget is part of the RULER spec), so this guard is its
+    # only protection against the same silent-empty-prompt failure.
+    if max_gen_toks >= max_model_len:
         raise SystemExit(
-            f"--max-gen-toks {args.max_gen_toks} must be < --max-model-len "
-            f"{args.max_model_len}; otherwise lm-eval truncates every prompt to empty "
-            f"and the servers reject the request.")
+            f"max_gen_toks {max_gen_toks} must be < max_model_len {max_model_len}; "
+            f"otherwise lm-eval truncates every prompt to empty and the servers "
+            f"reject the request.")
     lm = LocalCompletionsAPI(
         base_url=f"http://127.0.0.1:{port}/v1/completions",
         model="model",
-        tokenizer=args.tokenizer,
+        tokenizer=tokenizer,
         tokenizer_backend="huggingface",
-        num_concurrent=args.concurrency,
-        max_gen_toks=args.max_gen_toks,
-        max_length=args.max_model_len,
+        num_concurrent=concurrency,
+        max_gen_toks=max_gen_toks,
+        max_length=max_model_len,
         # MUST be True. lm-eval only renders the chat template to text when
         # `tokenizer_backend == "huggingface" AND tokenized_requests` (see
         # TemplateAPI.apply_chat_template); otherwise it returns the raw message list
@@ -282,10 +351,10 @@ def run_lm_eval(port: int, args) -> dict:
             f"{API_TIMEOUT}. The `timeout` kwarg was not honoured; at the 300s default "
             f"long generations exhaust the retries and the run dies with "
             f"'RuntimeError: Session is closed' after hours of work.")
-    log(f"lm-eval client: timeout={lm.timeout}s concurrency={args.concurrency} "
-        f"max_retries=3 max_gen_toks={args.max_gen_toks}")
+    log(f"lm-eval client: timeout={lm.timeout}s concurrency={concurrency} "
+        f"max_retries=3 max_gen_toks={max_gen_toks}")
 
-    if not args.think:
+    if not think:
         # Same patch as eval_transformers.py: Qwen3 suppresses thinking through a
         # chat-template kwarg, not generation config, so it must be injected where
         # lm-eval renders the template.
@@ -309,7 +378,14 @@ def run_lm_eval(port: int, args) -> dict:
         log("thinking suppressed (verified in rendered prompt)")
     else:
         log("thinking ENABLED (default)")
+    return lm
 
+
+def run_lm_eval(port: int, args) -> dict:
+    from lm_eval import evaluator
+
+    lm = build_client(port, args.tokenizer, args.concurrency, args.max_gen_toks,
+                      args.max_model_len, args.think)
     log(f"lm_eval: tasks={args.tasks} concurrency={args.concurrency} "
         f"max_gen_toks={args.max_gen_toks}")
     return evaluator.simple_evaluate(
@@ -368,8 +444,7 @@ def main() -> None:
                         "results/vllm/think/. Pass --no-think to suppress it; the "
                         "same model differs by ~20 points on GSM8K between the modes.")
     p.add_argument("--port-base", type=int, default=None,
-                   help="default derives from SLURM_ARRAY_TASK_ID so tasks sharing a "
-                        "node do not collide on ports")
+                   help="base of the 5-port block (+0 prefill, +1 decode, +2 proxy, +100/+200 nixl side channels). Default: a randomly chosen block verified free on this host -- nothing outside this process predicts it")
     p.add_argument("--max-model-len", type=int, default=8192,
                    help="served context window, and lm-eval's max_length. Must exceed "
                         "--max-gen-toks with room for the prompt")
@@ -424,7 +499,7 @@ def main() -> None:
         tag = args.tag or f"{prefill.name}__{decode.name}"
 
     if args.port_base is None:
-        args.port_base = 8500 + 10 * (int(os.environ.get("SLURM_ARRAY_TASK_ID", 0)) % 200)
+        args.port_base = free_port_base()
     log_dir = Path(args.log_dir) if args.log_dir else Path("/tmp") / f"disagg_{args.port_base}"
 
     with Stack(prefill, decode, args.tokenizer, args.port_base,

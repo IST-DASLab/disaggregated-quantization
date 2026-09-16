@@ -40,11 +40,11 @@
 #SBATCH --qos=normal
 #SBATCH --time=03:00:00
 #SBATCH --mem=0
-#SBATCH --account=adlr_psx_numerics
+#SBATCH --account=coreai_psx_qad
 
-CONTAINER=/lustre/fsw/portfolios/adlr/users/apanferov/containers/nemo:26.02.nemotron_3_super_luts_v2.sqsh
-HF_CACHE=/lustre/fsw/portfolios/adlr/users/apanferov/hf_cache
-LM_EVAL_OVERLAY=/lustre/fsw/portfolios/adlr/users/apanferov/prefill-decode/lm_eval_overlay
+CONTAINER=/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/containers/nemo-26.02.sqsh
+HF_CACHE=/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/hf_cache
+LM_EVAL_OVERLAY=/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/lm_eval_overlay
 LOG_KIND=eval_dual
 
 # label:prefix:quantizer:extra
@@ -122,7 +122,7 @@ if command -v scontrol &>/dev/null; then
     QAD_DIR=$(dirname "$SCRIPT_DIR")         # qad -- anchors checkpoints/ and results
     export SCRIPT_DIR QAD_DIR HF_CACHE LM_EVAL_OVERLAY EV_STEPS EV_MODEL EV_CONFIGS EV_LIMIT EV_BS
     srun --ntasks=1 --container-image="$CONTAINER" --no-container-mount-home \
-        --container-mounts="/lustre:/lustre,$HOME/.netrc:/root/.netrc" --export=ALL \
+        --container-mounts="/scratch:/scratch,/lustre:/lustre,$HOME/.netrc:/root/.netrc" --export=ALL \
         bash "$SCRIPT_PATH" "$@"
     exit $?
 fi

@@ -43,7 +43,7 @@ from vllm.model_executor.layers.quantization.base_config import (
     QuantizationConfig, QuantizeMethodBase)
 from vllm.model_executor.parameter import ModelWeightParameter
 
-from .cuda_gemv import auto_config, linear_op, load_extension
+from .cuda_gemv import act_quant_barrier, auto_config, linear_op, load_extension
 from .format import GROUP, LLOYD21, LLOYD43, pack_from_weight
 
 __all__ = ["LloydConfig", "Lloyd43Config", "Lloyd21Config",
@@ -69,6 +69,13 @@ class LloydConfig(QuantizationConfig):
     """
 
     FORMAT = LLOYD43
+    # Charge the layer for quantizing its activations, WITHOUT letting the GEMV benefit.
+    # This is what the format costs when it is NOT format-disaggregated: the deployment
+    # commits to 4-bit activations everywhere, but this weight-only kernel consumes bf16,
+    # so the quantization is pure tax. See cuda_gemv.act_quant_barrier.
+    ACT_QUANT = False
+    ACT_AMAX = 10.0
+    NAME: str | None = None
 
     def __init__(self, skip_modules: list[str] | None = None):
         super().__init__()
@@ -78,7 +85,9 @@ class LloydConfig(QuantizationConfig):
 
     @classmethod
     def get_name(cls) -> str:
-        return cls.FORMAT.name
+        # Not FORMAT.name: the *aq variants share a FORMAT with their plain counterpart,
+        # and vLLM compares this against the requested --quantization string.
+        return cls.NAME or cls.FORMAT.name
 
     @classmethod
     def get_supported_act_dtypes(cls) -> list[torch.dtype]:
@@ -111,6 +120,8 @@ class LloydLinearMethod(LinearMethodBase):
     def __init__(self, quant_config: LloydConfig):
         self.quant_config = quant_config
         self.fmt = quant_config.FORMAT
+        self.act_quant = quant_config.ACT_QUANT
+        self.act_amax = quant_config.ACT_AMAX
         load_extension()  # fail at load time, not mid-decode
 
     def create_weights(self, layer: torch.nn.Module, input_size_per_partition: int,
@@ -158,6 +169,11 @@ class LloydLinearMethod(LinearMethodBase):
         # Drop the dense copy -- holding it would defeat the entire point.
         layer.weight = torch.nn.Parameter(torch.empty(0, dtype=w.dtype, device=w.device),
                                           requires_grad=False)
+        if self.act_quant:
+            # Static absmax, the same convention the NVFP4 arms use: e2m1 spans +-6 and
+            # e4m3 spans +-448, so a block scale of amax*gs/6 lands in range for gs below.
+            layer.lloyd43_act_gs = torch.tensor(6 * 448 / self.act_amax,
+                                                dtype=torch.float32, device=w.device)
         del w
         torch.cuda.empty_cache()
 
@@ -167,6 +183,10 @@ class LloydLinearMethod(LinearMethodBase):
             raise RuntimeError("lloyd43: layer was not packed (K not a multiple of 32)")
 
         K, N = layer.lloyd43_K, layer.lloyd43_N
+        if self.act_quant:
+            # Declared to mutate x, so the GEMV's read of x is ordered after it and no
+            # pass may drop it -- at no cost beyond the quantization. x is not written.
+            act_quant_barrier(x, layer.lloyd43_act_gs)
         out = linear_op(x.reshape(-1, K), layer.lloyd43_packed, layer.lloyd43_bscale_u8,
                         layer.lloyd43_gscale, K, layer.lloyd43_cfg)
         out = out.reshape(*x.shape[:-1], N)
@@ -185,3 +205,24 @@ class Lloyd21Config(LloydConfig):
     """2 bits, 4 levels, 0.3125 bytes per weight, 1.4x less traffic than lloyd43."""
 
     FORMAT = LLOYD21
+
+
+@register_quantization_config("lloyd43aq")
+class Lloyd43AQConfig(LloydConfig):
+    """lloyd43 charged for activation quantization it cannot use: LUT3 without
+    format disaggregation. Same weights, same numerics, same kernel -- plus one
+    discarded fp4 quantization per linear, which at batch one is almost entirely
+    per-launch cost (4 linears x L layers extra kernels per token)."""
+
+    FORMAT = LLOYD43
+    ACT_QUANT = True
+    NAME = "lloyd43aq"
+
+
+@register_quantization_config("lloyd21aq")
+class Lloyd21AQConfig(LloydConfig):
+    """lloyd21 charged for the same unusable activation quantization."""
+
+    FORMAT = LLOYD21
+    ACT_QUANT = True
+    NAME = "lloyd21aq"

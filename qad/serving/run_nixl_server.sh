@@ -33,11 +33,29 @@
 
 set -uo pipefail
 
+# certifi's cacert.pem lives in /opt/venv on this container, which a GPU-allocated job
+# on this cluster hides (same phenomenon that hid wandb/datasets -- see run_qad.sh's
+# venv_overlay). The base /usr/local copy exists on a CPU-only check but the engine
+# processes still report it unreadable at runtime, breaking flashinfer's cubin_loader
+# ("Could not find a suitable TLS CA certificate bundle") and leaving TRT-LLM-gen
+# kernels stuck on CUDA_ERROR_NOT_FOUND instead of downloaded. Point requests/urllib3
+# at the system bundle directly rather than chase why certifi's own lookup fails here.
+export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+export REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+
 PREFILL_MODEL=""; DECODE_MODEL=""; TOKENIZER=""
 SERVED_NAME="${SERVED_NAME:-model}"
 PORT_BASE="${PORT_BASE:-8500}"
-PREFILL_GPU="${PREFILL_GPU:-0}"
-DECODE_GPU="${DECODE_GPU:-1}"
+# TP: GPUs per engine. This cluster's QOS carries MinTRES gres/gpu=4, so a plain
+# 1P1D job already has to ask for 4 GPUs even though it only used 2 -- default to
+# TP=2 so both engines actually use all 4 rather than leaving 2 idle every job (this
+# runs unattended via autoeval_watch.sh for potentially many jobs over hours, so the
+# waste compounds). PREFILL_GPU/DECODE_GPU still take precedence if set explicitly
+# (e.g. a KV-noise sweep pinning specific indices).
+TP="${TP:-2}"
+PREFILL_GPU="${PREFILL_GPU:-$(seq -s, 0 $((TP - 1)))}"
+DECODE_GPU="${DECODE_GPU:-$(seq -s, "$TP" $((2 * TP - 1)))}"
 # vLLM allocates KV blocks DYNAMICALLY (PagedAttention) -- max_model_len is a cap,
 # not a per-sequence reservation, so lowering it does not raise concurrency. The
 # "Maximum concurrency for N tokens per request" line in the engine log is vLLM's
@@ -63,7 +81,27 @@ PROXY_WORKERS="${PROXY_WORKERS:-8}"
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.92}"
 READY_FILE=""
 SERVER_READY_TIMEOUT_S="${SERVER_READY_TIMEOUT_S:-1800}"
-NIXL_PREFIX="${NIXL_PREFIX:-/lustre/fsw/portfolios/adlr/users/apanferov/prefill-decode/nixl_nodeps}"
+# The vLLM eval container (containers/vllm-nightly.sqsh) SHIPS nixl itself -- 1.3.2 under
+# /usr/local/lib/python3.12/dist-packages -- so the default points at the container's own
+# copy and the prepend below is a harmless no-op. Do NOT point this at the separately
+# pip-installed nixl_nodeps tree when running in that container: prepending a second nixl
+# shadows the one vLLM was built against. The out-of-container tree is only needed for an
+# image that lacks nixl entirely (as nemo-26.02 does). See MIGRATION.md §8.4.
+NIXL_PREFIX="${NIXL_PREFIX:-/usr/local/lib/python3.12/dist-packages}"
+# Extra flags appended verbatim to BOTH `vllm serve` invocations. Empty by default, so
+# every existing caller is unaffected. It exists because some models are unservable
+# without model-specific flags -- Muse-Glimmer needs its two channel parsers and
+# --generation-config auto -- and forking this script to add them would fork all of the
+# hard-won settings above with it. Word-split on purpose: it is a flag list, not a path.
+EXTRA_SERVE_ARGS="${EXTRA_SERVE_ARGS:-}"
+
+# Resolve the interpreter instead of spelling `python`. The nemo container this script
+# was written in has both names; the vLLM nightly image has ONLY python3, and there the
+# bare `python` calls below fail in ways that do not name the cause -- the KV host
+# detection silently produced an empty string and the script died with
+# "could not determine KV host IP", which reads like a network problem.
+PY="$(command -v python3 || command -v python)"
+[ -z "$PY" ] && { echo "ERROR: no python interpreter on PATH" >&2; exit 1; }
 
 # Async scheduling runs the scheduler a step ahead of execution while a KV
 # connector's metadata is per-step. It cost the P2P track a silent hang; keep it off
@@ -77,6 +115,7 @@ while (($# > 0)); do
     --decode-model)  DECODE_MODEL="$2";  shift 2 ;;
     --tokenizer)     TOKENIZER="$2";     shift 2 ;;
     --served-name)   SERVED_NAME="$2";   shift 2 ;;
+    --extra-serve-args) EXTRA_SERVE_ARGS="$2"; shift 2 ;;
     --port-base)     PORT_BASE="$2";     shift 2 ;;
     --max-model-len) MAX_MODEL_LEN="$2"; shift 2 ;;
     --ready-file)    READY_FILE="$2";    shift 2 ;;
@@ -102,7 +141,7 @@ DECODE_SIDE_PORT="${DECODE_SIDE_PORT:-$((PORT_BASE + 200))}"
 # Use the node's routable address rather than loopback: it is what UCX can actually
 # connect to, and it keeps this correct if the two engines are ever split across
 # nodes.
-KV_HOST="${VLLM_HOST_IP:-$(python - <<'PY'
+KV_HOST="${VLLM_HOST_IP:-$("$PY" - <<'PY'
 import socket
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 try:
@@ -127,8 +166,23 @@ export VLLM_HOST_IP="$KV_HOST"
 # so the engine never finishes starting. Using `${UCX_TLS:-all}` here would preserve
 # the broken inherited value, which is exactly the bug this line replaced.
 # Override deliberately with NIXL_UCX_TLS / NIXL_UCX_NET_DEVICES if needed.
+#
+# UCX_TLS=all IS THE FIX FOR "UCX CUDA support was not found". The vLLM container ships
+# UCX_TLS=tcp in its own environment, and tcp excludes every CUDA transport
+# (cuda_copy/cuda_ipc/gdr_copy). UCX then closes the cuda_cpy memory domain
+# ("no selected transport resources"), VRAM registration fails with
+# "VRAM memory is detected as host by UCX", and the engine dies at register_kv_caches
+# with NIXL_ERR_BACKEND. Nothing is missing from the image -- the cuda module loads fine
+# (libuct_cuda.so, "dmabuf is supported on cuda device 0"); it is purely that tcp-only
+# TLS deselects it. Verified: with UCX_TLS unset the VRAM-registration gate FAILS, and
+# with it set to all (or any list naming cuda_copy) it PASSES.
 export UCX_TLS="${NIXL_UCX_TLS:-all}"
-export UCX_NET_DEVICES="${NIXL_UCX_NET_DEVICES:-all}"
+# eth0, NOT all, on oci-jhb-slurm-1: this cluster's rdma_vf_rail0..3 carry ONLY IPv6
+# addresses, and with NET_DEVICES=all UCX picks a rail and dies at
+#   bind(addr=fdcd:...%0:0) failed: Cannot assign requested address
+#   uct_iface_open(tcp/rdma_vf_rail0) failed: Input/output error
+# eth0 is the node's only IPv4 device and is also what NCCL_SOCKET_IFNAME uses.
+export UCX_NET_DEVICES="${NIXL_UCX_NET_DEVICES:-eth0}"
 echo "[nixl] UCX_TLS=$UCX_TLS UCX_NET_DEVICES=$UCX_NET_DEVICES"
 
 # nixl must be importable by the engines. Prepend rather than replace so the caller's
@@ -148,6 +202,17 @@ export PYTHONPATH="$NIXL_PREFIX${PYTHONPATH:+:$PYTHONPATH}"
 # Pinning FLASH_ATTN keeps the layout the copy helper expects.
 export VLLM_ATTENTION_BACKEND="${NIXL_ATTENTION_BACKEND:-FLASH_ATTN}"
 echo "[nixl] VLLM_ATTENTION_BACKEND=$VLLM_ATTENTION_BACKEND"
+
+# HYBRID SSM / LINEAR-ATTENTION MODELS. A model whose layers carry recurrent state
+# rather than a KV cache -- Mamba2, and GatedDeltaNet as in Qwen3.5 -- transfers that
+# state through NixlConnector's 3-read conv path, which requires the DS conv layout and
+# refuses to start without it:
+#     AssertionError: 3-read Mamba conv transfer requires DS conv state layout.
+#                     Set VLLM_SSM_CONV_STATE_LAYOUT=DS
+# Set unconditionally: a model with no conv state has nothing for this to lay out, so
+# it is inert for every pure-attention model already measured through this script.
+export VLLM_SSM_CONV_STATE_LAYOUT="${VLLM_SSM_CONV_STATE_LAYOUT:-DS}"
+echo "[nixl] VLLM_SSM_CONV_STATE_LAYOUT=$VLLM_SSM_CONV_STATE_LAYOUT"
 
 if [ -n "${DISAGG_DEBUG:-}" ]; then
   export VLLM_LOGGING_LEVEL=DEBUG
@@ -193,29 +258,34 @@ echo "[nixl] NIXL_PREFIX=$NIXL_PREFIX"
 echo "[nixl] server PYTHONPATH=$PYTHONPATH"
 # Fail here rather than 10 minutes into a model load: without nixl the engine logs
 # "NIXL is not available" and then dies when the connector is constructed.
-python -c "import nixl._api; print('[nixl] nixl import OK:', nixl.__file__)" || {
+"$PY" -c "import nixl._api; print('[nixl] nixl import OK:', nixl.__file__)" || {
   echo "ERROR: nixl is not importable with PYTHONPATH=$PYTHONPATH" >&2
   echo "       install it with: pip install --no-deps --target $NIXL_PREFIX nixl==1.3.1 nixl-cu13==1.3.1" >&2
   exit 1
 }
 
 # kv_buffer_device: "cuda" registers the KV cache blocks with NIXL directly in VRAM,
-# which is what you want. It requires UCX to have CUDA support; the pip nixl wheel's
-# bundled UCX in this container reports it does not:
-#   ucx_utils.cpp:576] VRAM memory is detected as host by UCX. UCX is likely not
-#                      configured with CUDA/ROCm support.
-# and register_kv_caches() then raises NIXL_ERR_BACKEND at startup. Setting
-# NIXL_KV_BUFFER_DEVICE=cpu makes the connector stage through a host buffer instead
-# (use_host_buffer), which UCX can register without CUDA support. Slower, but it is a
-# real cross-engine transfer rather than a fallback to local recompute.
-# cpu, NOT cuda, is the correct default in THIS container. Its UCX is built without
-# CUDA support:
+# which is what you want. It requires UCX to have CUDA support -- on the ORIGINAL
+# (b200, container nemo:26.02.nemotron_3_super_luts_v2) cluster this was built
+# without it:
 #   "8 NVIDIA GPU(s) were detected, but UCX CUDA support was not found!"
 #   "VRAM memory is detected as host by UCX. VRAM registration cannot proceed."
-# so kv_buffer_device=cuda always dies in register_kv_caches with
-# nixlBackendError: NIXL_ERR_BACKEND, at engine init, on every node. The host buffer
-# is slower but still a real cross-engine transfer.
-KV_BUFFER_DEVICE="${NIXL_KV_BUFFER_DEVICE:-cpu}"
+# so kv_buffer_device=cuda died in register_kv_caches with nixlBackendError:
+# NIXL_ERR_BACKEND at engine init, on every node, and "cpu" (staging through a host
+# buffer instead, use_host_buffer) was the only working default there -- slower, but
+# still a real cross-engine transfer rather than a fallback to local recompute.
+#
+# 2026-09-09, b300/GB300 cluster, plain `nvcr.io/nvidia/nemo:26.02` pulled fresh from
+# NGC: verified this container's UCX DOES have CUDA support -- "Registering
+# KV_Caches. kv_buffer_device: cuda, use_host_buffer: False" on all workers, no
+# NIXL_ERR_BACKEND, disaggregated gsm8k canary completed end to end. cpu-staging is
+# NOT just slower here, it actively broke under --tensor-parallel-size 2: each TP
+# worker mirrors its own ~250 GiB (--gpu-memory-utilization=0.92) KV budget into host
+# RAM, and 4 workers' worth exceeded the node's available memory (SLURM cgroup OOM,
+# 18 oom_kill events). cuda staging has no such host-memory cost. Verdict is
+# per-container/hardware, not universal -- if this script runs somewhere else, check
+# the engine log for NIXL_ERR_BACKEND before trusting either default.
+KV_BUFFER_DEVICE="${NIXL_KV_BUFFER_DEVICE:-cuda}"
 
 # NixlConnector hashes each engine's configuration and refuses the handshake unless
 # the two hashes match. A heterogeneous pair (W4A4 prefill -> W4A16 decode) is
@@ -286,6 +356,7 @@ fi
 KV_PRODUCER_CFG="$(kv_cfg kv_producer)"
 KV_CONSUMER_CFG="$(kv_cfg kv_consumer)"
 echo "[nixl] kv_buffer_device=$KV_BUFFER_DEVICE"
+[ -n "$EXTRA_SERVE_ARGS" ] && echo "[nixl] extra serve args: $EXTRA_SERVE_ARGS"
 if kv_noise_on; then
   echo "[nixl] KV NOISE ON: prefill=${KV_BITS_PREFILL}bit decode=${KV_BITS_DECODE}bit"
 fi
@@ -297,9 +368,9 @@ vllm serve "$PREFILL_MODEL" \
   --port "$PREFILL_PORT" --served-model-name "$SERVED_NAME" \
   --tokenizer "$TOKENIZER" --trust-remote-code \
   --max-model-len "$MAX_MODEL_LEN" --max-num-seqs "$MAX_NUM_SEQS" \
-  --gpu-memory-utilization "$GPU_MEM_UTIL" \
+  --gpu-memory-utilization "$GPU_MEM_UTIL" --tensor-parallel-size "$TP" \
   ${EAGER_FLAG} --enable-request-id-headers ${ASYNC_SCHED_FLAG} \
-  --kv-transfer-config "$KV_PRODUCER_CFG" \
+  --kv-transfer-config "$KV_PRODUCER_CFG" ${EXTRA_SERVE_ARGS} \
   >"$LOG_DIR/prefill.log" 2>&1 &
 PIDS+=("$!")
 
@@ -310,16 +381,16 @@ vllm serve "$DECODE_MODEL" \
   --port "$DECODE_PORT" --served-model-name "$SERVED_NAME" \
   --tokenizer "$TOKENIZER" --trust-remote-code \
   --max-model-len "$MAX_MODEL_LEN" --max-num-seqs "$MAX_NUM_SEQS" \
-  --gpu-memory-utilization "$GPU_MEM_UTIL" \
+  --gpu-memory-utilization "$GPU_MEM_UTIL" --tensor-parallel-size "$TP" \
   ${EAGER_FLAG} --enable-request-id-headers ${ASYNC_SCHED_FLAG} \
-  --kv-transfer-config "$KV_CONSUMER_CFG" \
+  --kv-transfer-config "$KV_CONSUMER_CFG" ${EXTRA_SERVE_ARGS} \
   >"$LOG_DIR/decode.log" 2>&1 &
 PIDS+=("$!")
 
 wait_for prefill "$PREFILL_PORT" || exit 1
 wait_for decode  "$DECODE_PORT"  || exit 1
 
-python "$SCRIPT_DIR/nixl_proxy.py" --workers "$PROXY_WORKERS" \
+"$PY" "$SCRIPT_DIR/nixl_proxy.py" --workers "$PROXY_WORKERS" \
   --port "$PROXY_PORT" \
   --prefill-host 127.0.0.1 --prefill-port "$PREFILL_PORT" \
   --decode-host  127.0.0.1 --decode-port  "$DECODE_PORT" \

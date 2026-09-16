@@ -241,6 +241,18 @@ qad/wandb/
 attic_invalid_kvd/
 qad/cluster_scripts/.eval_submissions.jsonl
 
+# arm_comparison.json is DERIVED, not measured, and is the one exception to the rule
+# above. compare_arms.py writes it and nothing -- no driver, no notebook -- ever reads it
+# back; the `signflip` rows it appears to consult come from the in-memory return value in
+# the same run. It regenerates from the versioned scores/ export in seconds, and its
+# `benches` field records whichever --benches the last run happened to pass, so a
+# committed copy is not canonical: the one in this tree said ['mmlu_pro'] alone.
+#
+# Versioning it meant that merely READING the tables dirtied the tree, and that two
+# branches which had both looked at the results collided on a file neither had measured.
+# The measurements themselves -- summary.json and evals/scores/ -- stay versioned.
+evals/results/*/arm_comparison.json
+
 # luts backend -- not for version control
 qad/quantizers/luts_backend.py
 qad/data/
@@ -258,3 +270,43 @@ qad/results/**/*_samples_*.jsonl
 qad/kernels/lloyd43/.pytest_cache/
 qad/kernels/lloyd43/src/*.egg-info/
 qad/kernels/lloyd43/build/
+
+# Eval generations. Same rule as qad/results: the SCORES are versioned (summary.json
+# and the scorer outputs beside it), the raw generations are not -- MMMU-Pro vision
+# alone is 1730 responses x a multi-thousand-token reasoning chain.
+#
+# These patterns said `muse/` until the tree was renamed to `evals/`, at which point
+# they silently stopped matching and 88 MB of generations across 92 files went into the
+# first commit after the rename. A gitignore rule keyed on a directory name is a rule
+# that breaks the moment the directory is renamed, and it breaks SILENTLY -- nothing
+# fails, the commit just gets bigger.
+evals/results/**/raw.jsonl
+# raw.shard0of4.jsonl and friends: the ** pattern above matches the exact
+# filename only, so sharded runs would have been committed by accident.
+evals/results/**/raw.shard*.jsonl
+evals/results/**/rep*.jsonl
+evals/results/**/responses.jsonl
+
+# scored.jsonl -- ocrbench's per-item scores, 8 MB across 18 arms and growing with every
+# arm. It is DERIVED from raw.jsonl, which is ignored, and every number in it is now in
+# evals/scores/ in a form that is a tenth the size, covers all five benchmarks rather
+# than one, and is what compare_arms reads off-cluster. Versioning both would put the
+# same measurement in history twice, in two formats, with no way to tell which was
+# authoritative when they disagree.
+evals/results/**/scored.jsonl
+
+# generation_complete -- a marker holding one integer, written so the ocrbench scorer can
+# tell a finished arm from a resumed one mid-flight. It is state for the pipeline, not a
+# measurement, and the same count is in summary.json's n_scored.
+evals/results/**/generation_complete
+
+# RULER's generated haystacks are INPUTS, not measurements, and are the one thing under
+# evals/ that is not versioned. They are regenerated deterministically by RULER's own
+# scripts/data/prepare.py under a fixed seed (--random_seed 42) from the corpora in
+# harnesses/RULER, so nothing is lost by omitting them. Size is the reason: the 4k
+# corpus alone is 81 MB for 13 tasks x 500 docs, and cost scales with length -- the 64k
+# leg is ~16x that, putting a full 5-length sweep in the gigabytes.
+#
+# Scoped to the corpus directory ONLY. evals/results/**, including every RULER
+# summary.json and raw.jsonl, stays versioned like all other measurements.
+evals/data/ruler/

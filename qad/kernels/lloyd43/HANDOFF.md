@@ -697,3 +697,42 @@ Reproducing the above needed three things that are nothing to do with lloyd43:
   so a `TypeError` took down the engine. Patched locally to `except Exception`. That is an
   upstream bug worth reporting; only `flashinfer.comm` is affected, so uninstalling
   flashinfer would be over-broad.
+
+### The `*aq` arms: a LUT format charged for activation quantization
+
+`--quantization lloyd43aq` / `lloyd21aq` run the identical weights, kernel and numerics as
+their plain counterparts, plus one fp4 activation quantization per linear whose result is
+**thrown away**. That is what a LUT format costs when it is NOT format-disaggregated: the
+deployment commits to 4-bit activations everywhere, but a weight-only GEMV consumes bf16,
+so the quantization is pure tax. It is an upper bound on that tax, not a deployable
+configuration — a real W4A4 stack would have a kernel that consumes the quantized
+activation and gets something back for the cost.
+
+The measurement only means something if the discarded quantization actually runs, and a
+quantization whose result is discarded is textbook dead code. `act_quant_barrier` survives
+by being declared to **mutate** its input though it does not: a mutation is a side effect,
+so no DCE pass may drop the call, and the GEMV's read of `x` is ordered after it — at no
+cost beyond the quantization itself. Returning a clone would work too but bills the arm for
+a copy the format never performs.
+
+`test_act_barrier.py` checks this rather than assuming it, in separate processes because
+successive `torch.profiler` sessions in one process start returning empty event lists,
+which reads exactly like "the op was optimized away". Run it with `--no-v2`: vLLM compiles
+with `enable_auto_functionalized_v2=False`, and that is the mode where functionalization
+may leave the clone. Both modes currently pass.
+
+### A killed vLLM run poisons the JIT extension cache
+
+`load_extension()` builds through `torch.utils.cpp_extension.load`, whose `FileBaton`
+acquires by creating `~/.cache/torch_extensions/py311_cu132/lloyd43_cuda/lock` with
+`O_CREAT|O_EXCL` and releases by **deleting** it. SIGKILL between those two leaves the file
+behind, and every later load spins waiting for it to vanish — forever, at ~0% CPU, GPU
+idle, with no error. It looks exactly like a deadlock in the plugin, and it is not: the
+committed code hangs identically, because the cause is on disk rather than in the code.
+
+    rm ~/.cache/torch_extensions/py311_cu132/lloyd43_cuda/lock
+
+Related: `pkill -f vllm_serve` does not tear down a vLLM run. The engine lives in a
+separate `VLLM::EngineCore` process that gets reparented to init and keeps its memory.
+And `pkill -f <pattern>` matches the *shell command containing the pattern*, i.e. your own
+command line — which is how the lock got orphaned in the first place.

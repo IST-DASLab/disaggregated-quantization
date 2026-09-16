@@ -98,9 +98,30 @@ class DistOptimizer(torch.optim.Optimizer):
                     raise ValueError(f"unknown algo {group.get('algo')!r}")
                 for p in group["params"]:
                     if p.numel() >= 1024:
-                        assert p.shape[0] % world_size == 0, (
-                            f"Large param shape {p.shape}: shape[0] must be divisible "
-                            f"by world_size={world_size}"
+                        # FLAT sharding: the requirement is on numel, not shape[0].
+                        #
+                        # Sharding by rows needed shape[0] % world_size == 0 purely so
+                        # p[r*rs:(r+1)*rs] was a clean contiguous view. That is a property
+                        # of the slicing style, not of the maths: Adam is elementwise, so
+                        # which rank owns an element changes nothing about its update.
+                        #
+                        # And the two are the SAME PARTITION wherever both are legal --
+                        # for a row-major tensor, rows [r*rs, (r+1)*rs) are exactly flat
+                        # elements [r*numel/W, (r+1)*numel/W) -- so this is bitwise
+                        # identical at every width that used to work, not merely
+                        # equivalent.
+                        #
+                        # It matters because Qwen3.5's linear attention has 96 parameters
+                        # of shape (48, 5120): 48 rows block DP >= 32, while 245760
+                        # elements divide cleanly all the way to 64. Measured across the
+                        # 27B text stack: at DP=32 row-sharding fails 96 params and flat
+                        # sharding fails none.
+                        assert p.is_contiguous(), (
+                            f"Large param {tuple(p.shape)} is not contiguous; view(-1) "
+                            f"below would not alias its storage")
+                        assert p.numel() % world_size == 0, (
+                            f"Large param shape {p.shape}: numel {p.numel()} must be "
+                            f"divisible by world_size={world_size}"
                         )
         super().__init__(param_groups, defaults)
         self._step_t = torch.tensor(0.0, device="cpu")
@@ -127,14 +148,21 @@ class DistOptimizer(torch.optim.Optimizer):
                         dist.all_reduce(g, op=dist.ReduceOp.AVG, group=self._pg,
                                         async_op=True).get_future()
                     )
-                    grad_slices.append(g)
+                    # Flattened to match the parameter slice below: every tensor reaching
+                    # the compiled _adamw_step must have the SAME rank. all_reduce ran on
+                    # g itself, so this view is the same storage.
+                    grad_slices.append(g.view(-1))
                 else:
                     is_small.append(False)
-                    rsize = g.shape[0] // world_size
-                    g_slice = torch.empty_like(g[:rsize])
+                    # Flat views throughout -- see the assert in __init__. reduce_scatter
+                    # wants input numel == world_size * output numel, which a 1-D view
+                    # satisfies for any shape whose numel divides.
+                    g_flat = g.view(-1)
+                    rsize = g_flat.numel() // world_size
+                    g_slice = torch.empty_like(g_flat[:rsize])
                     reduce_futs.append(
                         dist.reduce_scatter_tensor(
-                            g_slice, g, op=dist.ReduceOp.AVG, group=self._pg,
+                            g_slice, g_flat, op=dist.ReduceOp.AVG, group=self._pg,
                             async_op=True
                         ).get_future()
                     )
@@ -149,8 +177,24 @@ class DistOptimizer(torch.optim.Optimizer):
                 reduce_futs[idx].wait()
                 g_slice = grad_slices[idx]
                 small = is_small[idx]
-                rsize = p.shape[0] // world_size
-                p_slice = p if small else p[rank * rsize : (rank + 1) * rsize]
+                # FLAT FOR EVERY PARAM, small ones included. p_flat aliases p's storage,
+                # so updating the slice updates p in place -- exactly as the row view did.
+                #
+                # The small path must flatten too, even though it is not sharded.
+                # _adamw_step is @torch.compile(dynamic=True, fullgraph=True): passing
+                # 1-D slices for large params and 2-D tensors for small ones puts two
+                # RANKS through one compiled graph, and Dynamo generalises them into a
+                # graph where exp_avg is 2-D while grad is 1-D:
+                #
+                #   lerp_(FakeTensor(size=(s33, s48)), FakeTensor(size=(s87,)), ...)
+                #   RuntimeError: Attempting to broadcast a dimension of length s87 at -1
+                #
+                # It killed all 8 27B runs ~8 min in, at the first optimizer step. Before
+                # flat sharding every call was 2-D, so the mixed-rank case could not
+                # arise. One rank for every call keeps it that way.
+                p_flat = p.view(-1)
+                rsize = p.numel() // world_size
+                p_slice = p_flat if small else p_flat[rank * rsize : (rank + 1) * rsize]
                 state = self.state[p]
                 if not state:
                     state["step"] = 0
@@ -172,7 +216,7 @@ class DistOptimizer(torch.optim.Optimizer):
                                 self._eps_t, self._wd_t)
                 if not small:
                     gather_futs.append(
-                        dist.all_gather_into_tensor(p, p_slice, group=self._pg,
+                        dist.all_gather_into_tensor(p_flat, p_slice, group=self._pg,
                                                     async_op=True).get_future()
                     )
                 idx += 1

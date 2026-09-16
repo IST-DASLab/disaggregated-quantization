@@ -1,0 +1,47 @@
+{
+  "benchmark": "ocrbench_v2_en",
+  "accuracy": 64.10437833350086,
+  "n_scored": 7400,
+  "n_ignored": 0,
+  "categories": {
+    "element_parsing": 41.936467292610956,
+    "knowledge_reasoning": 62.9544123269899,
+    "mathematical_calculation": 51.33317421077781,
+    "relationship_extraction": 87.45413720266662,
+    "text_detection": 58.59983277688132,
+    "text_recognition": 71.65064418820066,
+    "text_spotting": 66.58571970432155,
+    "visual_text_understanding": 72.32063896555817
+  },
+  "task_types": {
+    "APP agent en": 80.43329328719061,
+    "ASCII art classification en": 59.0,
+    "VQA with position en": 67.88925003998631,
+    "chart parsing en": 36.84443958260963,
+    "cognition VQA en": 68.89603831903203,
+    "diagram QA en": 85.66666666666667,
+    "document classification en": 66.0,
+    "document parsing en": 39.00499474591096,
+    "fine-grained text recognition en": 60.638884272078656,
+    "formula recognition en": 13.750000000000002,
+    "full-page OCR en": 83.76498085712527,
+    "key information extraction en": 80.88152415395062,
+    "key information mapping en": 96.21762126762127,
+    "math QA en": 49.0,
+    "reasoning VQA en": 54.4212962962963,
+    "science QA en": 65.17803831283636,
+    "table parsing en": 78.14643484192324,
+    "text counting en": 54.83293552694454,
+    "text grounding en": 44.66570688222385,
+    "text recognition en": 71.375,
+    "text spotting en": 66.58571970432155
+  },
+  "generation": {
+    "n": 7400,
+    "truncated": 409,
+    "empty_content": 394,
+    "tokens_p50": 471,
+    "tokens_p95": 8192,
+    "tokens_max": 8192
+  }
+}
