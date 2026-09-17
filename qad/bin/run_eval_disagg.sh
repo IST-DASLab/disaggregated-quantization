@@ -21,8 +21,7 @@
 # Results:  qad/results/disagg/think/<tag>/step_<N>.json   (or nothink/)
 # Logs:     logs/eval_disagg/<timestamp>_<label>/
 #
-# Requires TWO GPUs per task (prefill on 0, decode on 1). See DISAGG.md for the two
-# non-default connector settings this cluster needs and why.
+# Requires TWO GPUs per task (prefill on 0, decode on 1).
 
 #SBATCH --job-name=qad-disagg
 #SBATCH --nodes=1

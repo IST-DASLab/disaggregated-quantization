@@ -27,7 +27,7 @@
 if [ -z "$SLURM_JOB_ID" ]; then
     # cd+pwd (bash builtins, no -P) rather than realpath: realpath calls getcwd(),
     # which resolves the /lustre->/scratch symlink and would hand sbatch a /scratch
-    # path -- invisible to the container, which only mounts /lustre. See MIGRATION.md.
+    # path -- invisible to the container, which only mounts /lustre.
     SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     SELF="$SELF_DIR/$(basename "${BASH_SOURCE[0]}")"
     # This script lives in qad/bin/, so the repo root is two levels up.
@@ -126,8 +126,7 @@ QAD_DIR=$(dirname "$SCRIPT_DIR")         # qad -- anchors checkpoints/, wandb/, 
 # three path spellings. Rather than replay the old cluster's logical-vs-physical dance,
 # everything here uses the PHYSICAL /scratch path and the srun below mounts
 # /scratch:/scratch. getcwd()/realpath then agree with the mount, so the whole class of
-# "file is right there but invisible inside the container" bugs cannot occur. See
-# MIGRATION.md §1 for what this replaces.
+# "file is right there but invisible inside the container" bugs cannot occur.
 PD_ROOT=${PD_ROOT:-/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode}
 CONTAINER=${CONTAINER:-$PD_ROOT/containers/nemo-26.02.sqsh}
 HF_CACHE=${HF_CACHE:-$PD_ROOT/hf_cache}
@@ -163,9 +162,6 @@ srun \
         # Offline mode removes the fetch, so every rank reads the warm snapshot directly.
         # Same setting bin/run_eval_disagg.sh already uses. Override only to warm a cache.
         export HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-1}
-        # psx-luts carries the luts extension nvr2bit imports lazily. NO BACKTICKS:
-        # this whole block is a double-quoted bash -c string, so backticks are
-        # command substitution and even a COMMENT gets executed.
         # venv_overlay: this container's extras (wandb, datasets, ...) live only in
         # /opt/venv, which the NVIDIA GPU container-runtime hooks silently hide/replace
         # on a GPU-allocated job (confirmed: PATH loses /opt/venv/bin and the
@@ -184,9 +180,9 @@ srun \
         # so that if a future image DOES hide it, populating this path is the only fix
         # needed. This is the TRAINING overlay and stays a SEPARATE tree from evals'
         # lm_eval_overlay: this one is APPENDED to sys.path (container packages win),
-        # the eval one is PREPENDED (lm_eval must win). See MIGRATION.md §3/§4.
+        # the eval one is PREPENDED (lm_eval must win).
         export VENV_OVERLAY=${VENV_OVERLAY:-$PD_ROOT/venv_overlay}
-        export PYTHONPATH=$QAD_DIR:${PSX_LUTS_PATH:-$PD_ROOT/psx-luts}:\$PYTHONPATH
+        export PYTHONPATH=$QAD_DIR:\$PYTHONPATH
         export WANDB_MODE=${WANDB_MODE:-online}
         # wandb creates its run directory under \$WANDB_DIR, which defaults to the
         # CWD — and inside the container that is not a writable path, so wandb.init()

@@ -8,7 +8,7 @@ If the KV never crosses, the decode engine simply recomputes the prompt with its
 weights. Every request succeeds, every completion is fluent, and the number reported is
 homogeneous-decode wearing a disaggregated label. Nothing in the logs says "I fell back".
 
-For the quantized pairs in qad/serving/DISAGG.md the giveaway was behavioural: a W4A4
+For the quantized pairs the giveaway was behavioural: a W4A4
 prefill feeding a W4A16 decode produces text that neither homogeneous stack produces, so
 A != B and A != C settles it. That test is USELESS here. Both engines hold identical
 BF16 weights, so local recompute and a successful transfer are distributionally

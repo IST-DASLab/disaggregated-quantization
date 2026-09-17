@@ -103,8 +103,7 @@ def main() -> None:
     if not args.think:
         # Qwen3 suppresses thinking through a chat-template kwarg. FORCE it: the previous
         # version used kwargs.setdefault(), which never took effect, so every run in the
-        # old results/vllm/ was silently thinking-ENABLED despite --no-think. See
-        # DISAGG.md / the 2026-07-29 investigation.
+        # old results/vllm/ was silently thinking-ENABLED despite --no-think.
         tok = lm.tokenizer
         _orig = tok.apply_chat_template
 

@@ -24,7 +24,7 @@ verify_kv_transfer.py, which compares a disaggregated pair against the homogeneo
 decode-only stack and requires them to DIFFER.
 
 Two non-default settings are required on this cluster and are applied by
-run_nixl_server.sh; see DISAGG.md for the evidence behind each:
+run_nixl_server.sh:
   * kv_buffer_device=cpu   — the container's UCX is built without CUDA support, so
     registering VRAM fails at engine init on every node.
   * enforce_handshake_compat=false — Nixl's compatibility hash includes the model

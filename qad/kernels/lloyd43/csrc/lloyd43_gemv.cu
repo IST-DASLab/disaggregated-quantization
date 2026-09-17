@@ -9,7 +9,7 @@
 //
 // WHY IT IS SHAPED THIS WAY
 // -------------------------
-// The Triton work (HANDOFF.md 5.1-5.2) established that this problem is bound by the
+// The Triton work established that this problem is bound by the
 // memory ACCESS PATTERN, not by arithmetic: ablating the unpack and the LUT lookup out of
 // the Triton kernel entirely left it no faster. So the design goal is long contiguous
 // reads, enough of them in flight, and no cross-lane traffic in the k loop.

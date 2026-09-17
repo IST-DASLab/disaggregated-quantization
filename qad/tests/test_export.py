@@ -107,7 +107,7 @@ def test_variants():
 
 
 # ---------------------------------------------------------------------------
-# Text-only export of a multimodal wrapper (docs/GEMMA3_PLAN.md 2.2b)
+# Text-only export of a multimodal wrapper
 # ---------------------------------------------------------------------------
 def tiny_wrapper():
     """A 2-layer Gemma3ForConditionalGeneration, built from the 4b config.

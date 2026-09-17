@@ -17,7 +17,7 @@ TIME=${TIME:-00:30:00}
 
 # tests/ and the importable packages live in the qad root, one level up from bin/.
 # cd+pwd (bash builtins, no -P) rather than realpath: realpath calls getcwd(), which
-# resolves the /lustre->/scratch symlink -- see MIGRATION.md and run_qad.sh's SELF_DIR.
+# resolves the /lustre->/scratch symlink.
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$(dirname "$SELF_DIR")" || exit 1
 

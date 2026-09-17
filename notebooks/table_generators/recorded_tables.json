@@ -171,7 +171,7 @@
       },
       {
         "cells": [
-          "Qwen3.8-27B, frozen-decode disaggregation",
+          "Qwen3.8-27B, frozen-decode",
           "64",
           "2",
           "32",
@@ -241,9 +241,11 @@
           "4096",
           "12288",
           "151936",
-          "no  \\"
-        ],
-        "after": "hline"
+          "no"
+        ]
+      },
+      {
+        "rule": "\\midrule"
       },
       {
         "cells": [
@@ -282,9 +284,11 @@
           "3840",
           "15360",
           "262208",
-          "yes \\"
-        ],
-        "after": "hline"
+          "yes"
+        ]
+      },
+      {
+        "rule": "\\midrule"
       },
       {
         "cells": [

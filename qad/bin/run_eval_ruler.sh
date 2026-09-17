@@ -183,8 +183,7 @@ print(','.join(str(x) for x in out))
     fi
 
     # Qwen family only: "with and without reasoning" per the ask that created this
-    # script. Gemma-3 is think-only everywhere else in this repo (see
-    # GEMMA3_PLAN.md); a Gemma --no-think request is passed through so
+    # script. Gemma-3 is think-only everywhere else in this repo; a Gemma --no-think request is passed through so
     # eval_ruler.py's own hard-fail still catches a mistaken override rather than
     # this script silently swallowing it.
     # NOT both modes for Qwen: RULER's per-task generation budget is a fixed 128
@@ -269,7 +268,7 @@ export HF_HOME=$HF_CACHE
 export TOKENIZERS_PARALLELISM=false
 # RULER's niah tasks auto-fetch nltk's punkt_tab on first use. Without this it lands in a
 # container-internal path that --no-container-mount-home throws away, so EVERY job
-# re-downloads it (MIGRATION.md §6). Point it at a persistent shared dir instead; it is
+# re-downloads it. Point it at a persistent shared dir instead; it is
 # already warm, so RULER jobs no longer depend on that fetch succeeding at all.
 export NLTK_DATA=${NLTK_DATA:-/scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/nltk_data}
 export HF_DATASETS_OFFLINE=1

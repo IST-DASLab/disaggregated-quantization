@@ -5,8 +5,6 @@ anything; the working path is NixlConnector (`../../serving/run_nixl_server.sh`)
 than deleted because two of the bugs found here are real and were expensive to find,
 and this tree is kept for the record.
 
-See `../../docs/DISAGG.md` for the full write-up.
-
 Outcome: KV transfers correctly (verified: 28/28 layers, byte-identical checksums on
 both ends) but generated text is garbage in all four configurations tried
 (homogeneous/heterogeneous x CUDA graphs/eager), against a clean single-server

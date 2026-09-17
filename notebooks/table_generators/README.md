@@ -32,7 +32,7 @@ Tables containing red incomplete-result markers remain explicitly incomplete;
 | `qadd27b_accuracy` | `make_qadd27b_table.py` | Notebook Unsloth loader, all eight formats, mandatory step 980 |
 | `qadd27b_lengths` | `make_qadd27b_lengths_table.py` | Per-item `*_lengths.npz` exports and final-step results summaries, same quantized arms as the accuracy table |
 | `interop` | `make_interop_table.py` | `cross_grid.py` exported-score mode, full 3-decode by 4-prefill grids at step 980 |
-| `prefill-per-model` | `make_prefill_table.py` | `qad/kernels/prefill/offload_prefill.csv`, resident and `zero-ssd` |
+| `prefill-per-model` | `make_prefill_table.py` | `qad/kernels/prefill/offload_prefill.csv`, resident and `zero-ssd`; core Qwen 3/Gemma 3 only (27B uses separate llama.cpp measurements) |
 | `nvfp4-breakdown` | `make_breakdown_table.py` | `nvfp4_breakdown.csv` plus resident full-stack timings |
 | `hyper`, `parallel`, `models` | `make_recorded_table.py NAME` | Explicit setup metadata in `recorded_tables.json` |
 | `attn-backend` | `make_recorded_table.py attn-backend` | Historical attention timings recorded in `recorded_tables.json` |

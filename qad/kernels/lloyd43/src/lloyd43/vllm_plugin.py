@@ -9,7 +9,7 @@ module has been imported. `vllm_serve.py` in this directory does the import for 
 QUANTIZES ON THE FLY, ON PURPOSE
 --------------------------------
 QAD has no packed-lloyd43 checkpoint format yet -- `pack_from_weight` is the only producer
-and it works off a live weight tensor (HANDOFF 8). So this method loads an ordinary bf16
+and it works off a live weight tensor. So this method loads an ordinary bf16
 checkpoint and packs each linear in `process_weights_after_loading`, then drops the bf16
 copy. That is the same shape of thing vLLM's on-the-fly fp8 does, it needs no new
 checkpoint format, and it means the numbers below are measured against the *same weights*

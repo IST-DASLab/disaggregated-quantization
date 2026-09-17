@@ -253,11 +253,8 @@ qad/cluster_scripts/.eval_submissions.jsonl
 # The measurements themselves -- summary.json and evals/scores/ -- stay versioned.
 evals/results/*/arm_comparison.json
 
-# luts backend -- not for version control
-qad/quantizers/luts_backend.py
 qad/data/
 qad/cluster_scripts/bench_*.py
-qad/tests/test_*nvr*.py
 
 # Eval generations. Logged by default (see bin/run_eval*.sh) because the scores alone
 # cannot answer later questions -- length, refusals, format failures, repetition loops --

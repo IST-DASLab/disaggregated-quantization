@@ -109,7 +109,8 @@ class ODPReportingTests(unittest.TestCase):
         section = (ROOT / "notebooks/tables/prefill-per-model.tex").read_text()
         table_rows = [line for line in section.splitlines()
                       if line.startswith(("Qwen3-", "Qwen3.8-", "Gemma-3-"))]
-        self.assertEqual(len(table_rows), 9)
+        self.assertEqual(len(table_rows), 8)
+        self.assertNotIn("Qwen3.8-27B", section)
         models = {r["model"] for r in self.rows}
         for line in table_rows:
             cells = [part.strip() for part in line.split("&")]

@@ -26,7 +26,7 @@ import torch.nn.functional as F
 from torch import Tensor
 
 from .blocked import (qlinear, BLOCK, GLOBAL_DEN, SCALE_REF, BlockScaledLinear,
-                      blocked_quantize, replace_linears, ste, to_e4m3)
+                      blocked_quantize, replace_linears, ste)
 # torch.compile keys its cache on a guard signature, and e2m1_round is reached from
 # several: fp32 weights under no_grad in post_update, activations in the forward, and
 # the export packer. The default limit of 8 is below that count, and exceeding it makes
@@ -116,8 +116,7 @@ def fake_quant_ste(x: Tensor, block: int, global_scale: Tensor | None) -> Tensor
 
 
 def pack_nvfp4_weight(w: Tensor, block: int = BLOCK, global_scale: Tensor | None = None,
-                      signed: bool = False,
-                      block_eff: Tensor | None = None) -> tuple[Tensor, Tensor, Tensor]:
+                      signed: bool = False) -> tuple[Tensor, Tensor, Tensor]:
     """Encode a weight matrix into the real NVFP4 checkpoint tensors, using the
     SAME scales as nvfp4_quantize so the packed weight is bit-identical to the
     fake-quantized `_wq` the model trained with.  `global_scale` should be the
@@ -128,18 +127,8 @@ def pack_nvfp4_weight(w: Tensor, block: int = BLOCK, global_scale: Tensor | None
     """
     O, K = w.shape
     assert K % block == 0, f"in_features {K} not divisible by block {block}"
-    if block_eff is not None:
-        # Caller supplies the EFFECTIVE per-block scale. Needed when the weight was
-        # produced by something other than max-based block scaling: nvr2bit's vector
-        # quantizer does not always put code 6.0 on a block's peak (2.66% of blocks peak
-        # at 4), so recomputing block_amax/6 here re-rounds 1.08% of elements and turns
-        # an exact re-encode into a lossy one.
-        if global_scale is None:
-            global_scale = (w.abs().amax() / GLOBAL_DEN).clamp(min=1e-8)
-        block_scale = to_e4m3(block_eff.reshape(O, K // block).float() / global_scale)
-    else:
-        _, block_scale, global_scale = nvfp4_quantize(w, block, global_scale=global_scale,
-                                                      signed=signed)
+    _, block_scale, global_scale = nvfp4_quantize(w, block, global_scale=global_scale,
+                                                  signed=signed)
     # Guard the MAGNITUDE, not the value. `.clamp(min=1e-8)` floors negatives to +1e-8,
     # which is invisible while scales are all positive and catastrophic once `signed`
     # lets them go negative -- it discards exactly the sign the signed normalisation

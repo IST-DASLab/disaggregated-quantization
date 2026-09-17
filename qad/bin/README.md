@@ -30,7 +30,6 @@ Resource footprint, as declared in each script's `#SBATCH` header:
 |---|---|---|---|
 | `run_qad.sh` | 1 | 8 | 4 h (cluster cap — see `--chain`) |
 | `run_eval_disagg.sh` | 1 | 2 | 4 h |
-| `run_eval_dual.sh` | 1 | 1 | 3 h |
 | `run_eval_vllm.sh`, `run_eval.sh` | 1 | 1 | 2 h |
 | `run_tests.sh` | 1 | 8 (1 unless `test_checkpoint` is selected) | 30 min, interactive QoS |
 
@@ -78,24 +77,7 @@ Supplies `lm_eval` and its dependencies. It goes on the **driver's** `PYTHONPATH
 `nixl` + the CUDA-matched `nixl_cu13` wheel, installed with **`--no-deps`**. Put on the
 **servers'** `PYTHONPATH` by `serving/run_nixl_server.sh` (`$NIXL_PREFIX`).
 
-> Do **not** use the sibling `nixl_overlay/` (5.2 GB). That was an install *without*
-> `--no-deps`; it dragged in a second copy of torch which shadows the container's and
-> breaks `vllm._C` with an undefined `at::TensorBase` symbol. It is kept only as a
-> record of the failure. `diagnostics/run_nixl_check.sh` is the test that proves
-> `import nixl._api` and `import vllm` can coexist in one interpreter.
-
-### 4. `psx-luts` — the LUT extension (858 MB)
-```
-/lustre/fsw/portfolios/adlr/users/apanferov/prefill-decode/psx-luts     # $PSX_LUTS_PATH
-```
-A compiled extension imported lazily by the 2-bit LUT quantizer, added to `PYTHONPATH` by
-`run_qad.sh`. It must be **built** before use, or the import raises with instructions:
-```bash
-cd "$PSX_LUTS_PATH" && PSX_LUTS_FAST_BUILD=1 python setup.py build_ext --inplace
-```
-Only the `nvr2bit` / `nvfp4nvr2bit*` formats touch it; everything else runs without it.
-
-### 5. `third_party/Liger-Kernel/src`
+### 4. `third_party/Liger-Kernel/src`
 Added to `sys.path` directly by `training/qad.py` and `eval/eval_transformers.py` for
 `LigerFusedLinearJSDLoss` (the fused distillation loss). No environment variable — it is
 resolved relative to the repo root.
@@ -181,12 +163,6 @@ Other drivers, all sharing the same tag convention and on-disk layout:
 |---|---|---|
 | `run_eval_vllm.sh` | single-engine vLLM serving | `results/vllm/{think,nothink}/` |
 | `run_eval.sh` | in-process `transformers` + lm-eval | `results/transformers/` |
-| `run_eval_dual.sh` | dual formats via HF `generate()` | `results/dual/` |
-
-`run_eval_dual.sh` predates real disaggregated serving: HF `generate()` does one
-multi-token prompt pass then one token at a time, which is the prefill/decode split, so a
-dual-format model switches format on its own. `run_eval_disagg.sh` now answers the same
-question on real serving infrastructure and is preferred.
 
 ## Tests — `run_tests.sh`
 
@@ -223,13 +199,10 @@ Serving and diagnostics:
 ```bash
 ./serving/run_nixl_server.sh --prefill-model DIR --decode-model DIR \
      --tokenizer Qwen/Qwen3-0.6B --ready-file /path/ready
-./diagnostics/run_nixl_1p1d.sh                # end-to-end 1P1D smoke test
 ./diagnostics/run_kv_verify.sh                # gate: does KV actually cross?
-./diagnostics/run_nixl_check.sh               # can nixl and vllm coexist in one interpreter?
-./diagnostics/run_nixl_ucx_diag.sh            # UCX/CUDA registration diagnosis
 ```
 
 `run_kv_verify.sh` is the gate on every disaggregated number. If the KV transfer silently
 fails, the decode engine just recomputes the prompt with its own weights and returns a
 fluent, plausible answer — the eval reports a "disaggregated" score that is really
-homogeneous-decode, and nothing in the output looks wrong. See `docs/DISAGG.md`.
+homogeneous-decode, and nothing in the output looks wrong.

@@ -1,10 +1,9 @@
-"""Generate tab:prefill-per-model from the cold-start zero-SSD protocol."""
+"""Generate core Qwen 3/Gemma 3 stack timings; 27B uses separate llama.cpp measurements."""
 from common import prefill_data, latency, row
 
 MODELS = [
     ("Qwen/Qwen3-0.6B", "Qwen3-0.6B"), ("Qwen/Qwen3-1.7B", "Qwen3-1.7B"),
     ("Qwen/Qwen3-4B", "Qwen3-4B"), ("Qwen/Qwen3-8B", "Qwen3-8B"),
-    ("Qwen/Qwen3.8-27B", r"Qwen3.8-27B$^{\star}$"),
     ("google/gemma-3-270m", "Gemma-3-270M"), ("google/gemma-3-1b-it", "Gemma-3-1B"),
     ("google/gemma-3-4b-it", "Gemma-3-4B"), ("google/gemma-3-12b-it", "Gemma-3-12B"),
 ]
@@ -26,7 +25,7 @@ def render():
             for mode in ("resident", "zero-ssd"):
                 cells.append(f"{baseline / latency(data, model, 'nvfp4', mode, length):.2f}" + r"$\times$")
         lines.append(row(cells))
-        if model == "Qwen/Qwen3.8-27B":
+        if model == "Qwen/Qwen3-8B":
             lines.append(r"\midrule")
     return "\n".join(lines + [r"\bottomrule", r"\end{tabular}"])
 

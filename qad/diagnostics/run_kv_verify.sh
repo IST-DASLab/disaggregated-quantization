@@ -58,7 +58,7 @@ fi
 # HOST mode: re-invoke inside the container
 # ---------------------------------------------------------------------------
 if command -v scontrol &>/dev/null && [ -z "${KV_IN_CONTAINER:-}" ]; then
-    # `exit` after the first match is REQUIRED (see run_eval_dual.sh): scontrol can
+    # `exit` after the first match is REQUIRED: scontrol can
     # print several records and a multi-line path kills the task with exit 127.
     SCRIPT_PATH=$(scontrol show job "$SLURM_JOB_ID" | awk -F= '/Command=/{print $2; exit}')
     export SCRIPT_DIR=$(dirname "$SCRIPT_PATH")   # qad/diagnostics

@@ -10,8 +10,9 @@ shading. The separate `*_prompt_ms` measurements are retained, but are not TTFT
 and are not substituted for it.
 
 The supplied central TTFT statistic was not identified as a mean or median.
-Hardware and the baseline checkpoint/precision have not yet been specified.
-Do not infer those from the older DGX Spark transformer-stack microbenchmarks.
+The baseline is Unsloth's Qwen3.8-27B IQ1_S checkpoint using llama.cpp's native
+weight-only pathway. Hardware was not specified alongside the supplied CSV;
+do not infer it from the older DGX Spark transformer-stack microbenchmarks.
 No isolated SSD-loading-floor measurement was supplied for this run. The plot
 shows context lengths from 1K onward and restores the earlier 2645.159 ms
 load-only reference from `qad/kernels/prefill/load_floor_zero_ssd.csv`

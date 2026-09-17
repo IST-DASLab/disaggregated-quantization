@@ -70,7 +70,7 @@ cost; here it is pure overhead. Measured, it is worth 7-8% at 0.6B and 2-3% at 8
 -- almost entirely per-launch, so it shrinks as weight traffic grows.
 
 There is no roofline series: the memory ceiling is a bound on lloyd43's traffic
-specifically (HANDOFF 5.1) and is not a quantity the NVFP4 bars can be read against.
+specifically and is not a quantity the NVFP4 bars can be read against.
 """
 
 import argparse

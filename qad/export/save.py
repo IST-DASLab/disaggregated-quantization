@@ -43,7 +43,7 @@ from quantizers.full_disag import DualParamModule
 # block_size 16). So `model_type: gemma3` and `model_type: gemma3_text` cannot be served
 # by one backend, and the text-only shape is the only one that covers the whole family.
 # It is also the only thing we train: QAD quantizes text_stack(model).base and nothing
-# else. See docs/GEMMA3_PLAN.md 2.2b.
+# else.
 #
 # Explicit table, for the same reason training/models.py keeps _TEXT_PATHS explicit: a
 # guess here produces a checkpoint that loads and then serves garbage.
@@ -332,8 +332,7 @@ def text_only_config(config, arch: str):
     the two fields `text_config` does not serialize for itself.
 
     `model_type` is already "gemma3_text" on the sub-config -- that field is what makes
-    FLASH_ATTN legal again -- but `architectures` is None on it, which is exactly the
-    hand-patch docs/GEMMA3_PLAN.md 2.2 flagged. Paid here, once, at export time.
+    FLASH_ATTN legal again -- but `architectures` is None on it, handled here at export time.
     """
     text = copy.deepcopy(config.text_config)
     text.architectures = [arch]

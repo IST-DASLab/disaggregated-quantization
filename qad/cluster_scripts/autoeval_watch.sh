@@ -7,7 +7,6 @@
 #   <ctrl-b d>            # detach; reattach later with: tmux attach -t autoeval
 #
 #   INTERVAL=600 ./cluster_scripts/autoeval_watch.sh        # poll every 10 min
-#   ./cluster_scripts/autoeval_watch.sh --formats nvr2bit   # narrow to one format
 #   ./cluster_scripts/autoeval_watch.sh --family gemma3     # Gemma-3 instead of Qwen3
 #
 # Every argument is forwarded verbatim to submit_missing_evals.py, so --family/--models/

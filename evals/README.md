@@ -270,7 +270,7 @@ otherwise a score that is merely slightly off.
 engine just recomputes the prompt with its own weights: the request succeeds, the text
 is fluent, and the number reported is really homogeneous-decode. Nothing logs a fallback.
 
-The A/B/C attribution test used for the quantized pairs in `qad/serving/DISAGG.md`
+The A/B/C attribution test used for the quantized pairs
 **cannot work here** — both engines hold identical BF16 weights, so local recompute and a
 successful transfer are distributionally identical and no amount of reading completions
 separates them. What does separate them is *where the prefill work happened*, which the

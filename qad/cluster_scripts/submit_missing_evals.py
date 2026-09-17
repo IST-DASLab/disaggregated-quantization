@@ -105,7 +105,6 @@ LABELS = {
     # "lloyd21": "the lloyd43 construction at 2 BITS"). It read W3A16 here, which would
     # have put the wrong bit-width on every plot legend that reads LABELS.
     "lloyd3bit": "W3A16-Lloyd", "lloyd43": "W3A16-Lloyd43", "lloyd21": "W2A16-Lloyd21",
-    "nvr2bit": "NVR2BIT",
     "nvfp4pdshared": "NVFP4-pd-shared", "nvfp4pdsplit": "NVFP4-pd-split",
     "nvfp4prefill": "NVFP4-prefill", "nvfp4decode": "NVFP4-decode",
     "nvfp4lloyd43shared": "NVFP4-Lloyd43-shared",
@@ -116,8 +115,6 @@ LABELS = {
     # Non-disaggregated controls: the upcast weight served on BOTH phases.
     "nvfp4lloyd43upcastboth": "NVFP4-Lloyd43-upcastboth",
     "nvfp4lloyd21upcastboth": "NVFP4-Lloyd21-upcastboth",
-    "nvfp4nvr2bitupcast": "NVFP4-NVR2BIT-upcast",
-    "nvfp4nvr2bitsplit": "NVFP4-NVR2BIT-split",
 }
 
 # Excluded from the DEFAULT --formats, not from LABELS: still coverable with an explicit

@@ -10,9 +10,8 @@ from torch import Tensor
 from .blocked import (qlinear, BLOCK, GLOBAL_DEN, blocked_quantize, grid_rounder,
                       replace_linears, ste)
 from .grids import LLOYD21_SIGNED_2BIT, LLOYD43_SIGNED_3BIT
-from .nvfp4 import (NVFP4Linear, fake_quant_ste, pack_nvfp4_weight,
+from .nvfp4 import (NVFP4Linear, fake_quant_ste,
                     unpack_nvfp4_weight)
-from .nvr2bit import NUM_PROBES as NVR2BIT_PROBES, nvr2bit_quantize
 
 # [B, T] bool, True where the PREFILL format applies. None => infer from shape.
 _PHASE_MASK: Tensor | None = None
@@ -570,102 +569,4 @@ class NVFP4Lloyd21SplitLinear(NVFP4Lloyd43SplitLinear):
 
 def apply_nvfp4lloyd21split(model: nn.Module, block_size: int = BLOCK) -> None:
     replace_linears(model, lambda lin: NVFP4Lloyd21SplitLinear.from_linear(
-        lin, block_size=block_size))
-
-
-class _NVFP4NVR2BitMixin:
-    NVR2BIT_HEAVY = True
-    num_probes = NVR2BIT_PROBES
-
-    def _decode_group_amax(self) -> Tensor:
-        members = self._group if (self._group and len(self._group) > 1) else [self]
-        return max(m.decode_amax() for m in members)
-
-    def quantize_decode_weight(self):
-        return (nvr2bit_quantize(self._decode_master().detach(),
-                                 self._decode_group_amax(), self.num_probes),)
-
-    @torch.no_grad()
-    def refresh_buffers(self) -> None:
-        raise NotImplementedError
-
-
-class NVFP4NVR2BitUpcastLinear(_DualActMixin, NVFP4Linear):
-    NVR2BIT_HEAVY = True
-    signed = False
-    num_probes = NVR2BIT_PROBES
-
-    def __init__(self, weight: Tensor, bias, block_size: int = BLOCK):
-        super().__init__(weight, bias, block_size=block_size, quantize_act=True)
-
-    def group_amax(self) -> Tensor:
-        members = self._group if (self._group and len(self._group) > 1) else [self]
-        return max(m.amax() for m in members)
-
-    def quantize_weight(self):
-        return (nvr2bit_quantize(self.weight.detach(), self.group_amax(),
-                                 self.num_probes),)
-
-    @torch.no_grad()
-    def refresh_buffers(self) -> None:
-        self._wq.copy_(self._compute_wq())
-
-    def forward(self, x: Tensor) -> Tensor:
-        w = self.wq if not self.training else self._differentiable_weight()
-        phase = _phase_for(x)
-        if not torch.is_tensor(phase):
-            return qlinear(self._quant_act(x) if phase else x, w, self.bias)
-        return qlinear(torch.where(phase, self._quant_act(x, phase), x), w, self.bias)
-
-    @classmethod
-    def export_variants(cls) -> list:
-        return ["prefill", "decode"]
-
-    def _variant_weight(self, variant) -> Tensor:
-        return self.wq
-
-    def _variant_quantize_act(self, variant) -> bool:
-        return variant != "decode"
-
-    def export_tensors(self, variant=None) -> dict:
-        # use codebook-recovered block scales, not block_amax/6
-        from .luts_backend import _recover_scales
-        gscale = self._variant_global_scale(variant)
-        # RECOMPUTED in fp32 rather than packed from the bf16 `_wq` cache. Packing
-        # re-rounds onto the E2M1 grid, and a bf16 value sitting near a level midpoint
-        # snaps to the NEIGHBOURING level -- half a grid step, which on the 2-bit grid is
-        # ~20x bf16's own rounding (measured 3.8e-2 relative against 2e-3 for storage
-        # alone). Packing the cache would ship a checkpoint that does not match what
-        # training computed. Export is not a hot path; the forward still uses the cache.
-        w = self._compute_wq()
-        packed, wscale, wscale2 = pack_nvfp4_weight(
-            w, self.block_size, global_scale=gscale, signed=self.signed,
-            block_eff=_recover_scales(w, self.block_size))
-        out = {"weight_packed": packed.cpu(), "weight_scale": wscale.cpu(),
-               "weight_global_scale": (1.0 / wscale2).reshape(1).cpu()}
-        if self._variant_quantize_act(variant):
-            act = self.act_amax.float().clamp(min=1e-8)
-            out["input_global_scale"] = (GLOBAL_DEN / act).reshape(1).cpu()
-        if self.bias is not None:
-            out["bias"] = self.bias.detach().to(torch.bfloat16).cpu()
-        return out
-
-
-class NVFP4NVR2BitSplitLinear(_NVFP4NVR2BitMixin, NVFP4Lloyd43SplitLinear):
-    """Two masters: NVFP4 (W4A4) prefill, nvr2bit (W2A16) decode."""
-
-    @torch.no_grad()
-    def refresh_buffers(self) -> None:
-        self._wq.copy_(self._compute_wq())
-        if self._wq_dec.numel():
-            self._wq_dec.copy_(self.quantize_decode_weight()[0])
-
-
-def apply_nvfp4nvr2bitupcast(model: nn.Module, block_size: int = BLOCK) -> None:
-    replace_linears(model, lambda lin: NVFP4NVR2BitUpcastLinear.from_linear(
-        lin, block_size=block_size))
-
-
-def apply_nvfp4nvr2bitsplit(model: nn.Module, block_size: int = BLOCK) -> None:
-    replace_linears(model, lambda lin: NVFP4NVR2BitSplitLinear.from_linear(
         lin, block_size=block_size))

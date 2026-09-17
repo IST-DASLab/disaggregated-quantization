@@ -86,7 +86,7 @@ SERVER_READY_TIMEOUT_S="${SERVER_READY_TIMEOUT_S:-1800}"
 # copy and the prepend below is a harmless no-op. Do NOT point this at the separately
 # pip-installed nixl_nodeps tree when running in that container: prepending a second nixl
 # shadows the one vLLM was built against. The out-of-container tree is only needed for an
-# image that lacks nixl entirely (as nemo-26.02 does). See MIGRATION.md §8.4.
+# image that lacks nixl entirely (as nemo-26.02 does).
 NIXL_PREFIX="${NIXL_PREFIX:-/usr/local/lib/python3.12/dist-packages}"
 # Extra flags appended verbatim to BOTH `vllm serve` invocations. Empty by default, so
 # every existing caller is unaffected. It exists because some models are unservable

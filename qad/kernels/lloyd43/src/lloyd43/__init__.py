@@ -16,8 +16,6 @@ the packer and the reference stay usable on a machine without it.
     packed, block_scale, global_scale = pack_from_weight(w)      # w: (N, K)
     y = gemv_lloyd43(x, packed, block_scale, global_scale, K=w.shape[1])
 
-See HANDOFF.md for the format definition, the current status, and the invariants a new
-implementation has to hold; tests/ is the executable version of that contract.
 """
 
 from .format import (BITS, BLOCK, E4M3_MAX, GLOBAL_DEN, GROUP, LUT, SCALE_REF,

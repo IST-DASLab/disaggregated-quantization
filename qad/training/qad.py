@@ -477,7 +477,7 @@ def main() -> None:
         if rank == 0:
             print(f"frozen (shared lm_head): {_head_n / 1e6:.1f}M params", flush=True)
     if args.full_disag:
-        # --full-disag is DEPRECATED (docs/GEMMA3_PLAN.md 2.7) and was only ever
+        # --full-disag is DEPRECATED and was only ever
         # validated on Qwen3. Two separate things break it elsewhere: Gemma3RMSNorm is
         # `(1 + weight)` with a zeros init, which DualRMSNorm does not implement (2.1),
         # and apply_full_disag's discovery walks the WHOLE model, so on a multimodal
@@ -487,7 +487,7 @@ def main() -> None:
                 or hasattr(student.config, "vision_config"):
             raise SystemExit(
                 "--full-disag is deprecated and is not supported for Gemma-3 or any "
-                "multimodal wrapper; see docs/GEMMA3_PLAN.md 2.7")
+                "multimodal wrapper")
         # After the quantizer, so the linears are already dual and this only has to deal
         # with what it skipped: the embedding, the norms and the head.
         n = apply_full_disag(student)
@@ -590,16 +590,6 @@ def main() -> None:
     # PIPELINE SPLIT. Deliberately after the teacher val baseline above, which runs the
     # whole teacher and cannot be computed once the stack is halved.
     if groups is not None:
-        # nvr2bit's post_update round-robins refresh_buffers() across ranks and then
-        # BROADCASTS each layer's _wq with src=i % world_size. Under PP the two stages
-        # hold DIFFERENT layers, so the loop length differs per stage and src names a
-        # rank that does not own that layer: it deadlocks, or worse, overwrites one
-        # stage's cache with the other's. Refuse up front rather than hang at step 1.
-        if "nvr2bit" in args.quantizer:
-            raise NotImplementedError(
-                f"--pp is not supported for {args.quantizer}: post_update_nvr2bit "
-                "broadcasts layer caches across the whole world with src=i % world, "
-                "which assumes every rank holds every layer. Train it with --pp 1.")
         # The tied embedding/head must be identified BEFORE splitting: afterwards each
         # stage holds only one of the two names and the tie is no longer observable.
         replicas = pp_mod.replicated_params(student_text.base, student_text.head,

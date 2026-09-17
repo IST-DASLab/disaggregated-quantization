@@ -24,14 +24,12 @@ from .dual import (apply_nvfp4prefill, apply_nvfp4decode,
                    apply_nvfp4lloyd43upcast, apply_nvfp4lloyd21upcast,
                    apply_nvfp4lloyd43upcastboth, apply_nvfp4lloyd21upcastboth,
                    apply_nvfp4lloyd21split,
-                   apply_nvfp4nvr2bitupcast, apply_nvfp4nvr2bitsplit,
                    apply_nvfp4pdshared, apply_nvfp4pdsplit,
                    prefill_mask_from_labels, quant_phase)
 from .frozen_decode import (apply_nvfp4frozendec, load_frozen_decode,
                             NVFP4FrozenDecodeLinear, SKIP_LINEARS)
 from .lloyd import apply_lloyd21, apply_lloyd3bit, apply_lloyd43
 from .nvfp4 import apply_nvfp4, apply_nvfp4a16, calibrate_nvfp4
-from .nvr2bit import apply_nvr2bit, post_update_nvr2bit
 from .quest import apply_quest2bit, apply_quest3bit, apply_quest4bit
 from .ste import apply_ste2bit, apply_ste3bit, apply_ste4bit
 
@@ -284,32 +282,6 @@ REGISTRY: dict = {
         "defaults":     {"block_size": 16},
         "export":       "compressed_tensors",
         "variants":     ["prefill", "decode"],
-    },
-    "nvfp4nvr2bitupcast": {
-        # NVFP4 W4A4 prefill + nvr2bit W2A16 decode, one master.
-        "apply":        apply_nvfp4nvr2bitupcast,
-        "param_groups": None,
-        "post_update":  post_update_nvr2bit,
-        "defaults":     {"block_size": 16},
-        "export":       "compressed_tensors",
-        "variants":     ["prefill", "decode"],
-    },
-    "nvfp4nvr2bitsplit": {
-        # NVFP4 W4A4 prefill + nvr2bit W2A16 decode, two masters.
-        "apply":        apply_nvfp4nvr2bitsplit,
-        "param_groups": None,
-        "post_update":  post_update_nvr2bit,
-        "defaults":     {"block_size": 16},
-        "export":       "compressed_tensors",
-        "variants":     ["prefill", "decode"],
-    },
-    "nvr2bit": {
-        # W2A16 2-bit LUT weight quantization, pseudo-quantized export.
-        "apply":        apply_nvr2bit,
-        "param_groups": None,
-        "post_update":  post_update_nvr2bit,
-        "defaults":     {"num_probes": 4},
-        "export":       "dequantized",
     },
     "lloyd21": {
         # The lloyd43 construction at 2 BITS: MSE-optimal subject to 0.0 and +6.0 being
