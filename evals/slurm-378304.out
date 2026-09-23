@@ -1,7 +1,0 @@
-  wrote model-00001.safetensors (1 tensors, 5.09 GB)
-  wrote model-00002.safetensors (1 tensors, 5.09 GB)
-  wrote model-00003.safetensors (638 tensors, 4.31 GB)
-  wrote model-00004.safetensors (640 tensors, 4.30 GB)
-  wrote model-00005.safetensors (640 tensors, 4.32 GB)
-  wrote model-00006.safetensors (464 tensors, 2.70 GB)
-kept 2384 tensors, dropped 208 '.inner' masters -> 6 shards, 25.8 GB in /scratch/fsw/portfolios/coreai/projects/coreai_psx_qad/users/apanferov/prefill_decode/models/qadu2250-Q2_K_XL-prefill

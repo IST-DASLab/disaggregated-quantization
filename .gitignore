@@ -309,3 +309,8 @@ evals/results/**/generation_complete
 evals/data/ruler/
 
 01_BRAND_ASSETS/
+
+# Local assistant workflows, scheduler logs and schematic previews
+/.claude/
+slurm-*.out
+/notebooks/schematics/preview*.png
