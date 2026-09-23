@@ -20,7 +20,7 @@ checkpoint from SSD without increasing device weight residency.
 
 Download the [released Qwen3.8-27B NVFP4 prefillers on Hugging Face](https://huggingface.co/ISTA-DASLab/Qwen3.8-27B-NVFP4-prefiller).
 
-[Qwen3.8-27B accuracy and time-to-first-token figure (PDF)](notebooks/figures/pareto_gsq_rco_both.pdf)
+[![Qwen3.8-27B accuracy and time to first token](notebooks/figures/pareto_gsq_rco_both.png)](notebooks/figures/pareto_gsq_rco_both.pdf)
 
 On Qwen3.8-27B with released Unsloth GGUF decoders:
 
@@ -53,7 +53,7 @@ Distillation gradients reach prefill through the representations consumed by dec
 training both pathways in one forward-backward pass. The same construction supports
 shared weights, separate weights, or a frozen external decoder.
 
-[QADD training schematic (PDF)](notebooks/figures/qadd_training.pdf)
+[![QADD training schematic](notebooks/figures/qadd_training.png)](notebooks/figures/qadd_training.pdf)
 
 ### Decode-heavy and prefill-heavy workloads
 
@@ -62,7 +62,7 @@ The core experiments cover Qwen 3 (0.6B, 1.7B, 4B, 8B) and Gemma 3
 Decode-heavy evaluation uses GSM8K, MATH-500 and MMLU-Pro; prefill-heavy evaluation
 uses RULER's 13 tasks at 4K, 8K, 16K and 32K context lengths.
 
-[Decode-heavy and prefill-heavy accuracy figure (PDF)](notebooks/figures/bars_disag_both.pdf)
+[![Decode-heavy and prefill-heavy accuracy](notebooks/figures/bars_disag_both.png)](notebooks/figures/bars_disag_both.pdf)
 
 Format disaggregation primarily improves decode-heavy accuracy. Full disaggregation
 improves low-bit accuracy on both workload types, with larger gains on prefill-heavy
@@ -87,7 +87,7 @@ During prefill, ODP borrows buffer space from temporarily unused decode weights,
 streams prefill blocks from SSD, and restores the decode carve-out before generation.
 Decode weights are resident during generation; prefill weights need not be.
 
-[ODP loading and computation timeline (PDF)](notebooks/figures/odp_timeline.pdf)
+[![ODP loading and computation timeline](notebooks/figures/odp_timeline.png)](notebooks/figures/odp_timeline.pdf)
 
 The schematic illustrates the core Qwen 3 pipeline, scaled to aggregate measurements;
 it is not a per-block profiler trace. At context lengths above 16K, ODP adds under 5%
