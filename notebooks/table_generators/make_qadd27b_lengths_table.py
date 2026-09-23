@@ -58,7 +58,7 @@ def render():
                   row([r"\multirow{2}{*}{Decode format}", r"\multicolumn{2}{c|}{Mean tokens}",
                        r"\multicolumn{2}{c|}{Median tokens}", r"\multicolumn{2}{c|}{95th percentile}",
                        r"\multicolumn{2}{c}{Truncated (\%)}"]),
-                  row([""] + ["WO", "Conj."] * 4), r"\midrule"]
+                  row([""] + ["WO", "Pref."] * 4), r"\midrule"]
         for fmt, label in labels.items():
             metrics = {}
             for disagg in (False, True):

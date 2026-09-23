@@ -58,12 +58,12 @@ per benchmark. It computes means, medians and linearly interpolated 95th percent
 from per-item completion-token counts, including zero counts and truncated outputs;
 lengths are displayed to the nearest token. Truncation rates use the matching
 results summaries. Missing or partial inputs, repeated/invalid IDs, multiple passes,
-or mismatched item sets fail generation. Only step 980 is used for conjugates;
+or mismatched item sets fail generation. Only step 980 is used for prefillers;
 earlier checkpoints and cross-format interoperability runs are not substituted.
 
 The interoperability table reuses `evals/drivers/cross_grid.py` for tag selection,
 per-item grids and exact McNemar tests. Both benchmarks require all twelve cells
-and full common item coverage. Bold identifies training-matched conjugates, not
+and full common item coverage. Bold identifies training-matched prefillers, not
 row maxima; stars compare each other cell to that matched reference (two-sided,
 uncorrected `p < 0.05`). Reproduce its comparisons without raw generations with:
 

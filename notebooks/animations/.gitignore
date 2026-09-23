@@ -1,0 +1,4 @@
+.venv/
+media/
+preview_frames/
+__pycache__/

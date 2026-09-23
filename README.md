@@ -1,5 +1,8 @@
 # Disaggregated Quantization: Specializing LLM Prefill and Decode
 
+[![arXiv: 2609.26333](https://img.shields.io/badge/arXiv-2609.26333-b31b1b.svg)](https://arxiv.org/abs/2609.26333)
+[![Hugging Face: Qwen3.8 prefillers](https://img.shields.io/badge/Hugging_Face-Released_prefillers-FFD21E.svg)](https://huggingface.co/ISTA-DASLab/Qwen3.8-27B-NVFP4-prefiller)
+
 [Training](qad/training/) · [Evaluation](evals/) · [Plots](notebooks/plots.ipynb)
 
 Prefill and decode reward different quantization choices: hardware-native low-precision
@@ -11,9 +14,11 @@ common response objective.
 ## Improve an existing quantized decoder
 
 A released weight-only checkpoint need not be retrained to benefit. We train an NVFP4
-**prefill conjugate** around its frozen decoder, retaining the existing decode weights
+**prefiller** around its frozen decoder, retaining the existing decode weights
 and kernels. **Offloaded disaggregated prefill (ODP)** streams the additional prefill
 checkpoint from SSD without increasing device weight residency.
+
+Download the [released Qwen3.8-27B NVFP4 prefillers on Hugging Face](https://huggingface.co/ISTA-DASLab/Qwen3.8-27B-NVFP4-prefiller).
 
 [![Qwen3.8-27B accuracy versus device weight size on MMLU-Pro and MMMU-Pro, alongside llama.cpp time to first token.](docs/figures/pareto_gsq_rco_both.png)](notebooks/figures/pareto_gsq_rco_both.pdf)
 
@@ -115,7 +120,7 @@ and defaults to two nodes. See the
 
 Core QADD runs use 100M Tülu 3 tokens, 2048-token sequences, global batch 64,
 and a constant learning rate of 3e-6 after 100 warmup steps.
-The Qwen3.8-27B conjugates instead use text-only reasoning traces, an 8192-token limit,
+The Qwen3.8-27B prefillers instead use text-only reasoning traces, an 8192-token limit,
 global batch 32 and the final checkpoint at step 980; see the manuscript for the full setup.
 
 ```bash
@@ -155,7 +160,7 @@ Core results live in [qad/results/disagg/](qad/results/disagg/) and
 | Format-disaggregated LUT2 | `nvfp4lloyd21upcast` | LUT2 → NVFP4 / weight-only LUT2 |
 | Fully-disaggregated LUT2 | `nvfp4lloyd21split` | Separate NVFP4 / weight-only LUT2 |
 | Weight-only LUT3 / LUT2 | `lloyd43` / `lloyd21` | Weight-only in both phases |
-| Frozen-decoder conjugate | `nvfp4frozendec` | Trainable NVFP4 / fixed external decode weights |
+| Frozen-decoder prefiller | `nvfp4frozendec` | Trainable NVFP4 / fixed external decode weights |
 
 `nvfp4prefill` and `nvfp4decode` are phase-isolation controls: one phase uses NVFP4
 and the other BF16. `--full-disag` is a separate ablation that also duplicates normally
@@ -200,3 +205,17 @@ cd qad
 The manuscript distinguishes measured latency from proxy timings, and documents the
 accuracy protocols and their limitations. Highly batched serving, multi-turn cache
 rebuilds and agentic behavior are not evaluated.
+
+## Cite this work
+
+```bibtex
+@misc{panferov2026disaggregatedquantizationspecializingllm,
+      title={Disaggregated Quantization: Specializing LLM Prefill and Decode},
+      author={Andrei Panferov and Maximilian Kleinegger and Sweta Priyadarshi and Tijmen Blankevoort and Dan Alistarh},
+      year={2026},
+      eprint={2609.26333},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2609.26333},
+}
+```

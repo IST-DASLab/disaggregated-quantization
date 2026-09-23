@@ -307,3 +307,5 @@ evals/results/**/generation_complete
 # Scoped to the corpus directory ONLY. evals/results/**, including every RULER
 # summary.json and raw.jsonl, stays versioned like all other measurements.
 evals/data/ruler/
+
+01_BRAND_ASSETS/
