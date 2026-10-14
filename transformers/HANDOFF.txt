@@ -1,0 +1,196 @@
+Qwen3.8 prefiller training: handoff for B200 x 8
+Date: 2026-10-14
+
+USER INTENT AND CURRENT STATE
+
+Implement the qad/training/qad.py nvfp4frozendec recipe with Hugging Face
+Trainer, existing UV environment, bare metal, no Slurm or vLLM runtime.
+The user requested stopping after validation/MFU, then cleanup, commit and this
+handoff for a B200 x 8 machine. Do not start a long training run automatically.
+The earlier prohibition on committing was explicitly superseded by that request.
+All local training processes were stopped; all 10 L40S GPUs were idle afterward.
+
+REQUIRED SEMANTICS: PRESERVE THESE
+
+Teacher: Qwen/Qwen3.8-27B-FP8, real HF FP8 storage and kernels, frozen/eval.
+Student: FP32 trainable masters initialized by HF FineGrainedFP8Config with
+dequantize=True. BF16 autocast for GEMMs must not replace FP32 stored masters.
+Decoder: ISTA-DASLab/GSQ-RCO-small,
+Qwen3.8-27B-GSQ-RCO-IQ1_S.gguf. Stream dequantization directly into frozen
+student parameters; do not create an intermediate dense checkpoint.
+
+The trainable/shared partition matches the reference quantizer. Specialized
+prefill linear masters and norm scales train. Separate decode matrices and
+norm scales are frozen. Embeddings/head, in_proj_a/b, A_log, dt_bias, convolution
+and other shared parameters are single frozen objects reused by both phases.
+Shared frozen values MUST come from the decoder, the inference source of truth.
+This deliberately differs from the original script's base initialization for
+those shared parameters. Norms are specialized in the reference, not shared.
+Do not put the student decode branch under no_grad: gradients through its inputs
+are required. Keep the routing mask active through checkpoint recomputation.
+
+IMPLEMENTATION MAP
+
+train.py: CLI, rank-zero cold loading / metadata-only other ranks, direct DCP
+  resume, memory-mapped reference dataset chunks, Trainer configuration.
+prefiller.py: text-only models, reference quantizer, decoder-source shared
+  weights, prefill-only trainability assertions, chunked KL, custom Trainer.
+gguf_decode.py: NumPy GGUF IQ1_S dequantization and Qwen35 tensor layout fixes;
+  adapted converter attribution and Apache license retained. No vLLM dependency.
+fsdp_compat.py: local Accelerate persistent-buffer initialization workaround.
+offload.py: scoped Accelerate/FSDP2 wrapper selecting CPU/GPU residency by unit.
+metrics.py: step wall time, real/padded 6N student MFU, approximate QAD execution
+  utilization, peak allocated GPU memory. First step of each process is cold.
+launch.py/run.sh: local torchrun via existing .venv/UV, host RAM guard, descendant
+  cleanup on stop. Requirements are pinned in requirements.txt.
+export_prefiller.py: restore only student DCP tensors and export reference NVFP4
+  prefill checkpoint; metadata construction avoids reloading teacher weights.
+README.md: commands, sharing table, memory policies, metrics and limitations.
+
+CURRENT PARALLELISM
+
+FSDP2 across every local GPU. Different complete-sequence batches per rank;
+no TP or CP implementation. Each student/teacher decoder block and embedding
+is an FSDP unit; remaining heads/parameters belong to the root. Blocks reshard
+after forward. Teacher retains FP8, frozen decode matrices BF16, other student
+parameters FP32. MixedPrecisionPolicy(param_dtype=None, reduce_dtype=float32)
+is intentional: casting FP8 storage without scales would silently corrupt it.
+Activation checkpointing is enabled. CPU offload is currently the default.
+Global batch = ranks * --batch-size * --gradient-accumulation-steps.
+Default 10-rank global batch is 40; 8 ranks with defaults gives 32.
+
+Controls:
+  NPROC_PER_NODE, CUDA_VISIBLE_DEVICES, HOST_MEMORY_LIMIT_GIB (default 768)
+  --batch-size, --gradient-accumulation-steps, --max-seq-len
+  --logit-chunk-size (default 16; real-model runs used 128)
+  --no-cpu-offload (all shards, gradients and Adam state stay on GPU)
+  --teacher-resident (teacher block/embedding shards stay on GPU)
+  --student-resident-layers N (first N student blocks, gradients and Adam stay GPU)
+  --activation-offload (saved checkpoint inputs go to CPU)
+  --no-save-checkpoints (disposable benchmark; still evaluates/saves log history)
+
+TESTED RESULTS
+
+CPU: pytest transformers/test_prefiller.py: 4 passed. Checks reference partition,
+decoder-source shared weights, frozen tensors and bit-identical decode-only
+outputs after a prefill update, chunked KL loss/gradients, missing decoder
+coverage and GGUF layout transforms. This is tiny-model correctness evidence,
+not a full 27B post-update bitwise decoder comparison.
+
+Tiny 2-GPU hybrid Qwen: real FP8 MLP teacher kernels, FSDP training/eval/save/
+resume and NVFP4 export passed. Selective teacher + one student block residency
+with activation offload also passed training/eval/save/resume. Both CPU and GPU
+parameter shards were confirmed. Loss and utilization now log together.
+
+Real 27B / 10 L40S: initial optimizer step, evaluation, sharded checkpoint save,
+then direct checkpoint resume for three additional optimizer steps completed.
+Sequence 8192, batch/rank 1, accumulation 1, logit chunks 128, CPU offload.
+Initial train KL 15.5409, initial eval KL 13.1902; resumed final eval KL 4.829.
+Small validation subset (100K training tokens / 10K validation tokens), not a
+convergence study. Warm steps: 137.6 and 136.1 seconds, 234-248 real tokens/s.
+Mean student MFU: 2.67% padded-token 6N proxy, about 1.07% real-token proxy.
+Approximate QAD execution utilization: 6.34%. Peak allocated GPU: 33.9 GiB.
+Aggregate host RSS peak: 735.6 GiB. Allocator OOM/retry warnings recovered;
+there was no fatal CUDA OOM in these completed runs. Checkpoint writes and
+network filesystem restore are very slow and excluded from step timing.
+
+Selective 27B experiment used teacher residency + 12 student blocks + activation
+offload. Local parameter shards: GPU 5.59 GiB, CPU 12.24 GiB per rank, before
+optimizer/gradient state. It was stopped at the user's handoff request during
+checkpoint restoration. NO real 27B selective training/MFU result exists yet.
+
+LOCAL ARTIFACTS (IGNORED, NOT IN THE COMMIT)
+
+All paths relative to the repository root on the old machine:
+  transformers/outputs/qwen38-iq1s-validation/checkpoint-1
+  transformers/outputs/qwen38-iq1s-warm-benchmark/checkpoint-4
+  transformers/outputs/qwen38-iq1s-validation/train-rank0-loading.log
+  transformers/outputs/qwen38-iq1s-validation/warm-benchmark.log
+  transformers/outputs/qwen38-iq1s-validation/selective-benchmark.log
+  transformers/outputs/smoke-selective.log
+  transformers/outputs/smoke-selective-resume.log
+  transformers/outputs/smoke-export
+  transformers/.cache/ (HF teacher/GGUF/data/kernel/chunk caches)
+Checkpoint-4 is the latest completed real-model training state. Model+optimizer
+logical size is about 386 GB; allocated disk usage can differ. Git checkout
+does not transfer these artifacts. Preserve both DCP .metadata files, optimizer,
+scheduler, RNG, trainer state and training_args when copying a checkpoint.
+
+B200 x 8 STARTING PLAN
+
+1. Inspect GPU memory, topology, driver and host RAM first. Reuse the target
+   machine's UV .venv; install requirements through UV. Kernel wheels/toolchain
+   support for Blackwell needs actual validation; this was only run on L40S.
+   Inspect whether causal-conv1d can be installed for this stack. Its current
+   fallback is correct but slower; FLA DeltaNet kernels are installed.
+
+2. Start with all-GPU FSDP2 (--no-cpu-offload), no activation offload, eight ranks,
+   batch/rank 1, sequence 8192, logit chunks 128. FP32 master + gradients + Adam
+   plus frozen model storage are roughly 450 GiB total before active gathers,
+   activations and scratch; verify actual peaks on the target. The L40S offload
+   default is a fit baseline, not a recommendation for the B200 machine.
+
+3. Run the tiny test, then a three-step real-model validation before a long run:
+
+   UV_CACHE_DIR="$PWD/transformers/.cache/uv" uv pip install \
+     --python .venv/bin/python -r transformers/requirements.txt
+
+   NPROC_PER_NODE=2 bash transformers/run.sh --smoke-test --no-cpu-offload \
+     --max-steps 2 --warmup-steps 0 --gradient-accumulation-steps 1 \
+     --save-steps 2 --eval-steps 2 \
+     --output-dir transformers/outputs/b200-smoke
+
+   NPROC_PER_NODE=8 bash transformers/run.sh --no-cpu-offload \
+     --max-steps 3 --warmup-steps 0 --gradient-accumulation-steps 1 \
+     --train-tokens 100000 --val-tokens 10000 --max-seq-len 8192 \
+     --logit-chunk-size 128 --no-save-checkpoints \
+     --output-dir transformers/outputs/b200-validation
+
+   These commands retain L40S MFU denominators! Add --bf16-peak-tflops and
+   --fp8-peak-tflops using verified DENSE per-GPU B200 peaks before interpreting
+   the utilization metrics. Do not use sparsity-enhanced marketing peaks.
+   Adjust HOST_MEMORY_LIMIT_GIB to the actual host RAM/reserve policy.
+
+4. To benchmark resume, copy checkpoint-4 to fast local storage if available,
+   add --resume-from-checkpoint PATH and set --max-steps 7 (absolute global step,
+   not three extra steps). DCP can reshard from 10 to 8 ranks in principle;
+   this specific world-size change has NOT been tested here. Validate optimizer
+   restoration and RNG/data-order implications. A fresh initialization is also
+   available if cross-world-size resume fails. Do not claim exact sample-order
+   continuation when world size/batch/dataset settings change.
+
+5. Profile after warmup. Priorities: eliminate CPU transfers, inspect FSDP
+   gather overlap/wrapping and root-head residency, optimize branch computation
+   (currently both dense branches execute before token selection), consider
+   padding/packing, install optimized causal convolution. More GPU memory could
+   permit less recomputation. TP/CP require explicit quantizer and DeltaNet
+   support and correctness checks; neither is exposed as a supported CLI mode.
+
+6. Only after validation and user authorization, use full reference corpus:
+   200M train tokens / 200K val tokens, 980 steps, LR 3e-6, warmup 100,
+   accumulation 4 on 8 ranks gives global batch 32. Save/eval default every 50.
+
+KNOWN PITFALLS / NEXT REVIEW
+
+- Do not call from_pretrained independently on every rank for FP8/dequantized
+  weights. HF's rank-zero optimization excludes this quantized path. An early
+  attempt exceeded 1 TB host memory, stalled the host and lost a worker.
+  Explicit metadata-only construction and the RSS guard are necessary.
+- Resume builds metadata on ALL ranks and reads checkpoint shards directly;
+  it does not reconvert/reload teacher or GGUF. CPU tensor allocations must have
+  distinct data pointers for Accelerate optimizer remapping (all-meta pointers
+  would collide). Persistent/nonpersistent quantizer buffers need care.
+- Accelerate 1.15 private APIs are used in the buffer/residency workarounds.
+  Revalidate after dependency changes; installed packages were never patched.
+- Student norms/shared parameters stay FP32; only decode projection matrices
+  are BF16. Stored FP8 teacher parameters/scales must preserve their schema.
+- Native packed HF GGUF acceleration inspected here was Metal-oriented; no
+  validated CUDA IQ1_S forward+input-backward training route was found. There
+  is no measured IQ1_S CUDA speed claim. Current decoder is dequantized.
+- The initial real MFU run had a callback bug suppressing per-step loss logs;
+  metrics and final eval are valid. It also mislabeled the first resumed step
+  as warm. Discard that first step (264.9 sec). Both callback issues are fixed
+  and verified in the selective tiny logs.
+- Full 27B prefiller export has not been executed, only tiny export.
+- Final-evaluation state saving was moved after evaluate during cleanup;
+  selective benchmark had already imported the previous order when stopped.
