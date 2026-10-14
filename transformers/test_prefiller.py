@@ -22,6 +22,8 @@ def base_model():
     # Unit tests run on CPU even when optional GPU attention packages are installed.
     modeling_qwen3_5.torch_chunk_gated_delta_rule = inspect.unwrap(
         modeling_qwen3_5.torch_chunk_gated_delta_rule)
+    modeling_qwen3_5.causal_conv1d_fn = inspect.unwrap(modeling_qwen3_5.causal_conv1d_fn)
+    modeling_qwen3_5.causal_conv1d_update = inspect.unwrap(modeling_qwen3_5.causal_conv1d_update)
     torch.manual_seed(42)
     config = Qwen3_5TextConfig(vocab_size=128, hidden_size=32, intermediate_size=64,
         num_hidden_layers=2, num_attention_heads=2, num_key_value_heads=1, head_dim=16,

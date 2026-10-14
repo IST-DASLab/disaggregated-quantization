@@ -5,6 +5,7 @@ from pathlib import Path
 import signal
 import subprocess
 import sys
+import sysconfig
 import time
 
 import psutil
@@ -12,13 +13,22 @@ import psutil
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--nproc-per-node", type=int, default=10)
+    parser.add_argument("--nproc-per-node", type=int, default=8)
     parser.add_argument("--host-memory-limit-gib", type=float, default=768)
     args, training_args = parser.parse_known_args()
-    command = [sys.executable, "-m", "torch.distributed.run", "--standalone",
+    # This is a single-host launcher. Avoid hostname/DNS selecting an
+    # unreachable address for the worker bootstrap store.
+    command = [sys.executable, "-m", "torch.distributed.run", "--standalone", "--local-addr=127.0.0.1",
                f"--nproc_per_node={args.nproc_per_node}", str(Path(__file__).with_name("train.py")),
                *training_args]
-    process = subprocess.Popen(command, start_new_session=True)
+    # Prefer this environment's CUDA libraries over paths inherited from other
+    # virtualenvs, especially cuDNN's dynamically loaded sublibraries.
+    env = os.environ.copy()
+    nvidia = Path(sysconfig.get_path("purelib")) / "nvidia"
+    libraries = sorted(str(path) for path in nvidia.glob("*/lib") if path.is_dir())
+    if libraries:
+        env["LD_LIBRARY_PATH"] = ":".join([*libraries, env.get("LD_LIBRARY_PATH", "")])
+    process = subprocess.Popen(command, start_new_session=True, env=env)
     root = psutil.Process(process.pid)
     peak = 0.0
 

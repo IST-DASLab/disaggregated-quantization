@@ -1,0 +1,3 @@
+# Install after requirements.txt with --no-build-isolation (uses the pinned torch).
+causal-conv1d==1.7.0
+ninja==1.13.2

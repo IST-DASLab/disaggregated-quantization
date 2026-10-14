@@ -1,3 +1,65 @@
+B200 continuation update (2026-10-14)
+
+The original handoff below records the L40S implementation and measurements.
+CPU parameter offload, selective residency and activation offload have now been
+removed, including offload.py and their CLI flags. FSDP2 retains GPU shards,
+gradients, Adam state and checkpoint inputs. Activation checkpointing remains.
+The launcher now defaults to eight ranks. MFU defaults use B200 dense per-GPU
+peaks: BF16 2250 TFLOPS, FP8 4500 TFLOPS, derived from NVIDIA HGX specifications
+(https://www.nvidia.com/en-au/data-center/hgx/; sparse system peaks / 2 / 8).
+Do not pass the historical offload/residency flags shown below. Model and dataset
+downloads now use the normal HF_HOME/cache/login, including in the export command;
+only prepared chunks, smoke fixtures and the UV cache remain repository-local.
+The launcher uses loopback rendezvous (hostname resolved to an unreachable IP)
+and prioritizes this .venv's CUDA libraries (inherited cuDNN belonged to another
+project). Four CPU tests and GPU-resident two-rank tiny training/eval/save/resume
+have passed.
+Causal-conv1d 1.7.0 built successfully with CUDA 13.0, including sm_100. Install
+requirements-kernels.txt after requirements.txt using --no-build-isolation.
+The optimized two-GPU smoke run and tiny DCP-to-NVFP4 export also passed.
+CPU tests explicitly unwrap the reference causal convolution and DeltaNet paths
+so installing the CUDA extensions does not route CPU tensors into GPU kernels.
+
+The first real eight-GPU attempt loaded the complete decoder and teacher and
+prepared the datasets. Rank-zero pre-sharding RSS was 167.57 GiB; other ranks
+were 2.08-2.25 GiB. It failed during shard initialization because another user's
+vLLM processes had occupied GPUs 0-5 with approximately 150 GiB each after our
+initial idle-machine inspection. No real B200 optimizer step or MFU was measured
+in that attempt. Our launcher/workers were stopped; other workloads were left
+running. After waiting for those jobs to finish, the fresh eight-GPU retry
+completed all three optimizer steps and final evaluation successfully. No offloading or large
+checkpoint save was used. All eight GPUs were idle again after process exit.
+Models and datasets are cached in the normal Hugging Face cache.
+
+Real B200 validation (fresh initialization, not the old checkpoint-4): sequence
+8192, batch/rank 1, accumulation 1, logit chunks 128, 100K train / 10K val token
+budgets, optimized causal convolution. Train KL: 15.45175, 12.89052, 9.42579.
+Final eval KL: 6.486969. Cold first step: 248.13 s (excluded from warm metrics).
+Warm steps: 53.564 and 53.711 s; real throughput: 513.63 and 256.32 tokens/s
+(mean 384.97). Padding explains the different real throughput at similar step
+times. Mean student 6N MFU: 1.0954% padded, 0.3451% real; approximate QAD
+execution utilization: 2.5971%. Peaks: 82.4656 GiB maximum allocated GPU across ranks,
+199.5 GiB aggregate host RSS. This is short validation, not convergence evidence.
+Full-model checkpoint save/resume and export on B200 remain untested; the tiny
+save/resume/export paths passed. No long training run was started.
+Next: profile the warmed execution if further optimization is requested; launch
+the full reference training only with user authorization.
+
+Current local artifacts (ignored):
+  transformers/outputs/b200-smoke/checkpoint-2
+  transformers/outputs/b200-smoke-resume/checkpoint-3
+  transformers/outputs/b200-smoke-optimized/checkpoint-2
+  transformers/outputs/b200-smoke-export
+  transformers/outputs/b200-validation-contended.log (failed first attempt)
+  transformers/outputs/b200-validation.log (successful retry)
+  transformers/outputs/b200-validation/trainer_state.json (exact metrics)
+  transformers/outputs/b200-validation/run_config.json
+  transformers/outputs/cpu-tests-fixed.log (4 passed)
+
+Target inspection: eight idle B200 GPUs, 183359 MiB each, all-pairs NV18,
+driver 610.43.02, CUDA driver 13.3, approximately 3 TiB host RAM. GPU tools and
+training need execution outside this environment's filesystem sandbox.
+
 Qwen3.8 prefiller training: handoff for B200 x 8
 Date: 2026-10-14
 

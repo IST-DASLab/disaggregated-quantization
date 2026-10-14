@@ -6,7 +6,7 @@ from transformers import TrainerCallback
 
 
 class UtilizationCallback(TrainerCallback):
-    def __init__(self, trainer, bf16_peak_tflops=362.05, fp8_peak_tflops=733.0):
+    def __init__(self, trainer, bf16_peak_tflops=2250.0, fp8_peak_tflops=4500.0):
         from quantizers.frozen_decode import NVFP4FrozenDecodeLinear
         self.trainer = trainer
         model = trainer.model

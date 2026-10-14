@@ -42,13 +42,20 @@ From the repository root:
 UV_CACHE_DIR="$PWD/transformers/.cache/uv" uv pip install \
   --python .venv/bin/python -r transformers/requirements.txt
 
+# Build optimized causal convolution against the installed Torch/CUDA stack.
+UV_CACHE_DIR="$PWD/transformers/.cache/uv" uv pip install \
+  --python .venv/bin/python --no-build-isolation -r transformers/requirements-kernels.txt
+
 # Tiny hybrid architecture with real HF FP8 linear kernels; saves/resumes via FSDP.
 NPROC_PER_NODE=2 bash transformers/run.sh --smoke-test \
   --max-steps 2 --warmup-steps 0 --save-steps 1 --eval-steps 1 \
   --gradient-accumulation-steps 1 --output-dir transformers/outputs/smoke
 
-# Actual model, all 10 local L40S GPUs, FP32 masters and CPU offload.
-bash transformers/run.sh --logit-chunk-size 128
+# Three-step actual-model validation on all eight B200 GPUs, FP32 masters on GPU.
+bash transformers/run.sh --max-steps 3 --warmup-steps 0 \
+  --gradient-accumulation-steps 1 --train-tokens 100000 --val-tokens 10000 \
+  --max-seq-len 8192 --logit-chunk-size 128 --no-save-checkpoints \
+  --output-dir transformers/outputs/b200-validation
 
 # Eight GPUs give the paper's global batch 32 (1 example x 4 accumulation x 8).
 NPROC_PER_NODE=8 bash transformers/run.sh --logit-chunk-size 128
@@ -58,51 +65,34 @@ bash transformers/run.sh --logit-chunk-size 128 \
   --resume-from-checkpoint transformers/outputs/qwen38-iq1s/checkpoint-50
 ```
 
-The default ten-GPU global batch is 40. Sequence limit is 8192; the reasoning
+The default eight-GPU global batch is 32. Sequence limit is 8192; the reasoning
 corpus is the reference's `faunix/Qwen3.8-27B-Distillation-40K`, with tool-use rows
 filtered, reasoning split into the template's reasoning field, and overlong
 examples dropped. Trainer shards the dataloader; chunks are not pre-sharded.
 Use `--decode-model /path/to/file.gguf` or a dense safetensors directory to change
 the decoder. Dense wrapper checkpoints use `--decode-prefix model.language_model.`;
-text-only checkpoints use `--decode-prefix model.`. Downloads and token caches live
-under `transformers/.cache/`; checkpoints live under `transformers/outputs/`.
+text-only checkpoints use `--decode-prefix model.`. Model and dataset downloads
+use the normal Hugging Face cache and login, honoring
+`HF_HOME`, `HF_HUB_CACHE` and `HF_DATASETS_CACHE`. Prepared token chunks and the UV
+cache live under `transformers/.cache/`; checkpoints live under `transformers/outputs/`.
 
 ## FSDP and memory
 
 FSDP2 shards both text stacks and the student's decoder parameters. Frozen decode
 weights are Parameters with `requires_grad=False` so they can be sharded; cached
 full-size quantized weights are disabled. Autocast handles BF16 compute without
-casting FP8 teacher storage or FP32 student masters. CPU offload is enabled for
-masters, gradients and optimizer state. `--no-cpu-offload` is available for larger
-GPUs. TP/CP are not implemented: the custom quantizer and hybrid DeltaNet recurrence
+casting FP8 teacher storage or FP32 student masters. All parameter shards,
+gradients, optimizer state and saved activations stay on GPU; CPU and selective
+offload options have been removed. Activation checkpointing remains enabled.
+TP/CP are not implemented: the custom quantizer and hybrid DeltaNet recurrence
 need additional work for those modes.
-
-Selective offload is controlled per FSDP unit:
-
-| Argument | Effect |
-| --- | --- |
-| `--teacher-resident` | Keep frozen teacher block and embedding shards on GPU |
-| `--student-resident-layers N` | Keep the first N student blocks' parameter, gradient and Adam shards on GPU |
-| `--activation-offload` | Store activation-checkpoint inputs on CPU to free GPU headroom |
-| `--no-cpu-offload` | Keep all shards and Adam state on GPU |
-
-Selective residency requires FSDP and CPU offload. The remaining units retain CPU
-offload, including root-owned heads. Parameter sharding and checkpoint format stay
-the same when residency changes. The launcher prints local shard storage by device;
-measure training peaks when increasing residency. These policies are applied in a
-local Accelerate preparation wrapper, without editing installed packages.
-
-```bash
-# Use GPU headroom for teacher shards and 12 student blocks.
-bash transformers/run.sh --logit-chunk-size 128 --teacher-resident \
-  --student-resident-layers 12 --activation-offload
-```
 
 Only rank zero reads model weights. Other ranks construct metadata and uninitialized
 storage, then receive FSDP shards. The launcher monitors job RSS (default limit
 768 GiB, configurable through `HOST_MEMORY_LIMIT_GIB`) and reserves host RAM.
 `fsdp_compat.py` works around Accelerate 1.15's persistent-buffer initialization bug
-locally; installed packages are not patched.
+locally; installed packages are not patched. The single-host launcher uses loopback
+for rendezvous and prioritizes CUDA libraries from the active `.venv`.
 
 Checkpoints are sharded, resumable Trainer states with model, optimizer, scheduler
 and RNG state. They include frozen weights, so expect large checkpoints. At most
@@ -116,11 +106,23 @@ memory, and two conventional student `6N` MFU proxies (real and padded tokens).
 `hfu_qad_execution_estimate` additionally counts both dense phase branches, input
 gradients through frozen weights, teacher projections, and checkpoint recomputation.
 It approximates attention FLOPs and excludes quantizer/vector/DeltaNet overhead.
-The default dense peaks are 362.05 BF16 and 733 FP8 TFLOPS per L40S, from
-[NVIDIA's specifications](https://www.nvidia.com/en-gb/data-center/l40s/).
+The default dense per-GPU peaks are 2250 BF16 and 4500 FP8 TFLOPS for B200.
+[NVIDIA's HGX specifications](https://www.nvidia.com/en-au/data-center/hgx/)
+list sparse eight-GPU peaks; dense peaks are half those values, divided by eight.
 Adjust `--bf16-peak-tflops` and `--fp8-peak-tflops` for other hardware. The first
 step of each process, including after resume, includes compilation/warmup; use
 later steps for throughput comparisons.
+
+The eight-B200 validation completed three fresh optimizer steps and evaluation
+with GPU-resident state, sequence length 8192, batch/rank 1, accumulation 1,
+logit chunks 128, optimized causal convolution and 100K/10K train/validation token
+budgets. The two warm steps took 53.564 and 53.711 seconds, processing 514 and
+256 real tokens/s respectively (different padding). Mean student MFU was 1.095%
+with padded tokens and 0.345% with real tokens; estimated QAD utilization was
+2.597%. Maximum allocated GPU memory across ranks was 82.47 GiB; aggregate host RSS
+peaked at 199.5 GiB. Final eval KL was 6.48697. The cold first step took 248.13
+seconds and is excluded from these means. These measurements validate fit and
+execution; they do not establish convergence. No full-model checkpoint was saved.
 
 The initial 10-L40S validation used global batch 10, sequence length 8192,
 logit chunks 128, and full CPU offload. Two warm steps took 137.6 and 136.1

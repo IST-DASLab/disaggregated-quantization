@@ -8,6 +8,7 @@ import torch
 import transformers
 from transformers import AutoConfig, AutoTokenizer, FineGrainedFP8Config, TrainingArguments, set_seed
 from huggingface_hub import hf_hub_download, snapshot_download
+from huggingface_hub.constants import HF_HUB_CACHE
 
 from prefiller import (ChunkDataset, Prefiller, PrefillerTrainer, TextOnly,
                        collate_chunks, prepare_student, assert_trainable_prefill_only)
@@ -38,25 +39,17 @@ def parse_args():
     p.add_argument("--temperature", type=float, default=1.0)
     p.add_argument("--include-prefill-loss", action="store_true")
     p.add_argument("--resume-from-checkpoint")
-    p.add_argument("--cpu-offload", action=argparse.BooleanOptionalAction, default=True)
-    p.add_argument("--teacher-resident", action="store_true", help="Keep teacher FSDP block/embedding shards on GPU")
-    p.add_argument("--student-resident-layers", type=int, default=0, help="Keep first N student block shards, gradients and Adam states on GPU")
-    p.add_argument("--activation-offload", action="store_true", help="Offload saved checkpoint inputs to CPU")
     p.add_argument("--fsdp", action=argparse.BooleanOptionalAction, default=True)
     p.add_argument("--smoke-test", action="store_true", help="Tiny random hybrid Qwen with a real FP8 teacher")
     p.add_argument("--seed", type=int, default=42)
-    p.add_argument("--bf16-peak-tflops", type=float, default=362.05, help="Dense per-GPU peak for MFU estimates")
-    p.add_argument("--fp8-peak-tflops", type=float, default=733.0)
+    p.add_argument("--bf16-peak-tflops", type=float, default=2250.0, help="Dense per-GPU peak for MFU estimates (B200)")
+    p.add_argument("--fp8-peak-tflops", type=float, default=4500.0)
     args = p.parse_args()
     for key in ("max_seq_len", "max_steps", "batch_size", "gradient_accumulation_steps", "logit_chunk_size"):
         if getattr(args, key) < 1:
             p.error(f"--{key.replace('_', '-')} must be positive")
     if args.temperature <= 0:
         p.error("--temperature must be positive")
-    if args.student_resident_layers < 0:
-        p.error("--student-resident-layers must be nonnegative")
-    if (args.teacher_resident or args.student_resident_layers) and not (args.fsdp and args.cpu_offload):
-        p.error("Selective residency requires --fsdp --cpu-offload")
     return args
 
 
@@ -180,22 +173,18 @@ def load_datasets(tokenizer, args, cache):
 def main():
     args = parse_args()
     cache = Path(args.cache_dir).resolve()
-    os.environ.setdefault("HF_HOME", str(cache / "huggingface"))
-    os.environ.setdefault("HF_DATASETS_CACHE", str(cache / "datasets"))
     world = int(os.environ.get("WORLD_SIZE", "1"))
-    if args.fsdp and args.cpu_offload:
-        # Accelerate selects a dual NCCL/Gloo backend for CPU-offloaded DTensors.
-        os.environ["FSDP_OFFLOAD_PARAMS"] = "true"
     if args.fsdp:
         os.environ["ACCELERATE_USE_FSDP"] = "true"
+        os.environ["FSDP_OFFLOAD_PARAMS"] = "false"
     if args.fsdp and world == 1:
         raise SystemExit("FSDP needs torchrun with at least two processes; use --no-fsdp for a single GPU test")
     if not torch.cuda.is_available():
         raise SystemExit("CUDA is unavailable. On this host, launch outside the filesystem sandbox.")
-    fsdp_config = {"version": 2, "cpu_offload": args.cpu_offload,
+    fsdp_config = {"version": 2, "cpu_offload": False,
         "cpu_ram_efficient_loading": not bool(args.resume_from_checkpoint), "state_dict_type": "SHARDED_STATE_DICT",
         "auto_wrap_policy": "TRANSFORMER_BASED_WRAP", "reshard_after_forward": True,
-        "activation_checkpointing": True, "activation_checkpointing_offload": args.activation_offload}
+        "activation_checkpointing": True, "activation_checkpointing_offload": False}
     training_args = TrainingArguments(output_dir=args.output_dir,
         max_steps=args.max_steps, per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size,
@@ -205,7 +194,6 @@ def main():
         bf16=True, gradient_checkpointing=not args.fsdp,
         gradient_checkpointing_kwargs={"use_reentrant": False},
         fsdp=args.fsdp,
-        ddp_backend="cuda:nccl,cpu:gloo" if args.fsdp and args.cpu_offload else None,
         fsdp_config=fsdp_config if args.fsdp else None,
         optim="adamw_torch", remove_unused_columns=False,
         eval_strategy="steps", eval_steps=args.eval_steps,
@@ -242,7 +230,7 @@ def main():
             chunks.append((ids, labels, torch.ones_like(ids)))
         train_data, val_data, tokenizer = ChunkDataset(chunks), ChunkDataset(chunks[:world * 2]), None
     else:
-        hf_cache = str(cache / "huggingface")
+        hf_cache = HF_HUB_CACHE
         with training_args.main_process_first():
             decode = None if args.resume_from_checkpoint else resolve_decoder(args, hf_cache)
         print(f"[rank {rank}] {'building student metadata' if metadata_only else 'loading FP32 student from dequantized FP8 teacher'}", flush=True)
@@ -264,9 +252,6 @@ def main():
         verify_rank_loading(model, rank)
     trainer = PrefillerTrainer(model=model, args=training_args, train_dataset=train_data,
         eval_dataset=val_data, data_collator=collate_chunks, processing_class=tokenizer)
-    if args.teacher_resident or args.student_resident_layers:
-        from offload import install_selective_offload
-        install_selective_offload(trainer, args.teacher_resident, args.student_resident_layers)
     from metrics import UtilizationCallback
     trainer.add_callback(UtilizationCallback(trainer, args.bf16_peak_tflops, args.fp8_peak_tflops))
     if rank == 0:

@@ -1,12 +1,12 @@
 """Export the trained prefill half from a Trainer FSDP checkpoint to packed NVFP4."""
 import argparse
 import json
-import os
 from pathlib import Path
 
 import torch
 import torch.distributed.checkpoint as dcp
 from transformers import AutoTokenizer
+from huggingface_hub.constants import HF_HUB_CACHE
 
 from train import load_text_model, allocate_empty_parameters
 from prefiller import prepare_student
@@ -33,10 +33,8 @@ def main():
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--teacher-model", default="Qwen/Qwen3.8-27B-FP8")
-    parser.add_argument("--cache-dir", default="transformers/.cache")
     args = parser.parse_args()
-    hf_cache = str(Path(args.cache_dir).resolve() / "huggingface")
-    os.environ.setdefault("HF_HOME", hf_cache)
+    hf_cache = HF_HUB_CACHE
     student = load_text_model(args.teacher_model, True, hf_cache, metadata_only=True)
     restore_student(student, args.checkpoint)
     student.config.dtype = torch.bfloat16
