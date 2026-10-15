@@ -40,6 +40,19 @@ for _limit in ("recompile_limit", "cache_size_limit"):
 
 from .grids import E2M1_BOUNDS, E2M1_DECODE, E2M1_LEVELS
 
+_USE_EXACT_QUANT_OP = False
+
+
+def use_exact_quant_op(enabled=True):
+    """Keep quantization arithmetic opaque inside a compiled model block."""
+    global _USE_EXACT_QUANT_OP
+    _USE_EXACT_QUANT_OP = enabled
+
+
+@torch.compiler.disable
+def activation_global_scale(amax: Tensor) -> Tensor:
+    return amax / GLOBAL_DEN
+
 
 @torch.compile(dynamic=True)
 def e2m1_round(x: Tensor) -> Tensor:
@@ -90,7 +103,26 @@ def nvfp4_quantize(x: Tensor, block: int = BLOCK, global_scale: Tensor | None = 
     bit, and E4M3 block scales are signed, so the checkpoint holds it natively. It is
     off by default: flipping it would rename nothing but would change the bytes every
     existing nvfp4* checkpoint exports."""
+    if _USE_EXACT_QUANT_OP:
+        return _exact_quant_op(x, global_scale, block, signed)
     return blocked_quantize(x, e2m1_round, block, signed=signed, global_scale=global_scale)
+
+
+@torch.library.custom_op("qad::nvfp4_quantize_exact", mutates_args=())
+def _exact_quant_op(x: Tensor, global_scale: Tensor | None, block: int,
+                    signed: bool) -> tuple[Tensor, Tensor, Tensor]:
+    # This boundary preserves eager division/FP8 scaling and the separately
+    # compiled E2M1 rounder. A model compiler must not fuse across thresholds.
+    return blocked_quantize(x, e2m1_round, block, signed=signed, global_scale=global_scale)
+
+
+@_exact_quant_op.register_fake
+def _exact_quant_fake(x, global_scale, block, signed):
+    blocks = (x.shape[-1] + block - 1) // block
+    dequantized = x.new_empty((*x.shape[:-1], blocks * block), dtype=torch.float32)[..., :x.shape[-1]].to(x.dtype)
+    return (dequantized,
+            x.new_empty((*x.shape[:-1], blocks), dtype=torch.float32),
+            x.new_empty((), dtype=torch.float32) if global_scale is None else torch.empty_like(global_scale))
 
 
 def fake_quant_ste(x: Tensor, block: int, global_scale: Tensor | None) -> Tensor:
@@ -185,6 +217,9 @@ class NVFP4Linear(BlockScaledLinear):
 
     def rounder(self, x: Tensor) -> Tensor:
         return e2m1_round(x)
+
+    def quantize_weight(self) -> tuple[Tensor, Tensor, Tensor]:
+        return nvfp4_quantize(self.weight, self.block_size, self.group_global_scale(), signed=self.signed)
 
     # ------------------------------------------------------------------
     # compressed-tensors `nvfp4-pack-quantized` format
@@ -284,7 +319,7 @@ class NVFP4Linear(BlockScaledLinear):
         # Static observed activation scale (matches export/inference). The running
         # max is >= this batch's amax, so activations never saturate; falls back to
         # a dynamic per-forward scale only until the observer has seen data.
-        gscale = (self.act_amax / GLOBAL_DEN) if self._observed else None
+        gscale = activation_global_scale(self.act_amax) if self._observed else None
         return qlinear(fake_quant_ste(x, self.block_size, gscale), w, self.bias)
 
 

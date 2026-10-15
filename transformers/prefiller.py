@@ -1,7 +1,7 @@
 """Trainer-compatible QAD model; the objective and routing follow qad/training/qad.py.
 
-No cached full-size quantized weights, and frozen decode weights are Parameters:
-FSDP2 shards Parameters but replicates buffers. All quantizer arithmetic is reused.
+Frozen decode weights are Parameters so FSDP2 can shard them. Quantized prefill
+weights have an optional lazy BF16 buffer cache reused until the optimizer update.
 """
 from pathlib import Path
 import sys
@@ -10,7 +10,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 from torch.utils.checkpoint import checkpoint
-from transformers import Trainer
+from transformers import Trainer, TrainerCallback
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "qad"))
 from quantizers.base import set_recompute_wq
@@ -37,7 +37,8 @@ class TextOnly(nn.Module):
         self.model.config.use_cache = False
 
 
-def prepare_student(student, decode_path, decode_prefix="model.language_model.", load_weights=True):
+def prepare_student(student, decode_path, decode_prefix="model.language_model.", load_weights=True,
+                    cache_quantized_weights=True, weight_cache_max_gib=0):
     """FP32 masters/shared state and BF16 shardable frozen decode matrices."""
     set_recompute_wq(True)
     if load_weights:
@@ -45,6 +46,18 @@ def prepare_student(student, decode_path, decode_prefix="model.language_model.",
     # from_pretrained(dequantize=True, dtype=float32) supplies FP32 initial weights.
     apply_nvfp4frozendec(student.model)
     student.lm_head.requires_grad_(False)
+    if cache_quantized_weights:
+        budget = int(weight_cache_max_gib * 1024**3) if weight_cache_max_gib else None
+        used = 0
+        linears = [m for m in student.modules() if isinstance(m, NVFP4FrozenDecodeLinear)]
+        # Spend limited replicated-cache memory on the largest weight tensors.
+        for module in sorted(linears, key=lambda m: m.weight.numel(), reverse=True):
+            size = module.weight.numel() * 2
+            if budget is None or used + size <= budget:
+                module.enable_weight_cache()
+                used += size
+        if load_weights:
+            print(f"BF16 weight cache budget: {used / 1024**3:.3f} GiB per rank (lazy)", flush=True)
     for module in student.modules():
         if isinstance(module, NVFP4FrozenDecodeLinear):
             value = torch.empty_like(module.weight, dtype=torch.bfloat16)
@@ -113,7 +126,7 @@ def dense_safetensors_weights(path, prefix):
 
 
 def chunked_kl(student_hidden, teacher_hidden, student_head, teacher_head,
-               labels, attention_mask, chunk_size=16, temperature=1.0,
+               labels, attention_mask, chunk_size=1024, temperature=1.0,
                include_prefill_loss=False):
     """KL(teacher || student), shifted and scored on non-padding target positions.
 
@@ -147,7 +160,7 @@ def chunked_kl(student_hidden, teacher_hidden, student_head, teacher_head,
 
 
 class Prefiller(nn.Module):
-    def __init__(self, student, teacher, chunk_size=16, temperature=1.0,
+    def __init__(self, student, teacher, chunk_size=1024, temperature=1.0,
                  include_prefill_loss=False):
         super().__init__()
         self.student, self.teacher = student, teacher
@@ -171,6 +184,15 @@ class Prefiller(nn.Module):
             gradient_checkpointing_kwargs=gradient_checkpointing_kwargs or {"use_reentrant": False})
 
     def forward(self, input_ids, attention_mask, labels):
+        # FSDP2 normally relies on its param_dtype policy for mixed precision.
+        # Ours intentionally leaves FP32 masters and FP8 teacher storage intact,
+        # so Trainer's bf16 flag alone does not supply compute autocast here.
+        # Checkpointing captures this autocast context for backward recomputation.
+        with torch.autocast(device_type=input_ids.device.type, dtype=torch.bfloat16,
+                            enabled=input_ids.is_cuda):
+            return self._forward(input_ids, attention_mask, labels)
+
+    def _forward(self, input_ids, attention_mask, labels):
         with torch.no_grad():
             teacher_hidden = self.teacher.model(input_ids=input_ids,
                 attention_mask=attention_mask, use_cache=False).last_hidden_state
@@ -183,9 +205,19 @@ class Prefiller(nn.Module):
         return {"loss": loss}
 
 
+class WeightCacheCallback(TrainerCallback):
+    def on_optimizer_step(self, args, state, control, model=None, **kwargs):
+        # This event follows optimizer.step, before evaluation or checkpoint save.
+        # Never invalidate between microbatches or during backward recomputation.
+        for module in model.modules():
+            if isinstance(module, NVFP4FrozenDecodeLinear):
+                module.invalidate_weight_cache()
+
+
 class PrefillerTrainer(Trainer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.add_callback(WeightCacheCallback())
         self.model_accepts_loss_kwargs = False
         if self.is_fsdp_enabled:
             from torch.distributed.fsdp import MixedPrecisionPolicy

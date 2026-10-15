@@ -1,3 +1,95 @@
+B200 FSDP tuning update (2026-10-15)
+
+Authorization: use ONLY GPUs 0,5,6,7 for bounded tuning. Another user's vLLM
+initially occupied GPUs 1-4; they later appeared idle, but this does not authorize
+expansion. Do not use eight until the user explicitly commands it.
+Use the normal HF_HOME/cache/login. CPU/activation offload remains removed.
+
+Critical compute fix: the old FSDP2 runs used FP32 SIMT student GEMMs despite
+TrainingArguments(bf16=True). The preparation path with param_dtype=None did not
+install forward autocast. Profiled aten::mm consumed 44.17 s of a 53.49 s step;
+kernels were cutlass3x_sm100_simt_sgemm_f32. Prefiller.forward now explicitly
+enters CUDA BF16 autocast, preserving FP32 masters/gradients and FP8 teacher
+storage. Checkpoint recomputation captures autocast. A CUDA regression verifies
+BF16 linear outputs, FP32 parameter storage/gradients and frozen teacher grads.
+
+Actual 27B four-GPU comparison, batch/rank 1, accumulation 1, sequence 8192,
+KL chunks 1024, fused AdamW, cache disabled, all student blocks checkpointed,
+implicit prefetch, no retained blocks, max steps 4, profile step 3, no save:
+  eager BF16: warm steps 2/4 = 8.534285 / 8.854122 s; peak 135.903938 GiB
+  compiled:  warm steps 2/4 = 8.397242 / 8.340818 s; peak 135.894172 GiB
+  pre-fix:   warm steps 2/4 = 52.974583 / 52.879267 s; peak 138.73355 GiB
+Artifacts: transformers/outputs/b200-4gpu-bf16-baseline/ and
+transformers/outputs/b200-4gpu-compiled-baseline/, each with trainer_state.json,
+run_config.json and profile/{rank0-step3.json,operators.txt,operators.json}.
+Cold and profiled steps are excluded from throughput comparisons. Padded student
+MFU is about 7%, while the broader QAD execution estimate is about 16-17%.
+Post-fix aten::mm is 1.59 s; cuDNN BF16 attention replaces the FP32 fallback.
+The compilation gain here is modest (~4% mean warm latency), not a solution by
+itself. These short runs do not establish convergence. Whole-block compilation
+changes floating-point results: final eval KL eager 5.5253 vs compiled 5.9699.
+Compilation remains opt-in, and no bit-exact whole-model claim is made.
+
+Compilation: --compile-blocks compiles repeated student/teacher blocks in-place
+with static shapes, preserving FSDP hooks. --compile-mode accepts default or
+max-autotune-no-cudagraphs. NVFP4 quantization is an opaque custom op preserving
+eager division/scaling and the original compiled E2M1 rounder. Global-scale
+divisions are compiler barriers. LM-head/KL loops remain eager because scored
+position counts vary. CPU Inductor tests verify exact quantization, including
+ragged/signed inputs, and compiled dual-linear outputs/gradients within tolerance.
+Four-GPU compiled BF16 tiny training/eval/save/resume and NVFP4 export pass.
+
+BF16 quantized-weight buffers: enabled by default in this port, built lazily
+from gathered FP32 masters and reused across microbatches and checkpoint recompute.
+WeightCacheCallback clears them after optimizer.step, before eval/save. Loading
+state and post_update also invalidate. Manual optimizer users must invalidate.
+Buffers are nonpersistent; the old persistent empty _wq schema is unchanged.
+FSDP replicates buffers: full-model caches add roughly 40-45 GiB/rank. Use
+--weight-cache-max-gib N for a deterministic per-rank cap prioritizing largest
+matrices (0 unlimited), or --no-cache-quantized-weights. Activation quantization
+remains per input. KL chunk default is now 1024 (old default 16; old runs 128).
+
+FSDP controls: --sync-each-batch defaults true to retain sharded gradients with
+accumulation; --optimizer adamw_torch_fused; --activation-checkpoint-every N
+(1 all student blocks, 2 half, 0 none); --fsdp-prefetch-depth N (0 implicit,
+1/2 explicit APIs); --fsdp-retain-student-layers N (first N blocks stay gathered
+after forward); --profile-step N. Frozen teacher blocks are not checkpointed.
+Scoped Accelerate 1.15 preparation wrappers leave installed packages untouched.
+MFU execution estimates account for selected checkpoint interval. Profiled steps
+are flagged in metrics; barrier after trace export excludes export time from
+next step. Never add operator times to their nested kernel times in summaries.
+Tiny four-GPU selective checkpoint-every 2, prefetch-depth 2, retain 1, batch 2,
+accumulation 2, fused AdamW and profile-step 2 training/eval/save all pass.
+
+Validation: 12 CPU tests pass, one CUDA-only test skips on CPU. Separate GPU
+BF16-autocast regression passes. Existing NVFP4 tests and frozen-decoder gates
+pass. Cache parity includes outputs/gradients across accumulated/checkpointed
+microbatches, one computation per update, invalidation after update/load, cache
+budget, and KL loss/gradient agreement across chunk sizes 1/2/4/1024.
+Two-GPU cache train/eval/save/resume and old pre-cache checkpoint resume pass.
+
+Batch-2 candidate: transformers/outputs/b200-4gpu-bf16-batch2.log completed
+train/eval, accumulation 1, compiled, cache cap 4 GiB (actual 3.994), explicit
+prefetch depth 1, checkpoint all. Warm steps 2/4: 14.403920/15.044119 s, peak
+146.442611 GiB. CUDA allocator hit device capacity and repeatedly retried
+allocations despite this lower allocated peak. Do not reduce checkpointing until
+allocator behavior is fixed. Do not compare raw latency to batch 1 without
+accounting for doubled padded tokens.
+Completed repeat: transformers/outputs/b200-4gpu-bf16-batch2-expandable.log,
+same model settings, PYTORCH_ALLOC_CONF=expandable_segments:True, profiling off.
+Warm steps 2/3/4 = 15.116997/14.145698/14.426459 s (mean 14.563051), peak
+146.333135 GiB; no allocation-retry warnings. About 4500 padded tokens/s, ~15%
+above compiled batch 1. Batch/cache/prefetch were changed together; no isolated
+causal claim. Losses/grad norms and eval KL 5.062707 match prior batch-2 run.
+Cold step 23.95 s reused compiler disk cache; do not attribute to allocator.
+README contains the exact reproduction command. Four GPUs only; no eight-GPU
+or long training launch authorized. All own bounded GPU runs have finished.
+Next: on explicit eight-GPU command, remeasure cache budget/microbatch and
+selective checkpointing (every 2) with the lower per-rank state footprint.
+Four-GPU checkpoint removal is not validated; retain all-block checkpointing
+for the measured batch-2 candidate. Full-model save/resume remains untested;
+tiny compiled save/resume/export and pre-cache checkpoint resume pass.
+
 B200 continuation update (2026-10-14)
 
 The original handoff below records the L40S implementation and measurements.

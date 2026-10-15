@@ -169,6 +169,7 @@ class GroupScaled:
         `weight` is a quantized view rather than the original master weight."""
         return self.weight.detach().float().abs().amax()
 
+    @torch.compiler.disable
     def group_global_scale(self) -> Tensor:
         """Global scale shared across the fused group (group-max amax / 2688).
         Identical for every member, so an engine's global_scale.max() is a no-op.

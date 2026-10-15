@@ -10,7 +10,7 @@ from torch import Tensor
 from .blocked import (qlinear, BLOCK, GLOBAL_DEN, blocked_quantize, grid_rounder,
                       replace_linears, ste)
 from .grids import LLOYD21_SIGNED_2BIT, LLOYD43_SIGNED_3BIT
-from .nvfp4 import (NVFP4Linear, fake_quant_ste,
+from .nvfp4 import (NVFP4Linear, fake_quant_ste, activation_global_scale,
                     unpack_nvfp4_weight)
 
 # [B, T] bool, True where the PREFILL format applies. None => infer from shape.
@@ -62,7 +62,7 @@ class _DualActMixin:
                     a = torch.where(mask, a, torch.zeros((), device=a.device, dtype=a.dtype))
                 self.act_amax = torch.maximum(self.act_amax, a.amax())
             self._observed = True
-        gscale = (self.act_amax / GLOBAL_DEN) if self._observed else None
+        gscale = activation_global_scale(self.act_amax) if self._observed else None
         return fake_quant_ste(x, self.block_size, gscale)
 
 

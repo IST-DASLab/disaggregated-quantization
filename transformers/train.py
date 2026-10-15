@@ -29,13 +29,30 @@ def parse_args():
     p.add_argument("--max-steps", type=int, default=980)
     p.add_argument("--batch-size", type=int, default=1)
     p.add_argument("--gradient-accumulation-steps", type=int, default=4)
+    p.add_argument("--sync-each-batch", action=argparse.BooleanOptionalAction, default=True,
+                   help="Reduce-scatter gradients per microbatch instead of retaining full gradients")
+    p.add_argument("--optimizer", choices=["adamw_torch", "adamw_torch_fused"], default="adamw_torch")
+    p.add_argument("--activation-checkpoint-every", type=int, default=1,
+                   help="Checkpoint every Nth student block; 0 disables block recomputation")
+    p.add_argument("--fsdp-prefetch-depth", type=int, default=0,
+                   help="Explicit FSDP2 block prefetch depth; 0 keeps implicit prefetch")
+    p.add_argument("--fsdp-retain-student-layers", type=int, default=0,
+                   help="Keep first N student blocks gathered between forward and backward")
+    p.add_argument("--profile-step", type=int, default=0,
+                   help="Capture rank-zero CPU/CUDA trace for this absolute optimizer step")
+    p.add_argument("--compile-blocks", action="store_true", help="Compile repeated decoder blocks in place with Inductor")
+    p.add_argument("--compile-mode", choices=["default", "max-autotune-no-cudagraphs"], default="default")
     p.add_argument("--learning-rate", type=float, default=3e-6)
     p.add_argument("--warmup-steps", type=int, default=100)
     p.add_argument("--save-steps", type=int, default=50)
     p.add_argument("--save-checkpoints", action=argparse.BooleanOptionalAction, default=True,
                    help="Disable for disposable throughput benchmarks")
     p.add_argument("--eval-steps", type=int, default=50)
-    p.add_argument("--logit-chunk-size", type=int, default=16)
+    p.add_argument("--logit-chunk-size", type=int, default=1024)
+    p.add_argument("--cache-quantized-weights", action=argparse.BooleanOptionalAction, default=True,
+                   help="Reuse replicated BF16 weight buffers until the optimizer update")
+    p.add_argument("--weight-cache-max-gib", type=float, default=0,
+                   help="Cap replicated BF16 caches per GPU, prioritizing largest weights; 0 is unlimited")
     p.add_argument("--temperature", type=float, default=1.0)
     p.add_argument("--include-prefill-loss", action="store_true")
     p.add_argument("--resume-from-checkpoint")
@@ -50,6 +67,19 @@ def parse_args():
             p.error(f"--{key.replace('_', '-')} must be positive")
     if args.temperature <= 0:
         p.error("--temperature must be positive")
+    if args.weight_cache_max_gib < 0:
+        p.error("--weight-cache-max-gib must be nonnegative")
+    for key in ("activation_checkpoint_every", "fsdp_prefetch_depth", "fsdp_retain_student_layers", "profile_step"):
+        if getattr(args, key) < 0:
+            p.error(f"--{key.replace('_', '-')} must be nonnegative")
+    if not args.fsdp and (args.fsdp_prefetch_depth or args.fsdp_retain_student_layers):
+        p.error("FSDP tuning controls require --fsdp")
+    if not args.fsdp and args.activation_checkpoint_every > 1:
+        p.error("Selective block checkpointing requires --fsdp")
+    if args.compile_blocks and not args.fsdp:
+        p.error("--compile-blocks currently requires --fsdp")
+    if args.profile_step > args.max_steps:
+        p.error("--profile-step must not exceed --max-steps")
     return args
 
 
@@ -191,16 +221,20 @@ def main():
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         learning_rate=args.learning_rate, warmup_steps=args.warmup_steps,
         lr_scheduler_type="constant_with_warmup", weight_decay=0.0,
-        bf16=True, gradient_checkpointing=not args.fsdp,
+        bf16=True, gradient_checkpointing=not args.fsdp and args.activation_checkpoint_every != 0,
         gradient_checkpointing_kwargs={"use_reentrant": False},
         fsdp=args.fsdp,
         fsdp_config=fsdp_config if args.fsdp else None,
-        optim="adamw_torch", remove_unused_columns=False,
+        optim=args.optimizer, remove_unused_columns=False,
+        accelerator_config={"gradient_accumulation_kwargs": {"sync_each_batch": args.sync_each_batch}},
         eval_strategy="steps", eval_steps=args.eval_steps,
         save_strategy="steps" if args.save_checkpoints else "no", save_steps=args.save_steps, save_total_limit=2,
         logging_steps=1, report_to="none", prediction_loss_only=True,
         seed=args.seed, dataloader_pin_memory=True)
     set_seed(args.seed)
+    if args.compile_blocks:
+        from quantizers.nvfp4 import use_exact_quant_op
+        use_exact_quant_op()
     if args.fsdp:
         from fsdp_compat import install_buffer_loading_fix
         install_buffer_loading_fix()
@@ -220,7 +254,9 @@ def main():
                 from safetensors.torch import save_file
                 decode.mkdir(parents=True, exist_ok=True)
                 save_file({k: v.clone() for k, v in student.state_dict().items()}, str(decode / "model.safetensors"))
-        prepare_student(student, decode, "model.", load_weights=not metadata_only)
+        prepare_student(student, decode, "model.", load_weights=not metadata_only,
+                        cache_quantized_weights=args.cache_quantized_weights,
+                        weight_cache_max_gib=args.weight_cache_max_gib)
         g = torch.Generator().manual_seed(args.seed)
         chunks = []
         for _ in range(max(16, world * args.batch_size * args.gradient_accumulation_steps * 2)):
@@ -235,7 +271,9 @@ def main():
             decode = None if args.resume_from_checkpoint else resolve_decoder(args, hf_cache)
         print(f"[rank {rank}] {'building student metadata' if metadata_only else 'loading FP32 student from dequantized FP8 teacher'}", flush=True)
         student = load_text_model(args.teacher_model, True, hf_cache, metadata_only=metadata_only)
-        prepare_student(student, decode, args.decode_prefix, load_weights=not metadata_only)
+        prepare_student(student, decode, args.decode_prefix, load_weights=not metadata_only,
+                        cache_quantized_weights=args.cache_quantized_weights,
+                        weight_cache_max_gib=args.weight_cache_max_gib)
         print(f"[rank {rank}] {'building FP8 teacher metadata' if metadata_only else 'loading real FP8 teacher'}", flush=True)
         teacher = load_text_model(args.teacher_model, False, hf_cache, metadata_only=metadata_only)
         fp8_count = sum(p.numel() for p in teacher.parameters() if p.dtype == torch.float8_e4m3fn)
@@ -252,8 +290,18 @@ def main():
         verify_rank_loading(model, rank)
     trainer = PrefillerTrainer(model=model, args=training_args, train_dataset=train_data,
         eval_dataset=val_data, data_collator=collate_chunks, processing_class=tokenizer)
+    trainer.qad_checkpoint_every = args.activation_checkpoint_every
+    trainer.qad_profile_step = args.profile_step
+    if args.fsdp:
+        from fsdp_tuning import install_fsdp_tuning
+        install_fsdp_tuning(trainer, args.activation_checkpoint_every,
+                            args.fsdp_prefetch_depth, args.fsdp_retain_student_layers,
+                            args.compile_mode if args.compile_blocks else None)
     from metrics import UtilizationCallback
     trainer.add_callback(UtilizationCallback(trainer, args.bf16_peak_tflops, args.fp8_peak_tflops))
+    if args.profile_step:
+        from profiling import ProfileStepCallback
+        trainer.add_callback(ProfileStepCallback(args.profile_step))
     if rank == 0:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
         (Path(args.output_dir) / "run_config.json").write_text(json.dumps(vars(args), indent=2))

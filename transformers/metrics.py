@@ -17,6 +17,15 @@ class UtilizationCallback(TrainerCallback):
                         if isinstance(m, NVFP4FrozenDecodeLinear))
         self.shared = sum(m.weight.numel() for m in model.student.model.modules()
                           if isinstance(m, torch.nn.Linear) and not isinstance(m, NVFP4FrozenDecodeLinear))
+        every = getattr(trainer, "qad_checkpoint_every", 1)
+        checkpointed = [layer for index, layer in enumerate(model.student.model.layers)
+                        if every and index % every == 0]
+        self.checkpointed_dual = sum(m.weight.numel() for layer in checkpointed for m in layer.modules()
+                                    if isinstance(m, NVFP4FrozenDecodeLinear))
+        self.checkpointed_shared = sum(m.weight.numel() for layer in checkpointed for m in layer.modules()
+                                      if isinstance(m, torch.nn.Linear) and not isinstance(m, NVFP4FrozenDecodeLinear))
+        self.checkpointed_full_layers = sum(t == "full_attention" for index, t in enumerate(self.config.layer_types)
+                                           if every and index % every == 0)
         teacher_linears = [m for m in model.teacher.model.modules() if isinstance(m, torch.nn.Linear)]
         self.teacher_fp8 = sum(m.weight.numel() for m in teacher_linears if m.weight.dtype == torch.float8_e4m3fn)
         self.teacher_bf16 = sum(m.weight.numel() for m in teacher_linears if m.weight.dtype != torch.float8_e4m3fn)
@@ -45,12 +54,14 @@ class UtilizationCallback(TrainerCallback):
         # Standard 6N student proxy; QAD performs more work than ordinary training.
         padded_mfu = 6 * self.base_params * padded / (world * self.bf16_peak * seconds)
         real_mfu = 6 * self.base_params * real / (world * self.bf16_peak * seconds)
-        # Executed projection FLOPs: trainable dual branch 8N (fwd+bwd+recompute),
-        # frozen dual branch 6N (fwd+input-grad+recompute), shared frozen linears 6N.
+        # Trainable branch 6N + frozen branch 4N; checkpointing adds 4N.
+        # Shared frozen linears cost 4N, plus 2N when checkpointed.
         full_layers = sum(t == "full_attention" for t in self.config.layer_types)
         causal_attention = 2 * attention_square * full_layers * self.config.num_attention_heads * self.config.head_dim
-        bf16_work = (14 * self.dual + 6 * self.shared + 2 * self.teacher_bf16) * padded
-        bf16_work += 10 * self.head * scored + 5 * causal_attention
+        bf16_work = (10 * self.dual + 4 * self.checkpointed_dual + 4 * self.shared
+                     + 2 * self.checkpointed_shared + 2 * self.teacher_bf16) * padded
+        attention_recompute = 2 * attention_square * self.checkpointed_full_layers * self.config.num_attention_heads * self.config.head_dim
+        bf16_work += 10 * self.head * scored + 4 * causal_attention + attention_recompute
         fp8_work = 2 * self.teacher_fp8 * padded
         ideal_seconds = bf16_work / (world * self.bf16_peak) + fp8_work / (world * self.fp8_peak)
         # Logging here would reset DefaultFlowCallback.should_log before Trainer
@@ -58,6 +69,7 @@ class UtilizationCallback(TrainerCallback):
         self.trainer._utilization_metrics = {"step_seconds": seconds, "tokens_per_second": real / seconds,
             "mfu_student_6n_padded": padded_mfu, "mfu_student_6n_real": real_mfu,
             "hfu_qad_execution_estimate": ideal_seconds / seconds,
-            "peak_gpu_allocated_gib": peak_gib, "cold_step": self.first_step}
+            "peak_gpu_allocated_gib": peak_gib, "cold_step": self.first_step,
+            "profiled_step": state.global_step == getattr(self.trainer, "qad_profile_step", 0)}
         self.first_step = False
         control.should_log = True

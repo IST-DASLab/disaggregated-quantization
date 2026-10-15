@@ -133,6 +133,12 @@ class QuantizedLinear(nn.Linear):
         because returning the buffer ITSELF preserves identity, which formats like
         upcastboth assert on (prefill and decode must ship one tensor).
         """
+        if "_cached_wq" in self._buffers:
+            if self._cached_wq.numel() == 0:
+                # Build only while FSDP has gathered the full master. Buffers are
+                # replicated, so this intentionally retains one full BF16 copy.
+                self._cached_wq = self._compute_wq().to(torch.bfloat16)
+            return self._cached_wq
         if self._wq.numel() == 0:            # --recompute-wq: no cache to read
             # .to(bfloat16) is REQUIRED, not cosmetic. The cache is a bf16 buffer, so
             # the cached mode serves a bf16-rounded weight; _compute_wq returns fp32.
@@ -141,6 +147,23 @@ class QuantizedLinear(nn.Linear):
             # change to the format rather than a memory optimisation.
             return self._compute_wq().to(torch.bfloat16)
         return self._wq
+
+    def enable_weight_cache(self) -> None:
+        """Lazily cache BF16 quantized weights outside the checkpoint schema.
+
+        Call invalidate_weight_cache after an optimizer update (or post_update).
+        Keep the cache valid through all microbatches and checkpoint recomputes.
+        """
+        self.register_buffer("_cached_wq", torch.empty(0, dtype=torch.bfloat16,
+                             device=self.weight.device), persistent=False)
+
+    def invalidate_weight_cache(self) -> None:
+        if "_cached_wq" in self._buffers:
+            self._cached_wq = self._cached_wq.new_empty(0)
+
+    def _load_from_state_dict(self, *args, **kwargs):
+        self.invalidate_weight_cache()
+        return super()._load_from_state_dict(*args, **kwargs)
 
     @classmethod
     def from_linear(cls, linear: nn.Linear, **kwargs) -> "QuantizedLinear":
@@ -166,6 +189,7 @@ class QuantizedLinear(nn.Linear):
     def post_update(self, step: int, total_steps: int) -> None:
         """Called after optimizer.step(): advance schedule and refresh _wq buffer."""
         self._update_schedule(step, total_steps)
+        self.invalidate_weight_cache()
         if self._wq.numel():                 # nothing to refresh when recomputing
             self._wq.copy_(self._compute_wq())
 
