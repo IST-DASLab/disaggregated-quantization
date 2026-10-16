@@ -143,8 +143,8 @@ locally; installed packages are not patched. The single-host launcher uses loopb
 for rendezvous and prioritizes CUDA libraries from the active `.venv`.
 
 Checkpoints are sharded, resumable Trainer states with model, optimizer, scheduler
-and RNG state. They include frozen weights, so expect large checkpoints. At most
-two are retained. Resume constructs metadata and restores checkpoint shards directly;
+and RNG state. They include frozen weights, so expect large checkpoints. Only
+the latest is retained. Resume constructs metadata and restores checkpoint shards directly;
 it does not reload/reconvert the original teacher and GGUF decoder. Token caches
 are memory mapped so ranks share their filesystem cache pages.
 A checkpoint is not itself a deployable prefiller.
@@ -160,6 +160,22 @@ list sparse eight-GPU peaks; dense peaks are half those values, divided by eight
 Adjust `--bf16-peak-tflops` and `--fp8-peak-tflops` for other hardware. The first
 step of each process, including after resume, includes compilation/warmup; use
 later steps for throughput comparisons.
+
+The full eight-B200 run completed all 980 steps at MBS 4, accumulation 1
+(global batch 32), sequence length 8192, regional compilation, fused AdamW,
+4 GiB/rank BF16 cache cap, all student blocks checkpointed and prefetch depth 1.
+It exited successfully with no OOM or allocation-retry errors. Final eval KL was
+**1.40218**; warm steps averaged **26.448 s** (median 26.127 s), with a maximum
+allocated peak of **129.59 GiB/GPU**. Mean padded student MFU was 8.92%; the
+broader QAD execution estimate was 21.17%. Trainer runtime was about 7 h 43 min,
+excluding model loading and corpus preprocessing.
+
+Artifacts are in `outputs/qwen38-iq1s-8gpu-mbs4-20261015/`. Only
+`checkpoint-980/` is retained for resume (about 360 GiB); the older checkpoint
+was removed at the user's request. Logs, final Trainer state, exact `start.sh`
+and cached token chunks are preserved. The completed tmux session was closed.
+Full-model resume and packed NVFP4 export remain untested; the final training
+checkpoint is not a serving-format export.
 
 Post-fix four-B200 measurements (GPUs 0,5,6,7), sequence 8192, batch/rank 1,
 accumulation 1, KL chunks 1024, fused AdamW, cache disabled and all student blocks
@@ -177,8 +193,7 @@ pre-fix eager warm step was 52.975 seconds. BF16 reduced profiled `aten::mm` tim
 from 44.17 to 1.59 seconds and enabled cuDNN BF16 attention. Artifacts are under
 `outputs/b200-4gpu-{bf16,compiled}-baseline/`. These short runs validate execution
 and throughput, not convergence: eager/compiled final eval KL was 5.525/5.970.
-Only four GPUs are authorized for current tuning; wait for explicit user approval
-before expanding to eight.
+These four-GPU measurements predate the user-authorized full eight-GPU run below.
 
 The next four-GPU candidate uses batch/rank 2, a 4 GiB weight-cache cap and
 explicit prefetch depth 1, with other settings unchanged. Warm steps 2/4 took

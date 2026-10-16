@@ -1,3 +1,45 @@
+Full eight-GPU training completed (2026-10-16)
+
+The user authorized the full eight-GPU run at MBS 4; this supersedes the
+historical four-GPU-only and bounded-run restrictions below. All 980 steps
+completed successfully (exit_code 0), with no traceback, OOM or allocation-retry
+errors in the log. Final evaluation KL: 1.4021805525. Trainer runtime about
+7 h 43 min, excluding model loading and corpus preprocessing. All GPUs were
+verified free after completion; the finished job's tmux session was removed.
+
+Run directory: transformers/outputs/qwen38-iq1s-8gpu-mbs4-20261015/
+Exact launch script: start.sh; output log: train.log; exit_code contains 0.
+Final metrics: trainer_state.json. Resume checkpoint: checkpoint-980/.
+The user requested keeping only the last checkpoint: checkpoint-950 was removed
+(~359.58 GiB recovered). Preserve checkpoint-980 (~359.58 GiB), logs, metrics,
+launch script and prepared token caches. Future runs retain only one checkpoint
+(save_total_limit=1). No other user's processes or notebooks were touched.
+
+Configuration: all eight CUDA devices, normal HF_HOME, no offloading,
+PYTORCH_ALLOC_CONF=expandable_segments:True, 980 steps, warmup 100, LR 3e-6,
+MBS 4, accumulation 1 (global batch 32), seq 8192, train/val budgets 200M/200K,
+fused AdamW, regional compilation, lazy BF16 cache capped at 4 GiB/rank,
+checkpoint every student block, explicit prefetch depth 1, retain 0,
+sync_each_batch, KL chunks 1024, checkpoint/eval every 50 steps.
+
+First cold step: 276.3 s. All 979 warm steps: mean 26.44846 s, median 26.12707 s;
+last 100 mean 26.51378 s. Peak allocated memory: 129.58963 GiB per GPU maximum.
+Mean padded-token student 6N MFU: 8.9179%; QAD execution estimate: 21.1697%.
+Final logged training KL: ~1.375; run mean training loss: ~1.719.
+Eval KL: step 50 2.141, 100 1.875, 150 1.752, 200 1.702, 250 1.682,
+300 1.657, final 980 1.40218. Corpus preprocessing completed and is cached;
+the filtered available corpus yielded roughly 93M usable tokens rather than
+reaching the configured 200M cap. Completed training covered ~0.978 epochs.
+
+Full-model checkpoint saving completed successfully; final model/optimizer DCP
+metadata and scheduler/RNG/Trainer states were verified. Full-model resume has
+not been exercised. Packed NVFP4 prefiller export is NOT automatic and has not
+been run for this trained 27B model. Export remains a separate requested action;
+earlier exports were tiny validation models only. Preserve the final checkpoint
+until export and serving validation are complete.
+
+Historical tuning record follows:
+
 B200 FSDP tuning update (2026-10-15)
 
 Authorization: use ONLY GPUs 0,5,6,7 for bounded tuning. Another user's vLLM

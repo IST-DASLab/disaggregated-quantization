@@ -228,7 +228,7 @@ def main():
         optim=args.optimizer, remove_unused_columns=False,
         accelerator_config={"gradient_accumulation_kwargs": {"sync_each_batch": args.sync_each_batch}},
         eval_strategy="steps", eval_steps=args.eval_steps,
-        save_strategy="steps" if args.save_checkpoints else "no", save_steps=args.save_steps, save_total_limit=2,
+        save_strategy="steps" if args.save_checkpoints else "no", save_steps=args.save_steps, save_total_limit=1,
         logging_steps=1, report_to="none", prediction_loss_only=True,
         seed=args.seed, dataloader_pin_memory=True)
     set_seed(args.seed)
