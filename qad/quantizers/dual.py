@@ -55,7 +55,7 @@ class _DualActMixin:
     """Activation quantization restricted to prefill positions."""
 
     def _quant_act(self, x: Tensor, mask=None) -> Tensor:
-        if self.training or self.calibrating:
+        if self.calibrating or (self.training and not getattr(self, "observer_frozen", False)):
             with torch.no_grad():
                 a = x.detach().float().abs()
                 if mask is not None:
@@ -63,7 +63,8 @@ class _DualActMixin:
                 self.act_amax = torch.maximum(self.act_amax, a.amax())
             self._observed = True
         gscale = activation_global_scale(self.act_amax) if self._observed else None
-        return fake_quant_ste(x, self.block_size, gscale)
+        return fake_quant_ste(x, self.block_size, gscale,
+                              native_rounding=getattr(self, "native_activation_rounding", False))
 
 
 class DualSharedNVFP4Linear(_DualActMixin, NVFP4Linear):

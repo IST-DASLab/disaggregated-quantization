@@ -1,0 +1,137 @@
+Training, export and serving audit — 2026-10-16
+
+User decision: norms, embeddings and LM head are SHARED and FROZEN from the
+external decoder. Do not replace an old checkpoint's specialized norms silently.
+
+New training contract
+---------------------
+Only NVFP4 text projection masters train. Token embeddings, LM head, all text
+norms, GDN in_proj_a/b, convolution, A_log and dt_bias are frozen decoder values.
+Shared storage/activations are BF16; trainable masters/gradients remain FP32.
+The normal HF cache is used, without offloading.
+
+For each projection, W ~= gW * FP8_block_scale * FP4_code. Blocks contain 16
+values along K. The activation uses the same two-level scheme with gA.
+Compressed-tensors stores 1/gW and 1/gA; ODP stores gW and gA in GGUF metadata.
+The runtime applies gW*gA after the scaled FP4 dot product.
+
+Attention Q/K/V, MLP gate/up and (for NEW runs) GDN QKV/Z each share tensor-global
+scales within their group. Their WEIGHT MATRICES ARE DISTINCT. Sharing scales
+allows vLLM's concatenated GEMM; llama.cpp can still run separate GEMMs with the
+same values. No existing trained projection is regrouped/requantized at export.
+
+Global activation scales are calibrated on all ranks before optimization, MAX
+reduced, then frozen throughout training and export. Per-block activation scales
+remain dynamic. Before every DCP save, replicated observers are synchronized.
+Static resume restores the fixed scales; changing observer mode requires an
+explicit recalibration request. Quantization-contract fields in student-config/
+are restored rather than inferred from the base teacher when exporting/resuming.
+
+Native activation rounding uses nearest-even. Historical weight packing remains
+unchanged. The new activation rounder matched stock vLLM's GPU quantizer exactly
+on 393216 sampled BF16 values and the explicit midpoint regression. This is an
+activation-quantizer check, not a bit-exact whole-model inference claim.
+
+The new phase mask matches hybrid NIXL: the final prompt token is evaluated on
+the decoder, producing the first output logits. Earlier prompt positions use
+prefill weights; assistant tokens use frozen decoder weights. The actual cached
+training corpus contains 32059 documents, all with one assistant span, so no
+historical-assistant-as-prompt ambiguity was found in this run.
+
+Automatic export
+----------------
+After the final resumable checkpoint, rank zero releases the training models,
+exports the real compressed-tensors NVFP4 model, attaches frozen BF16 vision and
+processor assets for the real model, exports ODP GGUF blocks, then launches STOCK
+vLLM for text/image HTTP checks. No custom serving entrypoint is used by this
+check. A failed check fails the command while preserving the final checkpoint.
+Tokenizer files are explicitly saved with FSDP checkpoints: Accelerate's save
+path bypassed the previous _save() tokenizer hook.
+
+Packed export validation checks real UINT8 FP4 codes, FP8 block-scale shapes,
+positive global scales, fusion-group agreement, inference cache config and
+standalone tokenizer assets. Outputs are staged before publication. Only an
+existing validated artifact belonging to the same run can be replaced.
+
+Completed legacy 980-step run
+----------------------------
+transformers/outputs/qwen38-iq1s-8gpu-mbs4-20261015/checkpoint-980 remains intact.
+That run used the old contract: specialized prefill norms, running rank-local
+activation observers, independent GDN QKV/Z weight globals, historical midpoint
+rounding, and prompt-end rather than NIXL's final-prompt-decoder boundary.
+
+DCP selected different writer ranks for replicated buffers, e.g. layer-0 gate
+act_amax from __1_0.distcp and up act_amax from __5_0.distcp. All 64 gate/up and
+16 attention Q/K/V input-scale groups disagreed in the export. Values omitted
+by old DCP deduplication cannot be recovered by synchronization after loading.
+
+148 of the 209 exported text norms differ from the decoder at BF16 precision.
+The source training code qad/quantizers/frozen_decode.py ALSO specializes norms;
+the linked llama.cpp documentation's statement that it matches that split is
+incorrect for this quantizer. Original qad uses running activation maxima during
+training and rank-zero validation calibration before exports, without resetting
+the training maxima. It does not freeze calibration after a one-time pass.
+Its single-rank model export avoids DCP's mixed-writer observer-buffer problem.
+
+The actual 27B prefill-nvfp4 export was loaded with unmodified vLLM 0.31.0. Real
+NVFP4 kernels ran and both text and image HTTP requests completed. However,
+stock vLLM warned that fused weight/input global scales differed and collapsed
+them with max(). Therefore that OLD artifact is loadable, but not faithfully
+servable as-is. Evidence: logs/evals/legacy-export-stock-vllm/serving-check.json.
+The compatibility serving wrapper preserves independent projections/scales, but
+cannot repair a different training handoff or the old norm contract.
+
+Do not resume full benchmarks or claim that run matches the new contract. It
+needs retraining; changing norms/grouping/scales only at export is not equivalent.
+No full 27B retraining was started during this audit.
+
+GGUF export of the legacy run
+----------------------------
+prefill-gguf/ contains 64 real ODP GGUF layer files and export_manifest.json.
+All 400 NVFP4 projections and 48 BF16 gate projections were read back and checked
+byte-for-byte, including every FP4 code, FP8 block scale and global-scale header.
+No tensor or global scale was requantized or reconciled. The original individual
+scales can be retained because this ODP format stores projections separately.
+The manifest records that specialized source norms are omitted by the shared-
+norm runtime. These are usable ODP-format projection blocks, not evidence that
+the old complete trained model is preserved when using shared decoder norms.
+
+New-contract verification
+-------------------------
+Two-GPU tiny FSDP training, saving, static-scale resume, packed export and replacing
+the run's prior export pass. The fresh automatic export includes its tokenizer
+and chat template. Stock vLLM HTTP generation passes with native NVFP4 kernels,
+no scale-collapse warnings and no serving patches. See:
+transformers/outputs/audit-automatic-serving-smoke/serving-check/serving-check.json
+The final pipeline smoke adds automatic GGUF export as well.
+
+Targeted regressions cover synchronized two-rank DCP observer saves/loads,
+unchanged packed weights during explicit legacy observer reconciliation, static
+observer freezing, shared decoder norms, native midpoint rounding, phase masks,
+cached KV/recurrent-state handoff vs full mixed forward, export/tokenizer assets,
+and GGUF byte-level round trips. Full-model numerical parity is not established
+by these tests or by successful HTTP generation.
+
+Remaining cross-runtime difference
+----------------------------------
+Exact linked llama.cpp commit:
+https://github.com/IST-DASLab/disaggregated-llama.cpp/commit/967b479a5ab04c967a0591d02e130b4b35dbfe3d
+
+It activates ODP for ubatch.n_tokens > 1 and otherwise uses the decoder. A normal
+multi-token prompt therefore includes its final token on the prefiller. Stock
+vLLM hybrid NIXL explicitly transfers through N-1 and evaluates that final token
+on the decoder. Norm/global-scale consistency does not eliminate this difference.
+The linked runtime needs its final-token scheduling changed before one may claim
+the NEW model has the same handoff in both runtimes. Its behavior for a one-token
+tail of a chunk and batches containing multiple decoding sequences also needs
+explicit phase scheduling rather than classifying phase solely by batch size.
+
+The eval runner now rejects a legacy prompt-end prefiller before GPU startup and
+uses FP32 recurrent-state storage to avoid NIXL's default BF16 state truncation.
+Only the baseline's small smoke completed before evaluation was paused. There
+are no completed MMLU-Pro/MMMU-Pro combo scores to report.
+
+Native llama.cpp IQ1_S matmuls and dequantized-BF16 decoder matmuls may also differ
+numerically, as may native FP4 accumulation and fake-quant BF16 GEMMs. Quantization
+and layout agreement do not imply bit-exact outputs across these kernels. Full
+runtime cache/state/logit parity remains a separate required validation.

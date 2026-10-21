@@ -92,6 +92,33 @@ def e2m1_codes(x: Tensor) -> Tensor:
     return torch.where(mag == 0, torch.zeros_like(code), code)
 
 
+@torch.compile(dynamic=True)
+def e2m1_round_even(x: Tensor) -> Tensor:
+    """Native FP4 activation conversion uses nearest-even at exact midpoints.
+
+    Keep the historical weight rounder unchanged: changing an old checkpoint's
+    weight packing would silently change the model that was trained.
+    """
+    levels = torch.tensor(E2M1_LEVELS, device=x.device, dtype=x.dtype)
+    bounds = torch.tensor(E2M1_BOUNDS, device=x.device, dtype=x.dtype)
+    magnitude = x.abs()
+    index = torch.bucketize(magnitude, bounds)
+    boundary = bounds[index.clamp(max=len(E2M1_BOUNDS) - 1)]
+    index = index + ((index % 2 == 1) & (magnitude == boundary)).to(index.dtype)
+    return torch.sign(x) * levels[index]
+
+
+@torch.library.custom_op("qad::nvfp4_activation_quantize_native", mutates_args=())
+def _native_activation_quant(x: Tensor, global_scale: Tensor | None, block: int) -> Tensor:
+    # Keep divisions/scales outside compiler fusion across FP4 thresholds.
+    return blocked_quantize(x, e2m1_round_even, block, global_scale=global_scale)[0]
+
+
+@_native_activation_quant.register_fake
+def _native_activation_quant_fake(x, global_scale, block):
+    return torch.empty_like(x)
+
+
 def nvfp4_quantize(x: Tensor, block: int = BLOCK, global_scale: Tensor | None = None,
                    signed: bool = False) -> tuple[Tensor, Tensor, Tensor]:
     """Two-level NVFP4 fake-quant along the last dim.
@@ -125,7 +152,8 @@ def _exact_quant_fake(x, global_scale, block, signed):
             x.new_empty((), dtype=torch.float32) if global_scale is None else torch.empty_like(global_scale))
 
 
-def fake_quant_ste(x: Tensor, block: int, global_scale: Tensor | None) -> Tensor:
+def fake_quant_ste(x: Tensor, block: int, global_scale: Tensor | None,
+                   native_rounding: bool = False) -> Tensor:
     """STE fake-quant for ACTIVATIONS, with the quantize itself under no_grad.
 
     ste(x, q) is `x + (q - x).detach()`: the forward value is q and the gradient goes
@@ -143,7 +171,8 @@ def fake_quant_ste(x: Tensor, block: int, global_scale: Tensor | None) -> Tensor
     twice per step, so the saving lands twice.
     """
     with torch.no_grad():
-        q = nvfp4_quantize(x.detach(), block, global_scale)[0]
+        q = (_native_activation_quant(x.detach(), global_scale, block) if native_rounding else
+             nvfp4_quantize(x.detach(), block, global_scale)[0])
     return ste(x, q)
 
 

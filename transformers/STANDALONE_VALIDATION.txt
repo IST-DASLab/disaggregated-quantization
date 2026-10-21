@@ -1,0 +1,27 @@
+Standalone validation — 2026-10-21
+
+The source tree was copied to an unrelated directory named relocated-project
+under /tmp. Virtualenvs, outputs, caches and Python caches were excluded.
+PYTHONPATH was cleared. No adjacent qad/ or evals/ source tree was present.
+
+CPU validation from the copy: 28 passed, 1 CUDA-only test skipped.
+Includes two-rank Gloo checkpoint round trips, local import-origin checks and
+six CLI --help checks in isolated Python subprocesses from unrelated directories.
+
+GPU integration from the copy: PASS, process exit 0.
+Two B200 GPUs, two tiny-model FSDP training steps with block compilation,
+static activation calibration, evaluation and checkpoint saves. Only the final
+checkpoint was retained. Automatic real NVFP4 export and two ODP GGUF blocks
+passed structural/byte-level validation. Stock vLLM served an HTTP generation
+request using native NVFP4 kernels, with all fused global scales preserved.
+The serving process shut down at the end of the check.
+
+Existing compatible Python environments were selected explicitly using
+TRAINING_PYTHON and --serving-python. These provide installed dependencies;
+project code and export helpers all came from the relocated directory.
+Fresh dependency installation was not repeated. Setup commands and pinned
+training/serving requirements are included in README.md.
+
+This validates source relocation and the synthetic end-to-end pipeline, not
+new full-model training or cross-runtime numerical equivalence. The existing
+inference audit and llama.cpp handoff limitations remain documented separately.

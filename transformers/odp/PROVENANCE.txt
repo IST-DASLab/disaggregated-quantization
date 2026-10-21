@@ -1,0 +1,15 @@
+pack_prefill.py and nvfp4_ggml.py are vendored from:
+https://github.com/IST-DASLab/disaggregated-llama.cpp/tree/967b479a5ab04c967a0591d02e130b4b35dbfe3d/tools/odp
+Upstream MIT license is included in LICENSE.
+
+Local change: pack_layer_trained accepts validate_groups=False to skip the two
+validation-only multi-projection grp() calls. Projections are still written
+SEPARATELY with their ORIGINAL individual global scales. No packed codes, FP8
+scales, or tensor-global scales are changed. This is only enabled explicitly
+for legacy exports by the wrapper, which records incompatibilities in a manifest.
+
+The wrapper supports text-only and multimodal tensor prefixes, explicit layer
+types, staged publication, and byte-exact verification after GGUF serialization.
+The standalone copy also removes the parent-repository gguf-py path injection;
+it uses the gguf dependency installed from requirements.txt.
+Use export_gguf.py rather than the vendored main().

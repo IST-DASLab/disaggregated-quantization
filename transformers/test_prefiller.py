@@ -268,3 +268,77 @@ def test_gguf_head_layout_round_trip():
     assert torch.equal(restore_heads(tiled, config), hf)
     norm = torch.tensor([0.5, 1.5])
     assert torch.equal(restore_layout("model.norm.weight", norm, config), norm - 1)
+
+
+def test_mixed_forward_matches_cached_handoff_and_detects_boundary_change(tmp_path):
+    from transformers.models.qwen3_5 import modeling_qwen3_5
+    from quantizers.frozen_decode import NVFP4FrozenDecodeLinear
+    modeling_qwen3_5.torch_recurrent_gated_delta_rule = inspect.unwrap(
+        modeling_qwen3_5.torch_recurrent_gated_delta_rule)
+    student = base_model()
+    save_file({k: v.detach().clone() for k, v in student.state_dict().items()},
+              str(tmp_path / "model.safetensors"))
+    prepare_student(student, tmp_path, "model.")
+    with torch.no_grad():
+        for parameter in student.parameters():
+            if parameter.requires_grad:
+                parameter.add_(0.03)
+        for module in student.modules():
+            if isinstance(module, NVFP4FrozenDecodeLinear):
+                module.act_amax.fill_(4)
+                module._observed = True
+    student.eval()
+    ids = torch.tensor([[1, 2, 3, 4, 5, 6, 7, 8]])
+    mask = torch.arange(ids.shape[1]).unsqueeze(0) < 4
+    with torch.no_grad(), quant_phase(mask):
+        full = student.model(input_ids=ids, use_cache=False).last_hidden_state
+    with torch.no_grad(), quant_phase(mask[:, :4]):
+        prefix = student.model(input_ids=ids[:, :4], use_cache=True)
+    parts, cache = [prefix.last_hidden_state], prefix.past_key_values
+    for index in range(4, ids.shape[1]):
+        with torch.no_grad(), quant_phase(mask[:, index:index + 1]):
+            output = student.model(input_ids=ids[:, index:index + 1],
+                                   past_key_values=cache, use_cache=True)
+        parts.append(output.last_hidden_state)
+        cache = output.past_key_values
+    torch.testing.assert_close(torch.cat(parts, dim=1), full, rtol=1e-4, atol=1e-5)
+    # NIXL's hybrid path switches at N-1, whereas the existing training mask
+    # switches at N. Even identical weights/artifacts cannot erase this change.
+    shifted = mask.clone()
+    shifted[:, 3] = False
+    with torch.no_grad(), quant_phase(shifted):
+        other_boundary = student.model(input_ids=ids, use_cache=False).last_hidden_state
+    assert (full[:, 3:] - other_boundary[:, 3:]).abs().max() > 1e-4
+
+
+def test_shared_decoder_contract_and_native_activation_rounding(tmp_path):
+    from types import SimpleNamespace
+    from train import configure_quantization_contract
+    from prefiller import training_phase_mask
+    from quantizers.frozen_decode import FrozenDecodeNorm, NVFP4FrozenDecodeLinear
+    from quantizers.nvfp4 import fake_quant_ste
+    student = base_model()
+    external = {k: v.detach().clone() + 0.05 for k, v in student.state_dict().items()}
+    save_file(external, str(tmp_path / "model.safetensors"))
+    configure_quantization_contract(student, SimpleNamespace(resume_from_checkpoint=None))
+    prepare_student(student, tmp_path, "model.")
+    for name, module in student.named_modules():
+        if isinstance(module, FrozenDecodeNorm):
+            assert not module.weight_prefill.requires_grad
+            assert not module.weight_decode.requires_grad
+            assert torch.equal(module.weight_prefill, module.weight_decode)
+            assert torch.equal(module.weight_decode, external[name + ".weight"].bfloat16())
+        elif isinstance(module, NVFP4FrozenDecodeLinear):
+            assert module.weight.requires_grad and module.weight.dtype == torch.float32
+            assert module.native_activation_rounding
+    assert student.model.embed_tokens.weight.dtype == student.lm_head.weight.dtype == torch.bfloat16
+    gdn = student.model.layers[0].linear_attn
+    assert gdn.in_proj_qkv._group is gdn.in_proj_z._group
+    labels = torch.tensor([[-100, -100, -100, 5, 6]])
+    assert training_phase_mask(labels, student.config).tolist() == [[True, True, False, False, False]]
+    assert training_phase_mask(torch.tensor([[-100, 2]]), student.config).tolist() == [[True, False]]
+    x = torch.tensor([[.25, .75, 1.25, 1.75, 2.5, 3.5, 5., 6.,
+                       -.25, -.75, -1.25, -1.75, -2.5, -3.5, -5., -6.]], dtype=torch.bfloat16)
+    actual = fake_quant_ste(x, 16, torch.tensor(1 / 448), native_rounding=True)
+    expected = torch.tensor([[0, 1, 1, 2, 2, 4, 4, 6, 0, -1, -1, -2, -2, -4, -4, -6]])
+    assert torch.equal(actual, expected.bfloat16())

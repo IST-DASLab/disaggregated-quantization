@@ -3,6 +3,9 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
+import subprocess
+import sys
 
 import torch
 import transformers
@@ -14,6 +17,8 @@ from prefiller import (ChunkDataset, Prefiller, PrefillerTrainer, TextOnly,
                        collate_chunks, prepare_student, assert_trainable_prefill_only)
 from training.data import build_chunks, get_reasoning_train_val, _chunk_cache_path
 
+ROOT = Path(__file__).resolve().parent
+
 
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__)
@@ -21,8 +26,8 @@ def parse_args():
     p.add_argument("--decode-model", default="ISTA-DASLab/GSQ-RCO-small")
     p.add_argument("--decode-gguf", default="Qwen3.8-27B-GSQ-RCO-IQ1_S.gguf")
     p.add_argument("--decode-prefix", default="model.language_model.")
-    p.add_argument("--output-dir", default="transformers/outputs/qwen38-iq1s")
-    p.add_argument("--cache-dir", default="transformers/.cache")
+    p.add_argument("--output-dir", default=str(ROOT / "outputs/qwen38-iq1s"))
+    p.add_argument("--cache-dir", default=str(ROOT / ".cache"))
     p.add_argument("--max-seq-len", type=int, default=8192)
     p.add_argument("--train-tokens", type=int, default=200_000_000)
     p.add_argument("--val-tokens", type=int, default=200_000)
@@ -47,6 +52,19 @@ def parse_args():
     p.add_argument("--save-steps", type=int, default=50)
     p.add_argument("--save-checkpoints", action=argparse.BooleanOptionalAction, default=True,
                    help="Disable for disposable throughput benchmarks")
+    p.add_argument("--export-prefiller", action=argparse.BooleanOptionalAction, default=True,
+                   help="Automatically pack and validate the final NVFP4 serving model after checkpoint saving")
+    p.add_argument("--export-gguf", action=argparse.BooleanOptionalAction, default=True,
+                   help="Also export lossless per-layer GGUF ODP blocks from the packed NVFP4 model")
+    p.add_argument("--gguf-tag", help="ODP decoder tag; inferred from the decoder GGUF filename by default")
+    p.add_argument("--verify-serving", action=argparse.BooleanOptionalAction, default=True,
+                   help="After export, run stock vLLM text/image HTTP checks on the released rank-zero GPU")
+    p.add_argument("--serving-python", default=str(ROOT / ".venv-serving/bin/python"))
+    p.add_argument("--activation-observer-mode", choices=["static", "running"], default="static",
+                   help="Calibrate once and freeze (default), or reproduce legacy running observers")
+    p.add_argument("--calibration-batches", type=int, default=8)
+    p.add_argument("--recalibrate-activations", action="store_true",
+                   help="Explicitly reset calibration when resuming a legacy or changed contract")
     p.add_argument("--eval-steps", type=int, default=50)
     p.add_argument("--logit-chunk-size", type=int, default=1024)
     p.add_argument("--cache-quantized-weights", action=argparse.BooleanOptionalAction, default=True,
@@ -80,6 +98,18 @@ def parse_args():
         p.error("--compile-blocks currently requires --fsdp")
     if args.profile_step > args.max_steps:
         p.error("--profile-step must not exceed --max-steps")
+    if args.calibration_batches < 1:
+        p.error("--calibration-batches must be positive")
+    if args.export_prefiller and args.save_checkpoints and args.verify_serving and not Path(args.serving_python).is_file():
+        p.error("Serving validation needs --serving-python pointing to a vLLM environment; "
+                "--no-verify-serving explicitly skips the runtime check")
+    if args.resume_from_checkpoint:
+        previous = Path(args.resume_from_checkpoint).parent / "run_config.json"
+        saved = json.loads(previous.read_text()) if previous.is_file() else {}
+        legacy = saved.get("activation_observer_mode", "running") != args.activation_observer_mode
+        if legacy and not args.recalibrate_activations:
+            p.error("Changing observer mode on resume requires --recalibrate-activations; "
+                    "use --activation-observer-mode running for a legacy continuation")
     return args
 
 
@@ -105,6 +135,17 @@ def tiny_models():
             parent, _, child = name.rpartition(".")
             setattr(teacher.model.get_submodule(parent), child, fp8)
     return student, teacher
+
+
+def tiny_tokenizer():
+    """A local synthetic tokenizer makes smoke exports loadable by stock vLLM."""
+    from tokenizers import Tokenizer, models, pre_tokenizers
+    from transformers import PreTrainedTokenizerFast
+    backend = Tokenizer(models.WordLevel({f"tok{i}": i for i in range(256)}, unk_token="tok0"))
+    backend.pre_tokenizer = pre_tokenizers.Whitespace()
+    tokenizer = PreTrainedTokenizerFast(tokenizer_object=backend, unk_token="tok0", pad_token="tok0")
+    tokenizer.chat_template = "{% for message in messages %}{{ message['content'] }} {% endfor %}tok1 "
+    return tokenizer
 
 
 def load_text_model(model_id, dequantize, cache_dir, metadata_only=False):
@@ -200,6 +241,22 @@ def load_datasets(tokenizer, args, cache):
     return tuple(ChunkDataset(torch.load(path, mmap=True, weights_only=False)) for path in paths)
 
 
+def configure_quantization_contract(student, args):
+    fields = ("prefiller_native_activation_rounding", "prefiller_fuse_gdn_scales",
+              "prefiller_shared_decoder_norms", "prefiller_bf16_shared_parameters")
+    saved = {}
+    if args.resume_from_checkpoint:
+        path = Path(args.resume_from_checkpoint).parent / "student-config/config.json"
+        saved = json.loads(path.read_text()) if path.is_file() else {}
+    for field in fields:
+        # Resume never silently regroups/requantizes an existing master or
+        # changes activation rounding, even when recalibration is requested.
+        setattr(student.config, field, saved.get(field, False) if args.resume_from_checkpoint else True)
+    student.config.prefiller_handoff_boundary = (saved.get("prefiller_handoff_boundary", "prompt-end")
+                                                if args.resume_from_checkpoint else "last-prompt-decode")
+    student.config.prefiller_activation_observer_mode = getattr(args, "activation_observer_mode", "static")
+
+
 def main():
     args = parse_args()
     cache = Path(args.cache_dir).resolve()
@@ -247,6 +304,7 @@ def main():
                 student, teacher = tiny_models()
         else:
             student, teacher = tiny_models()
+        configure_quantization_contract(student, args)
         # A local dense decoder fixture makes all frozen tensor sources explicit.
         decode = cache / "tiny-decoder"
         with training_args.main_process_first():
@@ -264,13 +322,14 @@ def main():
             labels = ids.clone()
             labels[:8] = -100
             chunks.append((ids, labels, torch.ones_like(ids)))
-        train_data, val_data, tokenizer = ChunkDataset(chunks), ChunkDataset(chunks[:world * 2]), None
+        train_data, val_data, tokenizer = ChunkDataset(chunks), ChunkDataset(chunks[:world * 2]), tiny_tokenizer()
     else:
         hf_cache = HF_HUB_CACHE
         with training_args.main_process_first():
             decode = None if args.resume_from_checkpoint else resolve_decoder(args, hf_cache)
         print(f"[rank {rank}] {'building student metadata' if metadata_only else 'loading FP32 student from dequantized FP8 teacher'}", flush=True)
         student = load_text_model(args.teacher_model, True, hf_cache, metadata_only=metadata_only)
+        configure_quantization_contract(student, args)
         prepare_student(student, decode, args.decode_prefix, load_weights=not metadata_only,
                         cache_quantized_weights=args.cache_quantized_weights,
                         weight_cache_max_gib=args.weight_cache_max_gib)
@@ -291,6 +350,10 @@ def main():
     trainer = PrefillerTrainer(model=model, args=training_args, train_dataset=train_data,
         eval_dataset=val_data, data_collator=collate_chunks, processing_class=tokenizer)
     trainer.qad_checkpoint_every = args.activation_checkpoint_every
+    if args.activation_observer_mode == "static":
+        from observers import StaticActivationCalibration
+        trainer.add_callback(StaticActivationCalibration(trainer, args.calibration_batches,
+                             bool(args.resume_from_checkpoint), args.recalibrate_activations))
     trainer.qad_profile_step = args.profile_step
     if args.fsdp:
         from fsdp_tuning import install_fsdp_tuning
@@ -304,6 +367,8 @@ def main():
         trainer.add_callback(ProfileStepCallback(args.profile_step))
     if rank == 0:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+        config_dir = Path(args.output_dir) / "student-config"
+        student.config.save_pretrained(config_dir)
         (Path(args.output_dir) / "run_config.json").write_text(json.dumps(vars(args), indent=2))
         print(f"Training on {world} GPUs; global batch = {world * args.batch_size * args.gradient_accumulation_steps}", flush=True)
     trainer.train(resume_from_checkpoint=args.resume_from_checkpoint)
@@ -318,6 +383,39 @@ def main():
         trainer._save_checkpoint(trainer.model, trial=None)
     if torch.distributed.is_initialized():
         torch.distributed.destroy_process_group()
+    if rank == 0 and args.export_prefiller and args.save_checkpoints:
+        import gc
+        del trainer, model, student, teacher
+        gc.collect()
+        torch.cuda.empty_cache()
+        # Other ranks can exit; export uses CPU and the completed checkpoint,
+        # never gathers a second full model on a training GPU.
+        command = [sys.executable, str(Path(__file__).with_name("export_prefiller.py")),
+                   "--checkpoint", str(final.parent),
+                   "--student-config", str(config_dir / "config.json"),
+                   "--teacher-model", args.teacher_model,
+                   "--replace-existing",
+                   "--output-dir", str(Path(args.output_dir) / "prefill-nvfp4")]
+        if not args.smoke_test:
+            command.append("--multimodal")
+        subprocess.run(command, check=True, env=os.environ | {"CUDA_VISIBLE_DEVICES": "",
+                                                            "OMP_NUM_THREADS": "8"})
+        if args.export_gguf:
+            decoder_name = args.decode_model if args.decode_model.endswith(".gguf") else args.decode_gguf
+            match = re.search(r"(?:IQ|Q)\d(?:_[A-Z0-9]+)+", decoder_name)
+            tag = args.gguf_tag or (match.group() if match else "BF16")
+            subprocess.run([sys.executable,
+                            str(ROOT / "export_gguf.py"),
+                            str(Path(args.output_dir) / "prefill-nvfp4"),
+                            str(Path(args.output_dir) / "prefill-gguf"),
+                            "--tag", tag, "--replace-existing"], check=True,
+                           env=os.environ | {"CUDA_VISIBLE_DEVICES": "", "OMP_NUM_THREADS": "8"})
+        if args.verify_serving:
+            subprocess.run([args.serving_python,
+                            str(ROOT / "check_serving.py"),
+                            str(Path(args.output_dir) / "prefill-nvfp4"), "--gpu",
+                            os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0],
+                            "--output", str(Path(args.output_dir) / "serving-check")], check=True)
 
 
 if __name__ == "__main__":

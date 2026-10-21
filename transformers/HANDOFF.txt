@@ -1,3 +1,34 @@
+Standalone extraction update (2026-10-21)
+
+This folder now contains all required project code. See README.md for current
+standalone setup/run instructions and STANDALONE_VALIDATION.txt for relocated-
+copy validation. Quantizers, data/model helpers, NVFP4 export, multimodal prep,
+GGUF export and serving checks no longer depend on sibling qad/ or evals/ trees.
+Source-repository paths in the historical records below are not dependencies.
+No full-model retraining was started as part of the standalone extraction.
+
+Inference audit / export update (2026-10-16)
+
+Read INFERENCE_AUDIT.txt before continuing. The completed 980-step run used
+specialized norms and rank-local running observers; it is NOT equivalent to the
+new user-requested shared frozen norms/embedding/head contract. Do not silently
+change its weights or restart full evaluations. No new full 27B training started.
+
+New runs calibrate input globals once across ranks, freeze them, share GDN QKV/Z
+globals before training, use native nearest-even activation rounding, and match
+the hybrid NIXL final-prompt-token decode boundary. They automatically export
+real packed NVFP4 + per-layer ODP GGUF, then check stock vLLM HTTP generation.
+Tiny two-GPU training/resume/export and stock serving passed. Full cross-runtime
+parity is not established: linked llama.cpp still needs handoff alignment.
+
+The existing 27B model was exported to prefill-text/, prefill-nvfp4/ (multimodal),
+and prefill-gguf/ (64 GGUF blocks, 12.788 GiB, every code/scale verified).
+The old packed artifact boots stock vLLM and answers text/images, but vLLM
+collapses incompatible fused scales, so it is not faithful as-is. GGUF keeps
+those projections separate and preserves their scales exactly, but omits the
+legacy specialized norms. Its manifest records the limitation. Preserve the
+only checkpoint-980; do not present these legacy exports as a retrained model.
+
 Full eight-GPU training completed (2026-10-16)
 
 The user authorized the full eight-GPU run at MBS 4; this supersedes the

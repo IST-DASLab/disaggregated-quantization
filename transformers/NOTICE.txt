@@ -1,0 +1,18 @@
+Standalone extraction from disaggregated-quantization, 2026-10-21.
+
+quantizers/, export/, and training/ contain local copies of the required qad/
+implementation. training/pipeline.py retains only the legacy checkpoint-name
+mapping helper, not the pipeline-parallel runtime. These files need no adjacent
+qad checkout and no imports from its registry.
+
+prepare_multimodal.py, export_gguf.py, check_serving.py, serve_prefiller.py and
+test_gguf.py were extracted from this project's evals tools. No evals checkout,
+benchmark datasets, Slurm installation, or sibling virtualenv is required.
+
+odp/ contains code from IST-DASLab/disaggregated-llama.cpp commit
+967b479a5ab04c967a0591d02e130b4b35dbfe3d. Its MIT license and local changes are
+recorded in odp/LICENSE and odp/PROVENANCE.txt.
+
+gguf_decode.py retains its vllm-gguf-plugin source attribution and Apache-2.0
+license in GGUF_LAYOUT_LICENSE. Other files retain their source documentation;
+this notice does not assign a new license to the entire extracted project.

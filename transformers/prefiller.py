@@ -4,7 +4,6 @@ Frozen decode weights are Parameters so FSDP2 can shard them. Quantized prefill
 weights have an optional lazy BF16 buffer cache reused until the optimizer update.
 """
 from pathlib import Path
-import sys
 
 import torch
 from torch import nn
@@ -12,7 +11,6 @@ from torch.nn import functional as F
 from torch.utils.checkpoint import checkpoint
 from transformers import Trainer, TrainerCallback
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "qad"))
 from quantizers.base import set_recompute_wq
 from quantizers.dual import quant_phase, prefill_mask_from_labels
 from quantizers.frozen_decode import (
@@ -20,6 +18,19 @@ from quantizers.frozen_decode import (
     FrozenDecodeNorm,
 )
 from training.models import text_stack
+
+
+def training_phase_mask(labels, config):
+    mask = prefill_mask_from_labels(labels)
+    if getattr(config, "prefiller_handoff_boundary", "prompt-end") == "last-prompt-decode":
+        # Hybrid NIXL transfers state through N-1 and evaluates the last prompt
+        # token with the decoder to obtain the first generated-token logits.
+        boundary = mask[:, :-1] & labels[:, 1:].ne(-100)
+        # NIXL does not back off a one-token prompt.
+        boundary &= mask[:, :-1].long().cumsum(dim=1).gt(1)
+        mask = mask.clone()
+        mask[:, :-1] &= ~boundary
+    return mask
 
 
 class TextOnly(nn.Module):
@@ -39,12 +50,27 @@ class TextOnly(nn.Module):
 
 def prepare_student(student, decode_path, decode_prefix="model.language_model.", load_weights=True,
                     cache_quantized_weights=True, weight_cache_max_gib=0):
-    """FP32 masters/shared state and BF16 shardable frozen decode matrices."""
+    """FP32 projection masters, decoder-sourced shared state, and frozen decode matrices."""
     set_recompute_wq(True)
     if load_weights:
         print("Installing the prefill/decode quantizer on the text stack", flush=True)
     # from_pretrained(dequantize=True, dtype=float32) supplies FP32 initial weights.
     apply_nvfp4frozendec(student.model)
+    for module in student.modules():
+        if isinstance(module, NVFP4FrozenDecodeLinear):
+            module.native_activation_rounding = getattr(student.config, "prefiller_native_activation_rounding", False)
+        elif isinstance(module, FrozenDecodeNorm):
+            module.shared_decoder_norm = getattr(student.config, "prefiller_shared_decoder_norms", False)
+            if module.shared_decoder_norm:
+                module.weight_prefill.requires_grad_(False)
+    if getattr(student.config, "prefiller_fuse_gdn_scales", False):
+        # vLLM fuses these projections. Share globals BEFORE training, while
+        # preserving separate matrices/exports for llama.cpp. Never do this to
+        # legacy weights at export: that would requantize the trained matrices.
+        for module in student.modules():
+            qkv, z = getattr(module, "in_proj_qkv", None), getattr(module, "in_proj_z", None)
+            if isinstance(qkv, NVFP4FrozenDecodeLinear) and isinstance(z, NVFP4FrozenDecodeLinear):
+                qkv._group = z._group = [qkv, z]
     student.lm_head.requires_grad_(False)
     if cache_quantized_weights:
         budget = int(weight_cache_max_gib * 1024**3) if weight_cache_max_gib else None
@@ -65,10 +91,18 @@ def prepare_student(student, decode_path, decode_prefix="model.language_model.",
             module.register_parameter("decode_frozen", nn.Parameter(value, requires_grad=False))
         for name, parameter in module.named_parameters(recurse=False):
             if name != "decode_frozen":
-                parameter.data = parameter.data.float()
+                # An FP32 embedding would make the residual stream and the
+                # activation fake-quantizer run in FP32 before GEMM autocast.
+                # Serving consumes BF16 shared tensors/activations. FP32 storage
+                # is reserved for trainable masters in the new contract.
+                dtype = (torch.bfloat16 if not parameter.requires_grad and
+                         getattr(student.config, "prefiller_bf16_shared_parameters", False)
+                         else torch.float32)
+                parameter.data = parameter.data.to(dtype)
     # The sharing/trainable partition matches the reference. Shared frozen tensors
     # are initialized from the external decoder, which is the inference source of
-    # truth. Prefill masters and specialized norm scales retain teacher initialization.
+    # truth. Prefill masters retain teacher initialization. Legacy specialized
+    # norms retain it too; new runs freeze both norm branches to decoder values.
     if not load_weights:
         return
     print(f"Streaming frozen decoder tensors from {decode_path}", flush=True)
@@ -80,7 +114,7 @@ def prepare_student(student, decode_path, decode_prefix="model.language_model.",
         weights = dense_safetensors_weights(decode_path, decode_prefix)
     targets = {}
     for name, parameter in student.named_parameters():
-        if parameter.requires_grad or ".inner." in name:
+        if parameter.requires_grad or ".inner." in name or name.endswith(".weight_prefill"):
             continue
         key = name.replace(".decode_frozen", ".weight").replace(".weight_decode", ".weight")
         targets[key] = parameter
@@ -99,6 +133,10 @@ def prepare_student(student, decode_path, decode_prefix="model.language_model.",
     missing = set(targets) - seen
     if missing:
         raise ValueError(f"Frozen decoder missing {len(missing)} tensors: {sorted(missing)[:8]}")
+    with torch.no_grad():
+        for module in student.modules():
+            if isinstance(module, FrozenDecodeNorm) and module.shared_decoder_norm:
+                module.weight_prefill.copy_(module.weight_decode)
     assert_trainable_prefill_only(student)
 
 
@@ -110,7 +148,8 @@ def assert_trainable_prefill_only(student):
             if module.bias is not None:
                 raise ValueError("Biased dual linears need separate frozen decode biases")
         elif isinstance(module, FrozenDecodeNorm):
-            allowed.add(id(module.weight_prefill))
+            if not getattr(module, "shared_decoder_norm", False):
+                allowed.add(id(module.weight_prefill))
     actual = {id(p) for p in student.parameters() if p.requires_grad}
     if actual != allowed:
         raise ValueError("Trainable parameters differ from the prefill-only allowlist")
@@ -196,7 +235,7 @@ class Prefiller(nn.Module):
         with torch.no_grad():
             teacher_hidden = self.teacher.model(input_ids=input_ids,
                 attention_mask=attention_mask, use_cache=False).last_hidden_state
-        with quant_phase(prefill_mask_from_labels(labels)):
+        with quant_phase(training_phase_mask(labels, self.config)):
             student_hidden = self.student.model(input_ids=input_ids,
                 attention_mask=attention_mask, use_cache=False).last_hidden_state
         loss = chunked_kl(student_hidden, teacher_hidden, self.student.lm_head,
@@ -240,8 +279,21 @@ class PrefillerTrainer(Trainer):
                       int((labels[:, 1:].ne(-100) & mask[:, 1:].bool()).sum()), batch * seq * seq]
             self._step_token_counts = [a + b for a, b in zip(self._step_token_counts, counts)]
         inputs = self._prepare_inputs(inputs)
-        with quant_phase(prefill_mask_from_labels(inputs["labels"])):
+        with quant_phase(training_phase_mask(inputs["labels"], self.model.config)):
             return super().training_step(model, inputs, num_items_in_batch)
+
+    def _save_checkpoint(self, model, trial):
+        # DCP treats buffers as replicated and may choose a different writer for
+        # each projection. Rank-local observers MUST agree before that happens.
+        from observers import activation_observers
+        activation_observers(model, synchronize=True, reconcile=True)
+        result = super()._save_checkpoint(model, trial)
+        # FSDP saves through Accelerate rather than _save(), so it otherwise
+        # bypasses the tokenizer assets required by a standalone serving export.
+        if self.is_world_process_zero() and self.processing_class is not None:
+            self.processing_class.save_pretrained(Path(self.args.output_dir) /
+                                                  f"checkpoint-{self.state.global_step}")
+        return result
 
     def _save(self, output_dir=None, state_dict=None):
         # Plain nn.Module may contain tied teacher weights. torch.save supports ties;

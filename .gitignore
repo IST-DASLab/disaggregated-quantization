@@ -314,3 +314,7 @@ evals/data/ruler/
 /.claude/
 slurm-*.out
 /notebooks/schematics/preview*.png
+
+# Local session design notes and disposable trained-model smoke results.
+/evals/serving/DISAGGREGATED_SESSION_CACHE_PLAN.md
+/evals/results/**/iq1s-qad980-20261016-*-smoke/

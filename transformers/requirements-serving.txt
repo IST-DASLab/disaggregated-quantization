@@ -1,0 +1,4 @@
+# Install in a SEPARATE Python 3.12 environment; vLLM pins a different Torch.
+vllm==0.31.0
+requests==2.34.2
+pillow==12.3.0
